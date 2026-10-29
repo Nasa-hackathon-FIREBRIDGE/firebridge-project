@@ -12,9 +12,8 @@
     "allowSyntheticDefaultImports": true,
     "sourceMap": true,
     "declaration": true,
-    "baseUrl": ".",
     "paths": {
-      "@firebridge/*": ["packages/*/src/index.ts"]
+      "@firebridge/*": ["./packages/*/src/index.ts"]
     }
   }
 }
