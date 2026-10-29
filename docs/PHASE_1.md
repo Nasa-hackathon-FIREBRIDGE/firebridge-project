@@ -110,7 +110,7 @@ La phase 1 ne fournit ni scheduler d’ingestion, ni comptes utilisateurs, ni au
 
 ## Vérifier ton travail
 
-Pour une recette dans Swagger avec un jeu fictif isolé, lancer `npm.cmd run demo:api`, puis suivre le [guide de test manuel](TEST_MANUEL_PHASE_1.md). La démo écoute sur le port 3001 et ne remplace pas la recette avec PostgreSQL/PostGIS réel.
+Pour une recette manuelle, démarrer l’API avec la base de développement et une release publiée, puis ouvrir `http://localhost:3000/api-docs/`. Utiliser les paramètres et réponses du [contrat HTTP](../API.md). Les jeux fictifs versionnés sont réservés aux tests automatisés ; une éventuelle démo personnelle reste hors du dépôt.
 
 ```bash
 npm run lint

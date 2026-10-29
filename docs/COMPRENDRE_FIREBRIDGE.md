@@ -2,7 +2,7 @@
 
 **Document de référence pour l’équipe — état vérifié le 28 octobre 2026.**
 
-**Lecture après publication de la phase 1 :** les sections d’état ci-dessous conservent l’instantané antérieur à cette livraison. Le commit qui ajoute ce document contient l’adaptation Fastify, les trois endpoints, leurs tests et la démo locale. Après son push, ces éléments sont disponibles sur `feat/anwar-phase-1-catalog` ; leur présence dans cette branche ne signifie pas qu’ils ont été fusionnés dans `main`. La recette avec les migrations et données réelles reste à effectuer. Les guides à jour sont [Phase 1](PHASE_1.md) et [Test manuel](TEST_MANUEL_PHASE_1.md).
+**Lecture après publication de la phase 1 :** les sections d’état ci-dessous conservent l’instantané antérieur à cette livraison. La branche `feat/anwar-phase-1-catalog` contient l’adaptation Fastify, les trois endpoints et leurs tests ; leur présence dans cette branche ne signifie pas qu’ils ont été fusionnés dans `main`. La recette avec les migrations et données réelles reste à effectuer. La démo personnelle a été retirée des fichiers versionnés et reste locale. Les guides à jour sont [Phase 1](PHASE_1.md) et [Construction des endpoints pas à pas](PHASE_1_PAS_A_PAS.md).
 
 Dépôt : [Nasa-hackathon-FIREBRIDGE/firebridge-project](https://github.com/Nasa-hackathon-FIREBRIDGE/firebridge-project).
 

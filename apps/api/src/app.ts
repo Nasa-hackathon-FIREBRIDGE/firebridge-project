@@ -13,13 +13,7 @@ import { createDatabase, type SnapshotDatabase } from './repositories/database.j
 import { CatalogRepository } from './repositories/catalog.repository.js';
 import { CatalogService } from './services/catalog.service.js';
 
-export function createApp(
-  options: {
-    database?: SnapshotDatabase;
-    logger?: boolean;
-    documentation?: { title: string; description: string };
-  } = {}
-) {
+export function createApp(options: { database?: SnapshotDatabase; logger?: boolean } = {}) {
   const app = Fastify({
     logger: options.logger ?? { level: env.LOG_LEVEL },
     genReqId: () => randomUUID(),
@@ -37,15 +31,7 @@ export function createApp(
   app.register(helmet);
   app.register(cors);
   app.register(compress);
-  app.register(swagger, {
-    openapi: {
-      info: {
-        title: options.documentation?.title ?? 'FIREBRIDGE API',
-        version: '1.0.0',
-        description: options.documentation?.description
-      }
-    }
-  });
+  app.register(swagger, { openapi: { info: { title: 'FIREBRIDGE API', version: '1.0.0' } } });
   app.register(swaggerUi, { routePrefix: '/api-docs' });
   app.get('/health', async () => ({ status: 'ok', service: env.APP_NAME }));
   app.register(apiRoutes, { prefix: '/api/v1' });

@@ -51,7 +51,7 @@ Redis est nécessaire au futur traitement asynchrone, mais pas aux trois lecture
 
 ## Validation
 
-Pour essayer les trois endpoints dans Swagger sans Docker, lancer `npm run demo:api`, puis ouvrir `http://localhost:3001/api-docs/`. Ce mode utilise un jeu fictif isolé en mémoire. Le [guide de test manuel](docs/TEST_MANUEL_PHASE_1.md) donne les paramètres et résultats à vérifier.
+Pour tester manuellement les trois endpoints, démarrer l’API avec une base initialisée et une release publiée, puis ouvrir `http://localhost:3000/api-docs/`. Le [contrat HTTP](API.md) décrit les paramètres et les réponses à vérifier. Les fixtures fictives versionnées servent aux tests automatisés ci-dessous ; aucun serveur de démo n’est livré dans le dépôt.
 
 ```bash
 npm run lint

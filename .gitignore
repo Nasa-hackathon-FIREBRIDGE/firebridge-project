@@ -6,3 +6,7 @@ coverage/
 .vitest/
 .DS_Store
 npm-debug.log*
+
+# Personal manual-testing demo (kept locally, not published).
+/apps/api/scripts/demo.ts
+/docs/TEST_MANUEL_PHASE_1.md
