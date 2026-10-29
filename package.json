@@ -9,7 +9,7 @@
   "scripts": {
     "dev:api": "npm run dev --workspace @firebridge/api",
     "dev:worker": "npm run dev --workspace @firebridge/worker",
-    "build": "npm run build --workspace @firebridge/api && npm run build --workspace @firebridge/worker && npm run build --workspace @firebridge/database",
+    "build": "npm run build --workspace @firebridge/api && npm run build --workspace @firebridge/worker",
     "test": "npm run test --workspace @firebridge/api -- --run && npm run test --workspace @firebridge/worker -- --run",
     "lint": "eslint .",
     "format": "prettier --write ."

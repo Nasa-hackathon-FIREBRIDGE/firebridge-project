@@ -2,7 +2,7 @@
 
 FIREBRIDGE est le backend du projet NASA Space Apps Challenge « Harmonization of MODIS and VIIRS Hot Spots ». Il utilise TypeScript, Fastify et PostgreSQL/PostGIS, avec un worker séparé pour les traitements longs.
 
-La phase 1 implémente trois routes en lecture seule : `GET /api/v1/catalog`, `GET /api/v1/releases/{release_id}` et `GET /api/v1/updates`. Les autres ressources sont encore des squelettes et renvoient `501`.
+La phase 1 implémente trois routes en lecture seule : `GET /api/v1/catalog`, `GET /api/v1/releases/{release_id}` et `GET /api/v1/updates`. Les routes `GET /api/v1/sources` et `POST /api/v1/sources` sont également implémentées. Les autres ressources restent des squelettes `501`.
 
 Le [guide de la phase 1](docs/PHASE_1.md) explique le fonctionnement, les limites et le contrat à partager avec la personne chargée de l’ingestion. Le [contrat HTTP](API.md) décrit les paramètres et les réponses. Les documents de conception fournis par l’équipe restent dans `documents/`.
 
@@ -26,26 +26,31 @@ Prérequis : Node.js 22 ou supérieur, npm et Docker Desktop démarré pour Post
 
 ```bash
 npm ci
-docker compose up -d postgres
+docker compose up -d postgres redis
 npm run dev:api
 ```
 
 Sous PowerShell, utiliser `npm.cmd` si l’exécution des scripts `npm.ps1` est bloquée.
 
-Docker démarre PostgreSQL/PostGIS ; il n’applique pas les migrations métier. Les migrations de l’équipe ne sont pas encore présentes dans le dépôt. En attendant leur livraison, le schéma SQL fourni peut servir à initialiser une base de développement vide, explicitement :
+Les migrations de `main` sont reprises dans `packages/database/prisma/migrations/`. Sur une base de développement configurée, appliquer les migrations existantes avec :
 
 ```bash
-docker compose cp packages/database/prisma/sql/firebridge_schema_v2.sql postgres:/tmp/firebridge_schema_v2.sql
-docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U firebridge -d firebridge -f /tmp/firebridge_schema_v2.sql
+npm run prisma:deploy --workspace @firebridge/database
 ```
 
-Ce SQL est un artefact de conception pour une base vide, pas un historique de migrations. Les évolutions d’une base déjà initialisée devront suivre les migrations livrées par l’équipe ; le squelette `prisma migrate` actuel ne crée pas les tables métier de cette phase. L’API ne lance aucune migration au démarrage.
+Ces migrations créent actuellement `public.HealthCheck` et `firebridge.sources`. Elles ne créent pas encore les tables de releases, partitions et inventaires nécessaires à la phase 1. Le fichier `firebridge_schema_v2.sql` reste un artefact de conception : ne pas l’exécuter par-dessus les migrations pour compléter la base. Les tables manquantes doivent faire l’objet de migrations additives et d’une validation avec l’équipe.
+
+Le client Prisma et le package database sont générés avant le démarrage, la compilation et les tests de l’API. Aucune migration n’est lancée automatiquement par le serveur.
 
 L’API écoute sur `http://localhost:3000`. Swagger est accessible sur `http://localhost:3000/api-docs` et son document JSON sur `/api-docs/json`.
 
 **Aucune donnée NASA ni release n’est inventée au démarrage.** Tant que l’ingestion n’a pas publié de release et d’alias pour le scope choisi, `/catalog` sans paramètres et `/health/ready` répondent `503`. `/health/live` reste disponible. Un scope explicitement inconnu répond `404`.
 
-Redis est nécessaire au futur traitement asynchrone, mais pas aux trois lectures de la phase 1. Pour démarrer le worker existant : `docker compose up -d redis`, puis `npm run dev:worker`.
+La readiness vérifie PostgreSQL, Redis et la disponibilité du catalogue, avec un délai borné. Les lectures du catalogue ne contactent pas Redis, mais l’API reste déclarée non prête si une dépendance requise échoue. Les endpoints de santé canoniques sont `/api/v1/health/live` et `/api/v1/health/ready`.
+
+`CORS_ORIGINS` permet une liste d’origines navigateur autorisées, séparées par des virgules. En développement, la liste vide reste permissive. En production, configurer cette liste et remplacer les secrets de pagination.
+
+Le worker peut être lancé avec `npm run dev:worker`, mais n’a pas encore de processeur de jobs enregistré : son statut est `not_configured`.
 
 ## Validation
 

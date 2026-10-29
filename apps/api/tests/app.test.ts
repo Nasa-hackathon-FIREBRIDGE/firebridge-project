@@ -7,7 +7,11 @@ describe('Phase 1 routes with PostgreSQL queries', () => {
   let app: ReturnType<typeof createApp>;
   beforeAll(async () => {
     fixture = await testDatabase();
-    app = createApp({ database: fixture.adapter, logger: false });
+    app = createApp({
+      database: fixture.adapter,
+      logger: false,
+      readinessChecks: { database: async () => 1, redis: async () => 'PONG' }
+    });
     await app.ready();
   }, 30000);
   beforeEach(async () => {
@@ -25,6 +29,31 @@ describe('Phase 1 routes with PostgreSQL queries', () => {
     await fixture.db.exec('DELETE FROM firebridge.release_aliases');
     expect((await get('/health/ready')).statusCode).toBe(503);
     expect((await get('/health/live')).statusCode).toBe(200);
+  });
+  it('keeps catalog readiness scoped to each app and includes the Phase 0 Redis probe', async () => {
+    const degraded = createApp({
+      database: fixture.adapter,
+      logger: false,
+      readinessChecks: {
+        database: async () => 1,
+        redis: async () => {
+          throw new Error('Unavailable Redis');
+        }
+      }
+    });
+    try {
+      const response = await degraded.inject('/api/v1/health/ready');
+      expect(response.statusCode).toBe(503);
+      expect(response.json().checks).toMatchObject({
+        database: 'ready',
+        redis: 'unavailable',
+        catalogue: 'ready'
+      });
+      expect((await get('/health/ready')).statusCode).toBe(200);
+      expect((await degraded.inject('/api/v1/health/live')).statusCode).toBe(200);
+    } finally {
+      await degraded.close();
+    }
   });
   it('serves a scoped catalog and the common response envelope', async () => {
     const response = await get('/catalog?scope_key=morocco');
@@ -245,17 +274,16 @@ describe('Phase 1 routes with PostgreSQL queries', () => {
   it('returns sanitized 503 responses when the production database cannot be reached', async () => {
     const unavailable = createApp({ logger: false });
     try {
-      for (const path of [
-        '/catalog',
-        '/releases/' + ids.current,
-        '/updates?scope_key=morocco',
-        '/health/ready'
-      ]) {
+      for (const path of ['/catalog', '/releases/' + ids.current, '/updates?scope_key=morocco']) {
         const response = await unavailable.inject('/api/v1' + path);
         expect(response.statusCode).toBe(503);
         expect(response.json().error.code).toBe('DATABASE_UNAVAILABLE');
         expect(response.body).not.toMatch(/postgresql:|unused|ECONNREFUSED/);
       }
+      const readiness = await unavailable.inject('/api/v1/health/ready');
+      expect(readiness.statusCode).toBe(503);
+      expect(readiness.json().checks.database).toBe('unavailable');
+      expect(readiness.json().checks.catalogue).toBe('unavailable');
       expect((await unavailable.inject('/api/v1/health/live')).statusCode).toBe(200);
     } finally {
       await unavailable.close();
@@ -270,6 +298,7 @@ describe('Phase 1 routes with PostgreSQL queries', () => {
   });
   it('keeps other resource scaffolds reachable', async () => {
     expect((await get('/areas')).statusCode).toBe(501);
+    expect((await app.inject('/health')).statusCode).toBe(404);
     expect((await get('/nonexistent')).statusCode).toBe(404);
   });
 });

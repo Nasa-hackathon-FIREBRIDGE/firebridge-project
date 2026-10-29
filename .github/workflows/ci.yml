@@ -8,6 +8,9 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      # Prisma client generation reads the URL without connecting to a database.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/firebridge
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -45,6 +45,8 @@
     "GET /health/ready",
     "GET /catalog",
     "GET /releases/:release_id",
-    "GET /updates"
+    "GET /updates",
+    "GET /sources",
+    "POST /sources"
   ]
 }

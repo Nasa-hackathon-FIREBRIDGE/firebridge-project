@@ -2,7 +2,7 @@
 
 Base path: `/api/v1`. Fastify serves OpenAPI at `/api-docs/json` and Swagger UI at `/api-docs`.
 
-The implemented read-only routes are `/catalog`, `/releases/{release_id}` and `/updates`. Other resource groups remain planned (`501`). The older design documents in `documents/` describe the wider roadmap. The French [phase guide](docs/PHASE_1.md) explains implementation and ingestion conventions.
+The implemented read-only Phase 1 routes are `/catalog`, `/releases/{release_id}` and `/updates`. `GET /sources` and `POST /sources` are also implemented; other resource groups remain planned (`501`). The French [phase guide](docs/PHASE_1.md) explains implementation and ingestion conventions.
 
 ## Common responses
 
@@ -119,6 +119,22 @@ This route only reads the database and sends `Cache-Control: no-store`. Polling 
 
 ## Health and data prerequisites
 
-`GET /health/live` (under `/api/v1`) reports process liveness without a database query. `/health/ready` checks whether the configured default catalog can be served from the database and returns `503` otherwise. Redis and external providers are not part of phase 1 readiness.
+`GET /health/live` (under `/api/v1`) reports process liveness without a database query. `/health/ready` probes PostgreSQL, Redis and the configured default catalog, with bounded checks. The catalog provider is wired per Fastify application. A failing dependency returns `503`; external providers are not polled. Worker health is `not_checked`, and the worker itself has no processors configured.
 
 The application does not seed synthetic releases. Ingestion must publish real metadata, membership and aliases using the [documented JSON conventions](docs/PHASE_1.md#contrat-à-respecter-côté-ingestion). Test fixtures run in an isolated embedded database and never populate the application database.
+
+## Sources and Phase 0 integration
+
+`GET /sources` accepts strict filters `kind`, `provider`, `limit` (1–100; default 50) and `cursor`. It reads the Prisma Source model mapped to `firebridge.sources`. Source cursors use `PAGINATION_SECRET` and the `v1.payload.signature` format; they are independent from release membership cursors signed with `CURSOR_SECRET`.
+
+`POST /sources` validates `name`, `provider`, `kind`, `product`, `collection`, `processingStream`, `documentationUrl` (HTTP/HTTPS), `citation`, `licenseInfo` and `schemaVersion`. Optional fields include `platform`, `instrument`, `nativeResolutionM` and `metadata`. Unknown fields are rejected. Successful creation returns 201 with the generated source UUID. Registration does not acquire NASA data or publish a release.
+
+Sources retain the Phase 0 `status`, `message` and `data` fields, enriched with `request_id`, `schema_version` and `warnings`. Invalid source queries/bodies return 400 with `INVALID_QUERY`/`VALIDATION_ERROR`; Phase 1 JSON Schema validation keeps its documented 422 contract. Error responses include both the stable top-level `code`/`message` fields and the nested `error` object.
+
+`POST /sources` accepts an optional `Idempotency-Key`. With a key, its default Redis store fails closed with 503 when unavailable. Reusing a completed key with the same scoped method, path, query and body replays the response; a conflicting or in-progress request returns 409 (`Retry-After: 2` for in-progress work). Keys contain 1–256 printable non-space ASCII characters. The default scope uses a trusted authenticated identity when available and otherwise `unauthenticated`; caller-controlled tenant headers are not trusted by default.
+
+Idempotency uses native Fastify route hooks. Atomic Redis ownership tokens, optional lease renewal, safe replay headers and text/binary responses are retained. Response metadata uses the current request ID even on replay. The in-memory store is limited to tests/single-process development. This Redis boundary cache is not a transactional exactly-once business ledger; durable jobs and outbox work remain future implementation.
+
+`CORS_ORIGINS` configures the browser-origin allowlist. Set a custom `PAGINATION_SECRET` in production. Readiness probes have 3-second bounds; the API supplies a per-application `Phase1ReadinessProvider` so a connected database is not mistaken for a servable catalog.
+
+The two migrations currently create HealthCheck and Sources only. Apply them explicitly using the deploy command in the README. The complete Phase 1 data schema remains to be migrated.

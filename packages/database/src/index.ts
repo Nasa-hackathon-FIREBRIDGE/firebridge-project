@@ -1,6 +1,21 @@
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = globalThis as unknown as {
+  prisma?: PrismaClient;
+};
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
+
+export async function disconnectDatabase(): Promise<void> {
+  await prisma.$disconnect();
+}
+
 export const databaseStatus = {
   provider: 'postgresql',
   geospatialSupport: 'postgis-ready',
-  orm: 'prisma',
-  notes: 'Database schema is scaffolded for continued domain modeling.'
-};
+  orm: 'prisma'
+} as const;

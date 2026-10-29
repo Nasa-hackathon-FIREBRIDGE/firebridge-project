@@ -11,9 +11,6 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "sourceMap": true,
-    "declaration": true,
-    "paths": {
-      "@firebridge/*": ["./packages/*/src/index.ts"]
-    }
+    "declaration": true
   }
 }
