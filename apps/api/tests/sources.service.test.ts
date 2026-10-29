@@ -15,6 +15,7 @@ vi.mock('@firebridge/database', () => ({
 }));
 
 import { sourcesService } from '../src/services/sources.service.js';
+import { decodeCursor, encodeCursor } from '../src/utils/cursor.js';
 
 // ---------------------------------------------------------------------------
 // sourcesService.list
@@ -89,14 +90,19 @@ describe('sourcesService.list', () => {
     });
   });
 
-  it('returns a bounded page and a cursor when more sources are available', async () => {
+  it('returns a bounded page and a signed cursor when more sources are available', async () => {
     mocks.findMany.mockResolvedValue([{ id: 'source-a' }, { id: 'source-b' }, { id: 'source-c' }]);
+
+    const signedCursor = encodeCursor({
+      id: 'source-0',
+      filters: { kind: 'hotspots', provider: 'NASA' }
+    });
 
     const result = await sourcesService.list({
       kind: 'hotspots',
       provider: 'NASA',
       limit: 2,
-      cursor: 'source-0'
+      cursor: signedCursor
     });
 
     expect(mocks.findMany).toHaveBeenCalledWith({
@@ -108,10 +114,11 @@ describe('sourcesService.list', () => {
       orderBy: { id: 'asc' },
       take: 3
     });
-    expect(result).toEqual({
-      sources: [{ id: 'source-a' }, { id: 'source-b' }],
-      nextCursor: 'source-b'
-    });
+    expect(result.sources).toEqual([{ id: 'source-a' }, { id: 'source-b' }]);
+    expect(result.nextCursor).toBeDefined();
+
+    const decodedNext = decodeCursor(result.nextCursor!);
+    expect(decodedNext.id).toBe('source-b');
   });
 
   it('returns nextCursor: null on the last page (result count ≤ limit)', async () => {
@@ -122,6 +129,16 @@ describe('sourcesService.list', () => {
 
     expect(result.nextCursor).toBeNull();
     expect(result.sources).toHaveLength(2);
+  });
+
+  it('rejects an invalid, tampered or mismatched cursor with an error', async () => {
+    await expect(
+      sourcesService.list({
+        kind: 'hotspots',
+        limit: 10,
+        cursor: 'invalid.cursor.token'
+      })
+    ).rejects.toThrow();
   });
 
   it('propagates database errors without swallowing them', async () => {

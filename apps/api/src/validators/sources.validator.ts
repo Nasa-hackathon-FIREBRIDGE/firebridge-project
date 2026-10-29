@@ -39,6 +39,6 @@ export const sourceListQuerySchema = z
     kind: z.enum(sourceKinds).optional(),
     provider: z.string().trim().min(1).max(200).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
-    cursor: z.string().trim().min(1).max(200).optional()
+    cursor: z.string().trim().min(1).max(512).optional()
   })
   .strict();

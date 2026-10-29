@@ -1,12 +1,18 @@
 import type { NextFunction, Request, Response } from 'express';
 import { sourcesService } from '../services/sources.service.js';
 import { sourceCreateSchema, sourceListQuerySchema } from '../validators/sources.validator.js';
+import { ErrorCodes } from '../types/api.js';
 
 export const sourcesController = {
   async list(req: Request, res: Response, next: NextFunction) {
     const parsedQuery = sourceListQuerySchema.safeParse(req.query);
     if (!parsedQuery.success) {
-      res.status(400).json({ status: 'error', message: 'Invalid source query.', data: null });
+      res.status(400).json({
+        status: 'error',
+        code: ErrorCodes.INVALID_QUERY,
+        message: 'Invalid source query.',
+        data: null
+      });
       return;
     }
 
@@ -21,7 +27,12 @@ export const sourcesController = {
   async create(req: Request, res: Response, next: NextFunction) {
     const parsedBody = sourceCreateSchema.safeParse(req.body);
     if (!parsedBody.success) {
-      res.status(400).json({ status: 'error', message: 'Invalid source payload.', data: null });
+      res.status(400).json({
+        status: 'error',
+        code: ErrorCodes.VALIDATION_ERROR,
+        message: 'Invalid source payload.',
+        data: null
+      });
       return;
     }
 

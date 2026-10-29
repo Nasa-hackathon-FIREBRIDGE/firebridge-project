@@ -63,7 +63,7 @@ describe('GET /api/v1/sources', () => {
     const response = await request(createApp()).get('/api/v1/sources');
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('ok');
+    expect(response.status).toBe(200);
     expect(response.body.data.sources).toHaveLength(1);
     expect(response.body.data.sources[0].id).toBe('source-1');
     expect(response.body.data.nextCursor).toBeNull();
@@ -96,7 +96,12 @@ describe('GET /api/v1/sources', () => {
     const response = await request(createApp()).get('/api/v1/sources?foo=bar');
 
     expect(response.status).toBe(400);
-    expect(response.body).toEqual({ status: 'error', message: 'Invalid source query.', data: null });
+    expect(response.body).toEqual({
+      status: 'error',
+      code: 'INVALID_QUERY',
+      message: 'Invalid source query.',
+      data: null
+    });
     // Unknown key is rejected before the service is ever called.
     expect(list).not.toHaveBeenCalled();
   });
@@ -106,6 +111,7 @@ describe('GET /api/v1/sources', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.status).toBe('error');
+    expect(response.body.code).toBe('INVALID_QUERY');
   });
 
   it('forwards a cursor query parameter to the service unchanged', async () => {
@@ -127,6 +133,7 @@ describe('GET /api/v1/sources', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.status).toBe('error');
+    expect(response.body.code).toBe('INVALID_QUERY');
   });
 
   it('returns HTTP 500 and does not expose internal error details when the database fails', async () => {
@@ -139,6 +146,7 @@ describe('GET /api/v1/sources', () => {
     expect(response.status).toBe(500);
     expect(response.body).toEqual({
       status: 'error',
+      code: 'INTERNAL_SERVER_ERROR',
       message: 'Internal server error.',
       data: null
     });
@@ -201,6 +209,7 @@ describe('POST /api/v1/sources', () => {
     expect(response.status).toBe(400);
     expect(response.body).toEqual({
       status: 'error',
+      code: 'VALIDATION_ERROR',
       message: 'Invalid source payload.',
       data: null
     });
@@ -212,6 +221,7 @@ describe('POST /api/v1/sources', () => {
       .send({ ...minimalCreateBody, unknownField: 'should be rejected' });
 
     expect(response.status).toBe(400);
+    expect(response.body.code).toBe('VALIDATION_ERROR');
   });
 
   it('returns HTTP 500 and does not expose internal error details when the database fails on create', async () => {
@@ -224,9 +234,53 @@ describe('POST /api/v1/sources', () => {
     expect(response.status).toBe(500);
     expect(response.body).toEqual({
       status: 'error',
+      code: 'INTERNAL_SERVER_ERROR',
       message: 'Internal server error.',
       data: null
     });
     expect(JSON.stringify(response.body)).not.toContain('duplicate key');
+  });
+
+  it('fails closed with HTTP 503 SERVICE_UNAVAILABLE on POST /api/v1/sources when an Idempotency-Key is provided and the store fails', async () => {
+    const { RedisIdempotencyStore } = await import('../src/middleware/idempotency.js');
+    vi.spyOn(RedisIdempotencyStore.prototype, 'acquire').mockRejectedValue(
+      new Error('Redis connection lost')
+    );
+
+    const response = await request(createApp())
+      .post('/api/v1/sources')
+      .set('Idempotency-Key', 'idemp-source-create-fail-123')
+      .send(minimalCreateBody);
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      status: 'error',
+      code: 'SERVICE_UNAVAILABLE',
+      message: 'Internal server error.',
+      data: null
+    });
+  });
+
+  it('creates a source with HTTP 201 when Idempotency-Key is provided and the store succeeds', async () => {
+    vi.spyOn(sourcesService, 'create').mockResolvedValue({
+      id: 'source-idemp-1',
+      ...minimalCreateBody,
+      platform: null,
+      instrument: null,
+      nativeResolutionM: null,
+      metadata: {}
+    } as Awaited<ReturnType<typeof sourcesService.create>>);
+
+    const { RedisIdempotencyStore } = await import('../src/middleware/idempotency.js');
+    vi.spyOn(RedisIdempotencyStore.prototype, 'acquire').mockResolvedValue({ acquired: true });
+    vi.spyOn(RedisIdempotencyStore.prototype, 'complete').mockResolvedValue(true);
+
+    const response = await request(createApp())
+      .post('/api/v1/sources')
+      .set('Idempotency-Key', 'idemp-source-create-123')
+      .send(minimalCreateBody);
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.id).toBe('source-idemp-1');
   });
 });

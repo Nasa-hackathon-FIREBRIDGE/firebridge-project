@@ -18,21 +18,26 @@ redis.on('error', (error) => {
   logger.error({ code }, 'Redis connection error');
 });
 
-export async function pingRedis(): Promise<string> {
-  if (redis.status !== 'ready') {
-    if (redis.status !== 'wait' && redis.status !== 'end' && !connectionPromise) {
-      throw new Error('Redis client is not available');
-    }
-
-    if (!connectionPromise) {
-      connectionPromise = redis.connect().finally(() => {
-        connectionPromise = undefined;
-      });
-    }
-
-    await connectionPromise;
+export async function ensureRedisConnected(): Promise<void> {
+  if (redis.status === 'ready') {
+    return;
   }
 
+  if (redis.status !== 'wait' && redis.status !== 'end' && !connectionPromise) {
+    throw new Error('Redis client is not available');
+  }
+
+  if (!connectionPromise) {
+    connectionPromise = redis.connect().finally(() => {
+      connectionPromise = undefined;
+    });
+  }
+
+  await connectionPromise;
+}
+
+export async function pingRedis(): Promise<string> {
+  await ensureRedisConnected();
   return redis.ping();
 }
 

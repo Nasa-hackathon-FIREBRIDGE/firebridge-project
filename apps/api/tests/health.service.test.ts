@@ -13,7 +13,10 @@ vi.mock('../src/config/redis.js', () => ({
   pingRedis: mocks.pingRedis
 }));
 
-import { healthService } from '../src/services/health.service.js';
+import {
+  healthService,
+  registerPhase1ReadinessProvider
+} from '../src/services/health.service.js';
 
 // ---------------------------------------------------------------------------
 // Liveness
@@ -139,5 +142,33 @@ describe('healthService.getReadiness', () => {
     expect(serialised).not.toContain('prod-db.internal');
     expect(serialised).not.toContain('secret');
     expect(serialised).not.toContain('stack');
+  });
+
+  describe('Phase 1 catalogue readiness integration contract', () => {
+    it('returns status ok when Phase 1 provider confirms catalogue is servable', async () => {
+      registerPhase1ReadinessProvider({
+        isCatalogueServable: vi.fn().mockResolvedValue(true)
+      });
+
+      const result = await healthService.getReadiness();
+
+      expect(result.status).toBe('ok');
+      expect(result.checks.database).toBe('ready');
+      expect(result.checks.redis).toBe('ready');
+
+      registerPhase1ReadinessProvider(null);
+    });
+
+    it('returns status error when Phase 1 provider reports catalogue is unservable', async () => {
+      registerPhase1ReadinessProvider({
+        isCatalogueServable: vi.fn().mockResolvedValue(false)
+      });
+
+      const result = await healthService.getReadiness();
+
+      expect(result.status).toBe('error');
+
+      registerPhase1ReadinessProvider(null);
+    });
   });
 });

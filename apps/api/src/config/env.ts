@@ -6,6 +6,8 @@ import { z } from 'zod';
 const rootEnvPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../.env');
 dotenv.config({ path: rootEnvPath });
 
+const DEFAULT_DEV_PAGINATION_SECRET = 'firebridge-dev-secret-key-32-chars-long';
+
 const postgresUrlSchema = z
   .string()
   .url()
@@ -29,15 +31,29 @@ const corsOriginsSchema = z
     })
   );
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  APP_NAME: z.string().min(1).default('firebridge-api'),
-  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
-  DATABASE_URL: postgresUrlSchema,
-  REDIS_URL: redisUrlSchema,
-  CORS_ORIGINS: corsOriginsSchema
-});
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+    APP_NAME: z.string().min(1).default('firebridge-api'),
+    LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
+    DATABASE_URL: postgresUrlSchema,
+    REDIS_URL: redisUrlSchema,
+    CORS_ORIGINS: corsOriginsSchema,
+    PAGINATION_SECRET: z.string().min(16).default(DEFAULT_DEV_PAGINATION_SECRET)
+  })
+  .refine(
+    (data) => {
+      if (data.NODE_ENV === 'production' && data.PAGINATION_SECRET === DEFAULT_DEV_PAGINATION_SECRET) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'PAGINATION_SECRET must be explicitly set to a custom secret in production.',
+      path: ['PAGINATION_SECRET']
+    }
+  );
 
 const parsedEnv = envSchema.safeParse(process.env);
 
