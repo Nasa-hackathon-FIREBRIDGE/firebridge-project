@@ -2,8 +2,6 @@
 
 FIREBRIDGE est le backend du projet NASA Space Apps Challenge « Harmonization of MODIS and VIIRS Hot Spots ». Il utilise TypeScript, Fastify et PostgreSQL/PostGIS, avec un worker séparé pour les traitements longs.
 
-Pour comprendre la vision du produit, le travail publié par l’équipe et la suite du développement, lire [Comprendre FIREBRIDGE](docs/COMPRENDRE_FIREBRIDGE.md). Ce document distingue l’état GitHub des modifications encore locales.
-
 La phase 1 implémente trois routes en lecture seule : `GET /api/v1/catalog`, `GET /api/v1/releases/{release_id}` et `GET /api/v1/updates`. Les autres ressources sont encore des squelettes et renvoient `501`.
 
 Le [guide de la phase 1](docs/PHASE_1.md) explique le fonctionnement, les limites et le contrat à partager avec la personne chargée de l’ingestion. Le [contrat HTTP](API.md) décrit les paramètres et les réponses. Les documents de conception fournis par l’équipe restent dans `documents/`.
