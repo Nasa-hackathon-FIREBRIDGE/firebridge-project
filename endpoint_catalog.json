@@ -21,74 +21,30 @@
     "admin"
   ],
   "endpoints": {
-    "health": [
-      "GET /health/live",
-      "GET /health/ready"
-    ],
-    "catalog": [
-      "GET /catalog",
-      "GET /catalog/:id"
-    ],
-    "sources": [
-      "GET /sources",
-      "POST /sources"
-    ],
-    "releases": [
-      "GET /releases",
-      "GET /releases/:id"
-    ],
-    "updates": [
-      "GET /updates",
-      "POST /updates"
-    ],
-    "areas": [
-      "GET /areas",
-      "GET /areas/:areaId"
-    ],
-    "analyses": [
-      "GET /analyses",
-      "POST /analyses"
-    ],
-    "detections": [
-      "GET /detections",
-      "POST /detections"
-    ],
-    "tiles": [
-      "GET /tiles",
-      "GET /tiles/:tileId"
-    ],
-    "cells": [
-      "GET /cells",
-      "GET /cells/:cellId"
-    ],
-    "weather": [
-      "GET /weather",
-      "GET /weather/:locationId"
-    ],
-    "reports": [
-      "GET /reports",
-      "POST /reports"
-    ],
-    "provenance": [
-      "GET /provenance",
-      "GET /provenance/:id"
-    ],
-    "explanations": [
-      "GET /explanations",
-      "POST /explanations"
-    ],
-    "exports": [
-      "GET /exports",
-      "POST /exports"
-    ],
-    "jobs": [
-      "GET /jobs",
-      "GET /jobs/:jobId"
-    ],
-    "admin": [
-      "GET /admin/status",
-      "POST /admin/refresh"
-    ]
+    "health": ["GET /health/live", "GET /health/ready"],
+    "catalog": ["GET /catalog"],
+    "sources": ["GET /sources", "POST /sources"],
+    "releases": ["GET /releases/:release_id"],
+    "updates": ["GET /updates"],
+    "areas": ["GET /areas", "GET /areas/:areaId"],
+    "analyses": ["GET /analyses", "POST /analyses"],
+    "detections": ["GET /detections", "POST /detections"],
+    "tiles": ["GET /tiles", "GET /tiles/:tileId"],
+    "cells": ["GET /cells", "GET /cells/:cellId"],
+    "weather": ["GET /weather", "GET /weather/:locationId"],
+    "reports": ["GET /reports", "POST /reports"],
+    "provenance": ["GET /provenance", "GET /provenance/:id"],
+    "explanations": ["GET /explanations", "POST /explanations"],
+    "exports": ["GET /exports", "POST /exports"],
+    "jobs": ["GET /jobs", "GET /jobs/:jobId"],
+    "admin": ["GET /admin/status", "POST /admin/refresh"]
   },
-  "implementationStatus": "scaffolded"
+  "implementationStatus": "phase-1-implemented",
+  "implementedEndpoints": [
+    "GET /health/live",
+    "GET /health/ready",
+    "GET /catalog",
+    "GET /releases/:release_id",
+    "GET /updates"
+  ]
 }

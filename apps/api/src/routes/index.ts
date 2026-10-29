@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import type { FastifyPluginAsync } from 'fastify';
 import { healthRoutes } from './health.routes.js';
 import { catalogRoutes } from './catalog.routes.js';
 import { sourcesRoutes } from './sources.routes.js';
@@ -17,24 +17,24 @@ import { exportsRoutes } from './exports.routes.js';
 import { jobsRoutes } from './jobs.routes.js';
 import { adminRoutes } from './admin.routes.js';
 
-const router = Router();
+const apiRoutes: FastifyPluginAsync = async (app) => {
+  app.register(healthRoutes, { prefix: '/health' });
+  app.register(catalogRoutes, { prefix: '/catalog' });
+  app.register(sourcesRoutes, { prefix: '/sources' });
+  app.register(releasesRoutes, { prefix: '/releases' });
+  app.register(updatesRoutes, { prefix: '/updates' });
+  app.register(areasRoutes, { prefix: '/areas' });
+  app.register(analysesRoutes, { prefix: '/analyses' });
+  app.register(detectionsRoutes, { prefix: '/detections' });
+  app.register(tilesRoutes, { prefix: '/tiles' });
+  app.register(cellsRoutes, { prefix: '/cells' });
+  app.register(weatherRoutes, { prefix: '/weather' });
+  app.register(reportsRoutes, { prefix: '/reports' });
+  app.register(provenanceRoutes, { prefix: '/provenance' });
+  app.register(explanationsRoutes, { prefix: '/explanations' });
+  app.register(exportsRoutes, { prefix: '/exports' });
+  app.register(jobsRoutes, { prefix: '/jobs' });
+  app.register(adminRoutes, { prefix: '/admin' });
+};
 
-router.use('/health', healthRoutes);
-router.use('/catalog', catalogRoutes);
-router.use('/sources', sourcesRoutes);
-router.use('/releases', releasesRoutes);
-router.use('/updates', updatesRoutes);
-router.use('/areas', areasRoutes);
-router.use('/analyses', analysesRoutes);
-router.use('/detections', detectionsRoutes);
-router.use('/tiles', tilesRoutes);
-router.use('/cells', cellsRoutes);
-router.use('/weather', weatherRoutes);
-router.use('/reports', reportsRoutes);
-router.use('/provenance', provenanceRoutes);
-router.use('/explanations', explanationsRoutes);
-router.use('/exports', exportsRoutes);
-router.use('/jobs', jobsRoutes);
-router.use('/admin', adminRoutes);
-
-export default router;
+export default apiRoutes;

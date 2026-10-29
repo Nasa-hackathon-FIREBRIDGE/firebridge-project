@@ -1,6 +1,12 @@
 # FIREBRIDGE
 
-FIREBRIDGE is a modular monolith backend foundation for wildfire monitoring, analysis, and operational reporting. The project is organized as a TypeScript + Express API with supporting worker and shared package layers.
+FIREBRIDGE est le backend du projet NASA Space Apps Challenge « Harmonization of MODIS and VIIRS Hot Spots ». Il utilise TypeScript, Fastify et PostgreSQL/PostGIS, avec un worker séparé pour les traitements longs.
+
+Pour comprendre la vision du produit, le travail publié par l’équipe et la suite du développement, lire [Comprendre FIREBRIDGE](docs/COMPRENDRE_FIREBRIDGE.md). Ce document distingue l’état GitHub des modifications encore locales.
+
+La phase 1 implémente trois routes en lecture seule : `GET /api/v1/catalog`, `GET /api/v1/releases/{release_id}` et `GET /api/v1/updates`. Les autres ressources sont encore des squelettes et renvoient `501`.
+
+Le [guide de la phase 1](docs/PHASE_1.md) explique le fonctionnement, les limites et le contrat à partager avec la personne chargée de l’ingestion. Le [contrat HTTP](API.md) décrit les paramètres et les réponses. Les documents de conception fournis par l’équipe restent dans `documents/`.
 
 ## Architecture overview
 
@@ -8,34 +14,51 @@ FIREBRIDGE is a modular monolith backend foundation for wildfire monitoring, ana
 - `apps/worker`: asynchronous processing and queue workers using BullMQ and Redis
 - `packages/domain`: business entities and domain rules
 - `packages/contracts`: shared interfaces and DTOs
-- `packages/database`: Prisma schema and database layer
+- `packages/database`: schéma SQL PostgreSQL/PostGIS et squelette Prisma. La phase 1 utilise des requêtes SQL paramétrées avec `pg`, car le modèle Prisma ne décrit pas encore les tables métier.
 - `packages/integrations`: external provider adapters for satellite, weather, storage, and AI integrations
 - `packages/observability`: logging and tracing helpers
 
-## Implementation plan
-
-1. Establish the workspace and shared TypeScript configuration.
-2. Configure environment validation, logging, and application bootstrapping for the API.
-3. Provide structured health endpoints and versioned routing for `/api/v1`.
-4. Add controller/service skeletons for major resource groups: catalog, sources, releases, analyses, detections, weather, reports, exports, jobs, and admin.
-5. Add middleware, error handling, and API documentation with OpenAPI.
-6. Add worker infrastructure for Redis/BullMQ queue processing and background jobs.
-7. Add database and Prisma foundation with PostGIS-ready schema stubs.
-8. Document resource contracts and endpoint catalog for continued feature work.
-
 ## Local development
 
+Prérequis : Node.js 22 ou supérieur, npm et Docker Desktop démarré pour PostgreSQL/PostGIS.
+
+1. Copier `.env.example` vers `.env` si ce fichier n’existe pas déjà.
+2. Remplacer `CURSOR_SECRET` par une valeur aléatoire d’au moins 32 caractères. Tous les processus API doivent partager la même valeur. Une rotation invalide les anciens curseurs.
+3. Installer et démarrer :
+
 ```bash
-npm install
+npm ci
+docker compose up -d postgres
 npm run dev:api
 ```
 
-To bring up supporting infrastructure:
+Sous PowerShell, utiliser `npm.cmd` si l’exécution des scripts `npm.ps1` est bloquée.
+
+Docker démarre PostgreSQL/PostGIS ; il n’applique pas les migrations métier. Les migrations de l’équipe ne sont pas encore présentes dans le dépôt. En attendant leur livraison, le schéma SQL fourni peut servir à initialiser une base de développement vide, explicitement :
 
 ```bash
-docker compose up -d postgres redis
+docker compose cp packages/database/prisma/sql/firebridge_schema_v2.sql postgres:/tmp/firebridge_schema_v2.sql
+docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U firebridge -d firebridge -f /tmp/firebridge_schema_v2.sql
 ```
 
-## Notes
+Ce SQL est un artefact de conception pour une base vide, pas un historique de migrations. Les évolutions d’une base déjà initialisée devront suivre les migrations livrées par l’équipe ; le squelette `prisma migrate` actuel ne crée pas les tables métier de cette phase. L’API ne lance aucune migration au démarrage.
 
-This repository intentionally includes architecture and skeleton implementation only where required to provide a solid base. Endpoints that are not yet implemented return a planned/501 response rather than fake success payloads.
+L’API écoute sur `http://localhost:3000`. Swagger est accessible sur `http://localhost:3000/api-docs` et son document JSON sur `/api-docs/json`.
+
+**Aucune donnée NASA ni release n’est inventée au démarrage.** Tant que l’ingestion n’a pas publié de release et d’alias pour le scope choisi, `/catalog` sans paramètres et `/health/ready` répondent `503`. `/health/live` reste disponible. Un scope explicitement inconnu répond `404`.
+
+Redis est nécessaire au futur traitement asynchrone, mais pas aux trois lectures de la phase 1. Pour démarrer le worker existant : `docker compose up -d redis`, puis `npm run dev:worker`.
+
+## Validation
+
+Pour essayer les trois endpoints dans Swagger sans Docker, lancer `npm run demo:api`, puis ouvrir `http://localhost:3001/api-docs/`. Ce mode utilise un jeu fictif isolé en mémoire. Le [guide de test manuel](docs/TEST_MANUEL_PHASE_1.md) donne les paramètres et résultats à vérifier.
+
+```bash
+npm run lint
+npm run build
+npm test
+```
+
+Les tests des routes exécutent les requêtes SQL dans PostgreSQL embarqué via PGlite avec des données fictives isolées. Ils utilisent les définitions des tables du schéma SQL ; les types PostGIS y sont remplacés uniquement pour ces tests de métadonnées. Ils ne valident pas l’installation de PostGIS ni les requêtes spatiales. Aucun accès NASA, Redis ou Docker n’est requis pour ces tests.
+
+Le workflow GitHub Actions exécute ces trois vérifications sur les Pull Requests et les branches `main`, `staging` et `feat/**`.

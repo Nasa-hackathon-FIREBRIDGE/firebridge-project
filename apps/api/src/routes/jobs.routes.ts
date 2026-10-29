@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import type { FastifyPluginAsync } from 'fastify';
 import { jobsController } from '../controllers/jobs.controller.js';
 
-export const jobsRoutes = Router();
-
-jobsRoutes.get('/', jobsController.list);
-jobsRoutes.get('/:jobId', jobsController.getById);
+export const jobsRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/', jobsController.list);
+  app.get('/:jobId', jobsController.getById);
+};

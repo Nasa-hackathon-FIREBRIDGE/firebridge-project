@@ -1,14 +1,10 @@
-import type { Request, Response } from 'express';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 import { healthService } from '../services/health.service.js';
+import { envelope } from '../utils/response.js';
 
 export const healthController = {
-  getLiveStatus: (_req: Request, res: Response) => {
-    const result = healthService.getLiveStatus();
-    res.status(200).json(result);
-  },
-
-  getReadiness: (_req: Request, res: Response) => {
-    const result = healthService.getReadiness();
-    res.status(result.status === 'ok' ? 200 : 503).json(result);
-  }
+  getLiveStatus: async (_req: FastifyRequest, reply: FastifyReply) =>
+    reply.send(healthService.getLiveStatus()),
+  getReadiness: async (request: FastifyRequest, reply: FastifyReply) =>
+    reply.send(envelope(request, await request.server.catalogService.ready()))
 };

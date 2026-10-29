@@ -1,9 +1,9 @@
-import type { Request, Response } from 'express';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { envelope } from '../utils/response.js';
 
-export function notFoundHandler(_req: Request, res: Response): void {
-  res.status(404).json({
-    status: 'error',
-    message: 'Resource not found.',
-    data: null
+export function notFoundHandler(request: FastifyRequest, reply: FastifyReply) {
+  return reply.status(404).send({
+    ...envelope(request, null),
+    error: { code: 'NOT_FOUND', message: 'Resource not found.' }
   });
 }

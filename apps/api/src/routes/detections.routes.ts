@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import type { FastifyPluginAsync } from 'fastify';
 import { detectionsController } from '../controllers/detections.controller.js';
 
-export const detectionsRoutes = Router();
-
-detectionsRoutes.get('/', detectionsController.list);
-detectionsRoutes.post('/', detectionsController.create);
+export const detectionsRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/', detectionsController.list);
+  app.post('/', detectionsController.create);
+};

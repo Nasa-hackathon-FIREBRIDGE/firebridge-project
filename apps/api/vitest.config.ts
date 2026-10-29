@@ -1,8 +1,13 @@
 import { defineConfig } from 'vitest/config';
-
 export default defineConfig({
   test: {
-    include: ['tests/**/*.ts'],
-    exclude: ['**/*.js', 'dist/**', 'node_modules/**']
+    include: ['tests/**/*.test.ts'],
+    exclude: ['**/*.js', 'dist/**', 'node_modules/**'],
+    env: {
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgresql://unused:unused@localhost:1/unused',
+      DEFAULT_SCOPE_KEY: 'morocco',
+      CURSOR_SECRET: 'test-only-cursor-secret-at-least-32-characters'
+    }
   }
 });

@@ -1,51 +1,55 @@
-import compression from 'compression';
-import cors from 'cors';
-import express from 'express';
-import helmet from 'helmet';
-import swaggerJsdoc from 'swagger-jsdoc';
-import swaggerUi from 'swagger-ui-express';
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
+import compress from '@fastify/compress';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import { randomUUID } from 'node:crypto';
 import { env } from './config/env.js';
-import { logger } from './config/logger.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { notFoundHandler } from './middleware/not-found.js';
-import { securityHeaders } from './middleware/security.js';
-import apiRouter from './routes/index.js';
+import apiRoutes from './routes/index.js';
+import { createDatabase, type SnapshotDatabase } from './repositories/database.js';
+import { CatalogRepository } from './repositories/catalog.repository.js';
+import { CatalogService } from './services/catalog.service.js';
 
-export function createApp() {
-  const app = express();
-
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-  app.use(cors());
-  app.use(compression());
-  app.use(express.json({ limit: '1mb' }));
-  app.use(express.urlencoded({ extended: true }));
-  app.use(securityHeaders);
-
-  const swaggerDefinition = {
-    openapi: '3.0.0',
-    info: {
-      title: 'FIREBRIDGE API',
-      version: '1.0.0',
-      description: 'OpenAPI specification for the FIREBRIDGE backend foundation.'
-    },
-    servers: [{ url: `http://localhost:${env.PORT}/api/v1` }]
-  };
-
-  app.use(
-    '/api-docs',
-    swaggerUi.serve,
-    swaggerUi.setup(swaggerJsdoc({ definition: swaggerDefinition, apis: ['./src/routes/*.ts'] }))
-  );
-
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', service: env.APP_NAME, uptimeMs: process.uptime() * 1000 });
+export function createApp(
+  options: {
+    database?: SnapshotDatabase;
+    logger?: boolean;
+    documentation?: { title: string; description: string };
+  } = {}
+) {
+  const app = Fastify({
+    logger: options.logger ?? { level: env.LOG_LEVEL },
+    genReqId: () => randomUUID(),
+    bodyLimit: 1024 * 1024,
+    ajv: { customOptions: { removeAdditional: false, coerceTypes: false } }
   });
-
-  app.use('/api/v1', apiRouter);
-
-  app.use(notFoundHandler);
-  app.use(errorHandler);
-
-  app.locals.logger = logger;
+  const database = options.database ?? createDatabase(env.DATABASE_URL);
+  app.decorate('catalogService', new CatalogService(new CatalogRepository(database), env));
+  app.addHook('onClose', async () => {
+    if (!options.database) await database.close();
+  });
+  app.addHook('onRequest', async (request, reply) => {
+    reply.header('X-Request-Id', request.id);
+  });
+  app.register(helmet);
+  app.register(cors);
+  app.register(compress);
+  app.register(swagger, {
+    openapi: {
+      info: {
+        title: options.documentation?.title ?? 'FIREBRIDGE API',
+        version: '1.0.0',
+        description: options.documentation?.description
+      }
+    }
+  });
+  app.register(swaggerUi, { routePrefix: '/api-docs' });
+  app.get('/health', async () => ({ status: 'ok', service: env.APP_NAME }));
+  app.register(apiRoutes, { prefix: '/api/v1' });
+  app.setNotFoundHandler(notFoundHandler);
+  app.setErrorHandler(errorHandler);
   return app;
 }

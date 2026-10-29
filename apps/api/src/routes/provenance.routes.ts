@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import type { FastifyPluginAsync } from 'fastify';
 import { provenanceController } from '../controllers/provenance.controller.js';
 
-export const provenanceRoutes = Router();
-
-provenanceRoutes.get('/', provenanceController.list);
-provenanceRoutes.get('/:id', provenanceController.getById);
+export const provenanceRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/', provenanceController.list);
+  app.get('/:id', provenanceController.getById);
+};

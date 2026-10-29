@@ -35,6 +35,8 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3000
+      DEFAULT_SCOPE_KEY: ${DEFAULT_SCOPE_KEY:-morocco}
+      CURSOR_SECRET: ${CURSOR_SECRET:?Set CURSOR_SECRET in .env to at least 32 characters}
       DATABASE_URL: postgresql://firebridge:firebridge@postgres:5432/firebridge
       REDIS_URL: redis://redis:6379
     depends_on:

@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import type { FastifyPluginAsync } from 'fastify';
 import { adminController } from '../controllers/admin.controller.js';
 
-export const adminRoutes = Router();
-
-adminRoutes.get('/status', adminController.status);
-adminRoutes.post('/refresh', adminController.refresh);
+export const adminRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/status', adminController.status);
+  app.post('/refresh', adminController.refresh);
+};

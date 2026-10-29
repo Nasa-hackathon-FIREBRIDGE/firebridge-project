@@ -4,9 +4,10 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY apps/worker/package*.json ./apps/worker/
+COPY apps/api/package*.json ./apps/api/
 COPY packages ./packages
 
-RUN npm install
+RUN npm ci
 
 COPY . .
 
