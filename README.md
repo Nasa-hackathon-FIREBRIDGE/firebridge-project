@@ -36,6 +36,20 @@ To bring up supporting infrastructure:
 docker compose up -d postgres redis
 ```
 
+For production deployments, set `CORS_ORIGINS` to a comma-separated allowlist of
+browser origins. In development, CORS remains permissive unless an allowlist is
+provided. The worker currently has no registered BullMQ processors; it does not
+consume jobs and reports `not_configured` rather than claiming to be healthy.
+
+## Database next step
+
+The first Sources API module now has a Prisma model and an additive migration
+proposal in `packages/database/prisma/migrations/20261029030000_add_sources`.
+That migration has not been applied. Review and apply it only through the usual
+approved database migration process. The `firebridge_schema_v2.sql` file remains
+a design artifact for a separate `firebridge` schema and PostGIS-backed domain
+tables; it has not been applied and must not be used as a migration.
+
 ## Notes
 
 This repository intentionally includes architecture and skeleton implementation only where required to provide a solid base. Endpoints that are not yet implemented return a planned/501 response rather than fake success payloads.
