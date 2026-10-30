@@ -1,8 +1,16 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
-export function securityHeaders(req: Request, res: Response, next: NextFunction): void {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  next();
+export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer'
+};
+
+/**
+ * Fastify-native routes: app.addHook('onRequest', securityHeaders) on the ROOT instance.
+ */
+export async function securityHeaders(_req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+    reply.header(name, value);
+  }
 }

@@ -1,17 +1,14 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { healthService } from '../services/health.service.js';
 
 export const healthController = {
-  getLiveStatus: (_req: Request, res: Response) => {
-    res.status(200).json(healthService.getLiveStatus());
+  async getLiveStatus(_req: FastifyRequest, reply: FastifyReply) {
+    return reply.code(200).send(healthService.getLiveStatus());
   },
 
-  async getReadiness(_req: Request, res: Response, next: NextFunction) {
-    try {
-      const result = await healthService.getReadiness();
-      res.status(result.status === 'ok' ? 200 : 503).json(result);
-    } catch (error) {
-      next(error);
-    }
+  async getReadiness(_req: FastifyRequest, reply: FastifyReply) {
+    // Errors are rethrown to Fastify's error handler, as next(error) was before.
+    const result = await healthService.getReadiness();
+    return reply.code(result.status === 'ok' ? 200 : 503).send(result);
   }
 };

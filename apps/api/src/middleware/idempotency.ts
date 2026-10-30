@@ -1,5 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { Request, Response, NextFunction } from 'express';
+import type {
+  FastifyRequest,
+  onResponseAsyncHookHandler,
+  onSendAsyncHookHandler,
+  preHandlerAsyncHookHandler
+} from 'fastify';
 import { redis, ensureRedisConnected } from '../config/redis.js';
 import { logger } from '../config/logger.js';
 import {
@@ -374,7 +379,7 @@ export interface IdempotencyOptions {
    * Custom trusted scope provider.
    * Security: Untrusted client headers must NOT be used directly without authentication validation.
    */
-  getScope?: (req: Request) => string;
+  getScope?: (req: FastifyRequest) => string;
 
   /**
    * Error policy when the idempotency store cannot be reached.
@@ -415,26 +420,26 @@ export function canonicalize(obj: unknown): unknown {
 }
 
 /**
+ * Equivalent of Express's req.baseUrl + req.path: the URL path without the query string.
+ */
+function getRequestPath(req: FastifyRequest): string {
+  return req.url.split('?')[0] ?? '';
+}
+
+/**
  * Computes an unambiguous SHA-256 fingerprint of the request.
  * Encodes the method, route, canonicalized query params, and canonicalized body
  * into a structured JSON envelope, avoiding string boundary concatenation ambiguities.
  */
-export function computePayloadHash(req: Request): string {
-  const normalizedMethod = req.method.toUpperCase();
-  const normalizedRoute = (req.baseUrl + req.path).toLowerCase();
-  const canonicalQuery = canonicalize(req.query ?? {});
-  const canonicalBody = canonicalize(req.body ?? {});
-
+export function computePayloadHash(req: FastifyRequest): string {
   const fingerprintEnvelope = {
-    method: normalizedMethod,
-    route: normalizedRoute,
-    query: canonicalQuery,
-    body: canonicalBody
+    method: req.method.toUpperCase(),
+    route: getRequestPath(req).toLowerCase(),
+    query: canonicalize(req.query ?? {}),
+    body: canonicalize(req.body ?? {})
   };
 
-  return createHash('sha256')
-    .update(JSON.stringify(fingerprintEnvelope))
-    .digest('hex');
+  return createHash('sha256').update(JSON.stringify(fingerprintEnvelope)).digest('hex');
 }
 
 // ---------------------------------------------------------------------------
@@ -468,9 +473,12 @@ export function validateIdempotencyKeyFormat(rawKey: unknown): string {
  * Unauthenticated callers cannot spoof arbitrary client/tenant identifiers via headers.
  * If req.user is set (authenticated session), the user or tenant ID is trusted.
  * Otherwise, the request falls back to the isolated 'unauthenticated' scope partition.
+ *
+ * NOTE: the authentication hook MUST run before this route-level preHandler
+ * (e.g. a global onRequest hook), otherwise every key lands in 'unauthenticated'.
  */
-export function defaultScopeResolver(req: Request): string {
-  const user = (req as { user?: { tenantId?: string; id?: string } }).user;
+export function defaultScopeResolver(req: FastifyRequest): string {
+  const user = (req as unknown as { user?: { tenantId?: string; id?: string } }).user;
   if (user?.tenantId) {
     return `tenant:${user.tenantId}`;
   }
@@ -478,7 +486,7 @@ export function defaultScopeResolver(req: Request): string {
     return `user:${user.id}`;
   }
 
-  const auth = (req as { auth?: { tenantId?: string; sub?: string } }).auth;
+  const auth = (req as unknown as { auth?: { tenantId?: string; sub?: string } }).auth;
   if (auth?.tenantId) {
     return `tenant:${auth.tenantId}`;
   }
@@ -507,12 +515,14 @@ const STRIPPED_REPLAY_HEADERS = new Set([
   'date',
   'authorization',
   'x-request-id',
-  'idempotent-replayed'
+  'idempotent-replayed',
+  'content-length' // added: Fastify recomputes it on send
 ]);
 
-export function getSafeReplayHeaders(res: Response): Record<string, string> {
+export function getSafeReplayHeaders(
+  rawHeaders: Record<string, number | string | string[] | undefined>
+): Record<string, string> {
   const safeHeaders: Record<string, string> = {};
-  const rawHeaders = res.getHeaders();
 
   for (const [key, value] of Object.entries(rawHeaders)) {
     const lowerKey = key.toLowerCase();
@@ -525,10 +535,31 @@ export function getSafeReplayHeaders(res: Response): Record<string, string> {
 }
 
 // ---------------------------------------------------------------------------
-// Idempotency Middleware Factory
+// Idempotency Hooks Factory (Fastify-native)
 // ---------------------------------------------------------------------------
 
-export function idempotency(options: IdempotencyOptions = {}) {
+interface IdempotencyState {
+  storageKey: string;
+  ownerToken: string;
+  payloadHash: string;
+  responseBody: unknown;
+  responsePayload?: ResponsePayloadRecord;
+  capturable: boolean;
+  finalized: boolean;
+  stopRenewal: () => void;
+}
+
+export interface IdempotencyHooks {
+  preHandler: preHandlerAsyncHookHandler;
+  onSend: onSendAsyncHookHandler;
+  onResponse: onResponseAsyncHookHandler;
+}
+
+/**
+ * Usage (route level):
+ *   fastify.post('/', { ...idempotency({ required: false }) }, handler);
+ */
+export function idempotency(options: IdempotencyOptions = {}): IdempotencyHooks {
   const {
     required = false,
     lockTtlMs = 15_000,
@@ -540,10 +571,17 @@ export function idempotency(options: IdempotencyOptions = {}) {
     onStoreError = 'fail_closed'
   } = options;
 
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const states = new WeakMap<FastifyRequest, IdempotencyState>();
+
+  const releaseLock = (state: IdempotencyState, message: string): void => {
+    store.release(state.storageKey, state.ownerToken).catch((error: unknown) => {
+      logger.warn({ err: error instanceof Error ? error.message : 'Unknown error' }, message);
+    });
+  };
+
+  const preHandler: preHandlerAsyncHookHandler = async (req, reply) => {
     // Only apply to mutating HTTP methods
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-      next();
       return;
     }
 
@@ -551,24 +589,15 @@ export function idempotency(options: IdempotencyOptions = {}) {
 
     if (!rawHeader) {
       if (required) {
-        next(new MissingIdempotencyKeyError());
-        return;
+        throw new MissingIdempotencyKeyError();
       }
-      next();
       return;
     }
 
-    let key: string;
-    try {
-      key = validateIdempotencyKeyFormat(rawHeader);
-    } catch (err) {
-      next(err);
-      return;
-    }
+    const key = validateIdempotencyKeyFormat(rawHeader); // throws InvalidIdempotencyKeyError
 
-    const rawScope = getScope(req);
-    const scope = rawScope.trim() || 'unauthenticated';
-    const storageKey = `idempotency:${scope}:${req.method.toUpperCase()}:${req.baseUrl}${req.path}:${key}`;
+    const scope = getScope(req).trim() || 'unauthenticated';
+    const storageKey = `idempotency:${scope}:${req.method.toUpperCase()}:${getRequestPath(req)}:${key}`;
     const payloadHash = computePayloadHash(req);
     const ownerToken = randomUUID();
 
@@ -577,72 +606,65 @@ export function idempotency(options: IdempotencyOptions = {}) {
       acquireResult = await store.acquire(storageKey, payloadHash, lockTtlMs, ownerToken);
     } catch (error) {
       if (!required && onStoreError === 'bypass') {
-        req.app?.locals?.logger?.warn?.(
+        req.log.warn(
           { error },
           'Idempotency store is unreachable; bypassing idempotency as explicitly configured for optional route.'
         );
-        next();
         return;
       }
-      next(
-        new ServiceUnavailableError(
-          'Idempotency service is currently unavailable. Please retry shortly.'
-        )
+      throw new ServiceUnavailableError(
+        'Idempotency service is currently unavailable. Please retry shortly.'
       );
-      return;
     }
 
     if (!acquireResult.acquired) {
       const record = acquireResult.record;
 
       if (!record || record.status === 'in_progress') {
-        res.setHeader('Retry-After', '2');
-        next(
-          new IdempotencyConflictError(
-            'A request with this idempotency key is currently in progress.'
-          )
+        reply.header('Retry-After', '2');
+        throw new IdempotencyConflictError(
+          'A request with this idempotency key is currently in progress.'
         );
-        return;
       }
 
       if (record.payloadHash !== payloadHash) {
-        next(
-          new IdempotencyConflictError(
-            'Idempotency-Key was already used with a different request payload.'
-          )
+        throw new IdempotencyConflictError(
+          'Idempotency-Key was already used with a different request payload.'
         );
-        return;
       }
 
-      // Replay identical response safely with contractually relevant headers
+      // Replay identical response with contractually relevant headers.
+      // No state is registered, so onSend/onResponse are no-ops for replays.
       if (record.headers) {
         for (const [headerName, headerVal] of Object.entries(record.headers)) {
-          res.setHeader(headerName, headerVal);
+          reply.header(headerName, headerVal);
         }
       }
 
-      res.setHeader('Idempotent-Replayed', 'true');
+      reply.header('Idempotent-Replayed', 'true');
+      reply.code(record.statusCode ?? 200);
 
-      if (record.responsePayload) {
-        if (record.responsePayload.bodyType === 'buffer' && record.responsePayload.base64) {
-          res.status(record.statusCode).send(Buffer.from(record.responsePayload.base64, 'base64'));
-          return;
-        }
-        if (record.responsePayload.bodyType === 'text') {
-          res.status(record.statusCode).send(record.responsePayload.body as string);
-          return;
-        }
+      const payload = record.responsePayload;
+      if (payload?.bodyType === 'buffer' && payload.base64) {
+        return reply.send(Buffer.from(payload.base64, 'base64'));
       }
-
-      res.status(record.statusCode ?? 200).json(record.body);
-      return;
+      if (payload?.bodyType === 'text') {
+        return reply.send(payload.body as string);
+      }
+      if (record.body === undefined) {
+        return reply.send();
+      }
+      if (!reply.hasHeader('content-type')) {
+        reply.type('application/json; charset=utf-8');
+      }
+      return reply.send(JSON.stringify(record.body));
     }
 
     // Set up optional lease renewal heartbeat
     let renewalTimer: ReturnType<typeof setInterval> | undefined;
     let timerCleanedUp = false;
 
-    const stopRenewal = () => {
+    const stopRenewal = (): void => {
       if (timerCleanedUp) {
         return;
       }
@@ -677,112 +699,106 @@ export function idempotency(options: IdempotencyOptions = {}) {
       renewalTimer.unref?.();
     }
 
-    // Intercept response to safely capture and store result upon completion
-    let responseBody: unknown = undefined;
-    let responsePayload: ResponsePayloadRecord | undefined = undefined;
-
-    const originalJson = res.json.bind(res);
-    const originalSend = res.send.bind(res);
-
-    res.json = (body: unknown): Response => {
-      responseBody = body;
-      responsePayload = { bodyType: 'json', body };
-      return originalJson(body);
+    const state: IdempotencyState = {
+      storageKey,
+      ownerToken,
+      payloadHash,
+      responseBody: undefined,
+      responsePayload: undefined,
+      capturable: true,
+      finalized: false,
+      stopRenewal
     };
+    states.set(req, state);
 
-    res.send = (body: unknown): Response => {
-      if (responsePayload === undefined) {
-        if (Buffer.isBuffer(body)) {
-          responseBody = body;
-          responsePayload = {
-            bodyType: 'buffer',
-            base64: body.toString('base64')
-          };
-        } else if (typeof body === 'string') {
-          try {
-            responseBody = JSON.parse(body);
-            responsePayload = { bodyType: 'json', body: responseBody };
-          } catch {
-            responseBody = body;
-            responsePayload = { bodyType: 'text', body };
-          }
-        } else {
-          responseBody = body;
-          responsePayload = { bodyType: 'json', body };
-        }
-      }
-      return originalSend(body);
-    };
-
-    let finalized = false;
-
-    res.on('finish', () => {
-      stopRenewal();
-      if (finalized) {
+    // Premature connection close: release the lock (equivalent of res.on('close')).
+    reply.raw.once('close', () => {
+      state.stopRenewal();
+      if (state.finalized) {
         return;
       }
-      finalized = true;
+      state.finalized = true;
 
-      const statusCode = res.statusCode;
-
-      if (statusCode >= 200 && statusCode < 500) {
-        const safeHeaders = getSafeReplayHeaders(res);
-        store
-          .complete(
-            storageKey,
-            ownerToken,
-            payloadHash,
-            statusCode,
-            responseBody,
-            safeHeaders,
-            retentionTtlSec,
-            responsePayload
-          )
-          .then((persisted) => {
-            if (!persisted) {
-              logger.warn(
-                'Idempotency record was not persisted (lock expired or acquired by another owner)'
-              );
-            }
-          })
-          .catch((error: unknown) => {
-            logger.warn(
-              { err: error instanceof Error ? error.message : 'Unknown error' },
-              'Failed to persist completed idempotency record in background'
-            );
-          });
-      } else {
-        // Unhandled 5xx or server crash: release the lock atomically so client can retry
-        store
-          .release(storageKey, ownerToken)
-          .catch((error: unknown) => {
-            logger.warn(
-              { err: error instanceof Error ? error.message : 'Unknown error' },
-              'Failed to release idempotency lock in background'
-            );
-          });
+      if (!reply.raw.writableEnded) {
+        releaseLock(state, 'Failed to release idempotency lock on premature connection close');
       }
     });
-
-    res.on('close', () => {
-      stopRenewal();
-      if (finalized) {
-        return;
-      }
-      finalized = true;
-
-      if (!res.writableEnded) {
-        store
-          .release(storageKey, ownerToken)
-          .catch((error: unknown) => {
-            logger.warn(
-              { err: error instanceof Error ? error.message : 'Unknown error' },
-              'Failed to release idempotency lock on premature connection close'
-            );
-          });
-      }
-    });
-
-    next();
   };
+
+  // Captures the serialized body (replaces the res.json / res.send interception).
+  const onSend: onSendAsyncHookHandler = async (req, _reply, payload) => {
+    const state = states.get(req);
+    if (!state) {
+      return payload;
+    }
+
+    if (payload === null || payload === undefined) {
+      state.responseBody = undefined;
+      state.responsePayload = { bodyType: 'json', body: undefined };
+    } else if (Buffer.isBuffer(payload)) {
+      state.responseBody = payload;
+      state.responsePayload = { bodyType: 'buffer', base64: payload.toString('base64') };
+    } else if (typeof payload === 'string') {
+      try {
+        state.responseBody = JSON.parse(payload);
+        state.responsePayload = { bodyType: 'json', body: state.responseBody };
+      } catch {
+        state.responseBody = payload;
+        state.responsePayload = { bodyType: 'text', body: payload };
+      }
+    } else {
+      // Stream or other non-replayable payload.
+      state.capturable = false;
+    }
+
+    return payload;
+  };
+
+  // Finalization (replaces res.on('finish')).
+  const onResponse: onResponseAsyncHookHandler = async (req, reply) => {
+    const state = states.get(req);
+    if (!state) {
+      return;
+    }
+
+    state.stopRenewal();
+    if (state.finalized) {
+      return;
+    }
+    state.finalized = true;
+
+    const statusCode = reply.statusCode;
+
+    if (statusCode >= 200 && statusCode < 500 && state.capturable) {
+      store
+        .complete(
+          state.storageKey,
+          state.ownerToken,
+          state.payloadHash,
+          statusCode,
+          state.responseBody,
+          getSafeReplayHeaders(reply.getHeaders()),
+          retentionTtlSec,
+          state.responsePayload
+        )
+        .then((persisted) => {
+          if (!persisted) {
+            logger.warn(
+              'Idempotency record was not persisted (lock expired or acquired by another owner)'
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          logger.warn(
+            { err: error instanceof Error ? error.message : 'Unknown error' },
+            'Failed to persist completed idempotency record in background'
+          );
+        });
+    } else {
+      // 5xx or non-replayable body: release the lock atomically so the client can retry
+      releaseLock(state, 'Failed to release idempotency lock in background');
+    }
+  };
+
+  return { preHandler, onSend, onResponse };
 }

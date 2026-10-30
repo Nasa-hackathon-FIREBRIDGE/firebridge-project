@@ -1,6 +1,5 @@
-import express from 'express';
-import request from 'supertest';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   canonicalize,
   computePayloadHash,
@@ -8,10 +7,39 @@ import {
   getSafeReplayHeaders,
   idempotency,
   InMemoryIdempotencyStore,
-  validateIdempotencyKeyFormat
+  validateIdempotencyKeyFormat,
+  type IdempotencyOptions
 } from '../src/middleware/idempotency.js';
 import { errorHandler } from '../src/middleware/error-handler.js';
 import { InvalidIdempotencyKeyError } from '../src/errors/app-error.js';
+
+const apps: FastifyInstance[] = [];
+
+/** Fastify instance with the project's global error handler, closed after each test. */
+function newApp(): FastifyInstance {
+  const app = Fastify();
+  app.setErrorHandler(errorHandler);
+  apps.push(app);
+  return app;
+}
+
+/**
+ * The idempotency record is persisted/released in the background after the response is
+ * flushed (same as the Express 'finish' listener). Over real HTTP that completed long before
+ * the next request; with inject() we yield to the event loop explicitly.
+ */
+async function flushBackground(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
+function post(
+  app: FastifyInstance,
+  url: string,
+  options: { headers?: Record<string, string>; payload?: Record<string, unknown> } = {}
+) {
+  return app.inject({ method: 'POST', url, headers: options.headers, payload: options.payload });
+}
 
 describe('Idempotency-Key Middleware', () => {
   let store: InMemoryIdempotencyStore;
@@ -20,27 +48,29 @@ describe('Idempotency-Key Middleware', () => {
     store = new InMemoryIdempotencyStore();
   });
 
-  function createTestApp(options = {}) {
-    const app = express();
-    app.use(express.json());
+  afterEach(async () => {
+    await Promise.all(apps.splice(0).map((app) => app.close()));
+  });
 
-    const handlerMock = vi.fn((req, res) => {
-      res.status(201).json({ success: true, processedAt: Date.now(), data: req.body });
-    });
+  function createTestApp(options: Partial<IdempotencyOptions> = {}) {
+    const app = newApp();
+
+    const handlerMock = vi.fn((req: FastifyRequest, reply: FastifyReply) =>
+      reply.code(201).send({ success: true, processedAt: Date.now(), data: req.body })
+    );
 
     app.post(
       '/test-resource',
-      idempotency({
-        store,
-        getScope: (req) => (req.headers['x-tenant-id'] as string) || 'test-client',
-        ...options
-      }),
-      (req, res) => {
-        handlerMock(req, res);
-      }
+      {
+        ...idempotency({
+          store,
+          getScope: (req) => (req.headers['x-tenant-id'] as string) || 'test-client',
+          ...options
+        })
+      },
+      async (req, reply) => handlerMock(req, reply)
     );
 
-    app.use(errorHandler);
     return { app, handlerMock };
   }
 
@@ -72,22 +102,18 @@ describe('Idempotency-Key Middleware', () => {
     it('returns HTTP 400 when Idempotency-Key is required but absent', async () => {
       const { app } = createTestApp({ required: true });
 
-      const res = await request(app)
-        .post('/test-resource')
-        .send({ title: 'Task' });
+      const res = await post(app, '/test-resource', { payload: { title: 'Task' } });
 
-      expect(res.status).toBe(400);
-      expect(res.body.code).toBe('MISSING_IDEMPOTENCY_KEY');
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('MISSING_IDEMPOTENCY_KEY');
     });
 
     it('allows requests through when Idempotency-Key is optional and absent', async () => {
       const { app, handlerMock } = createTestApp({ required: false });
 
-      const res = await request(app)
-        .post('/test-resource')
-        .send({ title: 'Task' });
+      const res = await post(app, '/test-resource', { payload: { title: 'Task' } });
 
-      expect(res.status).toBe(201);
+      expect(res.statusCode).toBe(201);
       expect(handlerMock).toHaveBeenCalledOnce();
       expect(res.headers['idempotent-replayed']).toBeUndefined();
     });
@@ -95,13 +121,13 @@ describe('Idempotency-Key Middleware', () => {
     it('rejects malformed Idempotency-Key with HTTP 400', async () => {
       const { app } = createTestApp({ required: true });
 
-      const res = await request(app)
-        .post('/test-resource')
-        .set('Idempotency-Key', 'invalid key with spaces')
-        .send({ title: 'Task' });
+      const res = await post(app, '/test-resource', {
+        headers: { 'Idempotency-Key': 'invalid key with spaces' },
+        payload: { title: 'Task' }
+      });
 
-      expect(res.status).toBe(400);
-      expect(res.body.code).toBe('INVALID_IDEMPOTENCY_KEY');
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('INVALID_IDEMPOTENCY_KEY');
     });
   });
 
@@ -112,24 +138,26 @@ describe('Idempotency-Key Middleware', () => {
       const payload = { title: 'Create Source', value: 42 };
 
       // First call
-      const firstRes = await request(app)
-        .post('/test-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .send(payload);
+      const firstRes = await post(app, '/test-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        payload
+      });
 
-      expect(firstRes.status).toBe(201);
-      expect(firstRes.body.success).toBe(true);
+      expect(firstRes.statusCode).toBe(201);
+      expect(firstRes.json().success).toBe(true);
       expect(handlerMock).toHaveBeenCalledOnce();
       expect(firstRes.headers['idempotent-replayed']).toBeUndefined();
 
-      // Second call with same key and same body
-      const secondRes = await request(app)
-        .post('/test-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .send(payload);
+      await flushBackground();
 
-      expect(secondRes.status).toBe(201);
-      expect(secondRes.body).toEqual(firstRes.body);
+      // Second call with same key and same body
+      const secondRes = await post(app, '/test-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        payload
+      });
+
+      expect(secondRes.statusCode).toBe(201);
+      expect(secondRes.json()).toEqual(firstRes.json());
       expect(secondRes.headers['idempotent-replayed']).toBe('true');
       // Handler must NOT have been called a second time
       expect(handlerMock).toHaveBeenCalledOnce();
@@ -140,22 +168,23 @@ describe('Idempotency-Key Middleware', () => {
       const idempotencyKey = 'req-key-002';
 
       // First call with payload A
-      await request(app)
-        .post('/test-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .send({ name: 'Payload A' });
+      await post(app, '/test-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        payload: { name: 'Payload A' }
+      });
 
       expect(handlerMock).toHaveBeenCalledOnce();
+      await flushBackground();
 
       // Second call with same key but payload B
-      const conflictRes = await request(app)
-        .post('/test-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .send({ name: 'Payload B (different)' });
+      const conflictRes = await post(app, '/test-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        payload: { name: 'Payload B (different)' }
+      });
 
-      expect(conflictRes.status).toBe(409);
-      expect(conflictRes.body.code).toBe('IDEMPOTENCY_CONFLICT');
-      expect(conflictRes.body.message).toContain('different request payload');
+      expect(conflictRes.statusCode).toBe(409);
+      expect(conflictRes.json().code).toBe('IDEMPOTENCY_CONFLICT');
+      expect(conflictRes.json().message).toContain('different request payload');
       // Handler must NOT be called for the conflicting request
       expect(handlerMock).toHaveBeenCalledOnce();
     });
@@ -170,67 +199,64 @@ describe('Idempotency-Key Middleware', () => {
       const storageKey = `idempotency:test-client:POST:/test-resource:${idempotencyKey}`;
       const payloadHash = computePayloadHash({
         method: 'POST',
-        baseUrl: '',
-        path: '/test-resource',
+        url: '/test-resource',
         body: payload,
         query: {}
-      } as unknown as express.Request);
+      } as unknown as FastifyRequest);
 
       // Simulate Request 1 having acquired the in_progress lock with an ownership token
       await store.acquire(storageKey, payloadHash, 10_000, 'owner-token-1');
 
       // Request 2 arrives while in_progress lock is held
-      const concurrentRes = await request(app)
-        .post('/test-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .send(payload);
+      const concurrentRes = await post(app, '/test-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        payload
+      });
 
-      expect(concurrentRes.status).toBe(409);
-      expect(concurrentRes.body.code).toBe('IDEMPOTENCY_CONFLICT');
-      expect(concurrentRes.body.message).toContain('currently in progress');
+      expect(concurrentRes.statusCode).toBe(409);
+      expect(concurrentRes.json().code).toBe('IDEMPOTENCY_CONFLICT');
+      expect(concurrentRes.json().message).toContain('currently in progress');
       expect(concurrentRes.headers['retry-after']).toBe('2');
     });
   });
 
   describe('Error handling and lock release', () => {
     it('releases the lock when an unhandled 500 error occurs, allowing subsequent retries', async () => {
-      const app = express();
-      app.use(express.json());
+      const app = newApp();
 
       let attempts = 0;
       app.post(
         '/failing-resource',
-        idempotency({ store, required: true }),
-        (_req, _res, next) => {
+        { ...idempotency({ store, required: true }) },
+        async (_req, reply) => {
           attempts++;
           if (attempts === 1) {
-            next(new Error('Transient database error'));
-            return;
+            throw new Error('Transient database error');
           }
-          _res.status(201).json({ success: true, attempt: attempts });
+          return reply.code(201).send({ success: true, attempt: attempts });
         }
       );
-      app.use(errorHandler);
 
       const idempotencyKey = 'retryable-key';
       const payload = { item: 'value' };
 
       // First attempt fails with 500
-      const firstRes = await request(app)
-        .post('/failing-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .send(payload);
+      const firstRes = await post(app, '/failing-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        payload
+      });
 
-      expect(firstRes.status).toBe(500);
+      expect(firstRes.statusCode).toBe(500);
+      await flushBackground();
 
       // Second attempt with same key must not be blocked by lingering in_progress lock
-      const retryRes = await request(app)
-        .post('/failing-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .send(payload);
+      const retryRes = await post(app, '/failing-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        payload
+      });
 
-      expect(retryRes.status).toBe(201);
-      expect(retryRes.body.attempt).toBe(2);
+      expect(retryRes.statusCode).toBe(201);
+      expect(retryRes.json().attempt).toBe(2);
     });
   });
 
@@ -240,22 +266,21 @@ describe('Idempotency-Key Middleware', () => {
       const idempotencyKey = 'shared-key-across-tenants';
 
       // Tenant A
-      const resA = await request(app)
-        .post('/test-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .set('x-tenant-id', 'tenant-alpha')
-        .send({ data: 'A' });
+      const resA = await post(app, '/test-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey, 'x-tenant-id': 'tenant-alpha' },
+        payload: { data: 'A' }
+      });
 
-      expect(resA.status).toBe(201);
+      expect(resA.statusCode).toBe(201);
+      await flushBackground();
 
       // Tenant B uses the same key with different data -> must NOT conflict due to tenant scoping
-      const resB = await request(app)
-        .post('/test-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .set('x-tenant-id', 'tenant-beta')
-        .send({ data: 'B' });
+      const resB = await post(app, '/test-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey, 'x-tenant-id': 'tenant-beta' },
+        payload: { data: 'B' }
+      });
 
-      expect(resB.status).toBe(201);
+      expect(resB.statusCode).toBe(201);
       expect(handlerMock).toHaveBeenCalledTimes(2);
     });
 
@@ -264,7 +289,7 @@ describe('Idempotency-Key Middleware', () => {
         headers: { 'x-tenant-id': 'spoofed-tenant-id' },
         user: undefined,
         auth: undefined
-      } as unknown as express.Request;
+      } as unknown as FastifyRequest;
 
       // Unauthenticated caller cannot hijack another tenant's scope by sending custom headers
       expect(defaultScopeResolver(unauthenticatedReq)).toBe('unauthenticated');
@@ -272,7 +297,7 @@ describe('Idempotency-Key Middleware', () => {
       const authenticatedReq = {
         headers: {},
         user: { tenantId: 'real-trusted-tenant' }
-      } as unknown as express.Request;
+      } as unknown as FastifyRequest;
 
       expect(defaultScopeResolver(authenticatedReq)).toBe('tenant:real-trusted-tenant');
     });
@@ -284,10 +309,10 @@ describe('Idempotency-Key Middleware', () => {
       const { app, handlerMock } = createTestApp({ required: true, retentionTtlSec: 1 });
       const idempotencyKey = 'expiring-key';
 
-      await request(app)
-        .post('/test-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .send({ item: 'data' });
+      await post(app, '/test-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        payload: { item: 'data' }
+      });
 
       expect(handlerMock).toHaveBeenCalledOnce();
 
@@ -295,10 +320,10 @@ describe('Idempotency-Key Middleware', () => {
       await new Promise((r) => setTimeout(r, 1100));
 
       // Re-send same key and body after expiration -> should re-execute
-      await request(app)
-        .post('/test-resource')
-        .set('Idempotency-Key', idempotencyKey)
-        .send({ item: 'data' });
+      await post(app, '/test-resource', {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        payload: { item: 'data' }
+      });
 
       expect(handlerMock).toHaveBeenCalledTimes(2);
     });
@@ -392,19 +417,17 @@ describe('Idempotency-Key Middleware', () => {
     it('produces identical payload hashes for JSON bodies with different key orderings', () => {
       const req1 = {
         method: 'POST',
-        baseUrl: '/api/v1',
-        path: '/sources',
+        url: '/api/v1/sources',
         query: { kind: 'hotspots', provider: 'NASA' },
         body: { name: 'Fire', count: 10, nested: { b: 2, a: 1 } }
-      } as unknown as express.Request;
+      } as unknown as FastifyRequest;
 
       const req2 = {
         method: 'POST',
-        baseUrl: '/api/v1',
-        path: '/sources',
+        url: '/api/v1/sources',
         query: { provider: 'NASA', kind: 'hotspots' },
         body: { count: 10, name: 'Fire', nested: { a: 1, b: 2 } }
-      } as unknown as express.Request;
+      } as unknown as FastifyRequest;
 
       expect(computePayloadHash(req1)).toBe(computePayloadHash(req2));
     });
@@ -412,27 +435,24 @@ describe('Idempotency-Key Middleware', () => {
     it('produces different hashes when query parameters or body values differ', () => {
       const reqBase = {
         method: 'POST',
-        baseUrl: '',
-        path: '/sources',
+        url: '/sources',
         query: { limit: '10' },
         body: { active: true }
-      } as unknown as express.Request;
+      } as unknown as FastifyRequest;
 
       const reqDiffQuery = {
         method: 'POST',
-        baseUrl: '',
-        path: '/sources',
+        url: '/sources',
         query: { limit: '20' },
         body: { active: true }
-      } as unknown as express.Request;
+      } as unknown as FastifyRequest;
 
       const reqDiffBody = {
         method: 'POST',
-        baseUrl: '',
-        path: '/sources',
+        url: '/sources',
         query: { limit: '10' },
         body: { active: false }
-      } as unknown as express.Request;
+      } as unknown as FastifyRequest;
 
       expect(computePayloadHash(reqBase)).not.toBe(computePayloadHash(reqDiffQuery));
       expect(computePayloadHash(reqBase)).not.toBe(computePayloadHash(reqDiffBody));
@@ -454,23 +474,21 @@ describe('Idempotency-Key Middleware', () => {
         release: vi.fn()
       };
 
-      const app = express();
-      app.use(express.json());
+      const app = newApp();
       app.post(
         '/critical-endpoint',
-        idempotency({ store: failingStore, required: true, onStoreError: 'fail_closed' }),
-        (_req, res) => res.status(200).json({ ok: true })
+        { ...idempotency({ store: failingStore, required: true, onStoreError: 'fail_closed' }) },
+        async (_req, reply) => reply.code(200).send({ ok: true })
       );
-      app.use(errorHandler);
 
-      const res = await request(app)
-        .post('/critical-endpoint')
-        .set('Idempotency-Key', 'idemp-fail-1')
-        .send({ data: 1 });
+      const res = await post(app, '/critical-endpoint', {
+        headers: { 'Idempotency-Key': 'idemp-fail-1' },
+        payload: { data: 1 }
+      });
 
-      expect(res.status).toBe(503);
-      expect(res.body.code).toBe('SERVICE_UNAVAILABLE');
-      expect(res.body.message).not.toContain('Connection refused');
+      expect(res.statusCode).toBe(503);
+      expect(res.json().code).toBe('SERVICE_UNAVAILABLE');
+      expect(res.json().message).not.toContain('Connection refused');
     });
 
     it('bypasses idempotency without failing when route explicitly opts into bypass on failure', async () => {
@@ -480,79 +498,74 @@ describe('Idempotency-Key Middleware', () => {
         release: vi.fn()
       };
 
-      const app = express();
-      app.use(express.json());
-      const handler = vi.fn((_req, res) => res.status(200).json({ executed: true }));
+      const app = newApp();
+      const handler = vi.fn((_req: FastifyRequest, reply: FastifyReply) =>
+        reply.code(200).send({ executed: true })
+      );
 
       app.post(
         '/optional-endpoint',
-        idempotency({ store: failingStore, required: false, onStoreError: 'bypass' }),
-        handler
+        { ...idempotency({ store: failingStore, required: false, onStoreError: 'bypass' }) },
+        async (req, reply) => handler(req, reply)
       );
-      app.use(errorHandler);
 
-      const res = await request(app)
-        .post('/optional-endpoint')
-        .set('Idempotency-Key', 'idemp-bypass-1')
-        .send({ data: 1 });
+      const res = await post(app, '/optional-endpoint', {
+        headers: { 'Idempotency-Key': 'idemp-bypass-1' },
+        payload: { data: 1 }
+      });
 
-      expect(res.status).toBe(200);
-      expect(res.body.executed).toBe(true);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().executed).toBe(true);
       expect(handler).toHaveBeenCalledOnce();
     });
   });
 
   describe('Response Replay Header Filtering & Non-JSON Handling', () => {
     it('filters out hop-by-hop and sensitive headers during replay while preserving contract headers', () => {
-      const mockRes = {
-        getHeaders: () => ({
-          'content-type': 'application/json',
-          etag: '"abc123"',
-          'set-cookie': 'session=secret123',
-          connection: 'keep-alive',
-          'x-request-id': 'req-xyz'
-        })
-      } as unknown as express.Response;
-
-      const safe = getSafeReplayHeaders(mockRes);
+      // getSafeReplayHeaders now receives the response headers directly (reply.getHeaders()).
+      const safe = getSafeReplayHeaders({
+        'content-type': 'application/json',
+        etag: '"abc123"',
+        'set-cookie': 'session=secret123',
+        connection: 'keep-alive',
+        'x-request-id': 'req-xyz',
+        'content-length': 42
+      });
       expect(safe['content-type']).toBe('application/json');
       expect(safe.etag).toBe('"abc123"');
       expect(safe['set-cookie']).toBeUndefined();
       expect(safe.connection).toBeUndefined();
       expect(safe['x-request-id']).toBeUndefined();
+      // Fastify recomputes content-length on send, so it must not be replayed.
+      expect(safe['content-length']).toBeUndefined();
     });
 
     it('replays plain text and binary buffer responses accurately', async () => {
-      const app = express();
-      app.use(express.json());
+      const app = newApp();
 
       let callCount = 0;
-      app.post(
-        '/text-endpoint',
-        idempotency({ store, required: true }),
-        (_req, res) => {
-          callCount++;
-          res.setHeader('Content-Type', 'text/plain');
-          res.status(200).send(`Plain text execution #${callCount}`);
-        }
-      );
-      app.use(errorHandler);
+      app.post('/text-endpoint', { ...idempotency({ store, required: true }) }, async (_req, reply) => {
+        callCount++;
+        reply.header('Content-Type', 'text/plain');
+        return reply.code(200).send(`Plain text execution #${callCount}`);
+      });
 
       // First call
-      const res1 = await request(app)
-        .post('/text-endpoint')
-        .set('Idempotency-Key', 'text-key-1');
+      const res1 = await post(app, '/text-endpoint', {
+        headers: { 'Idempotency-Key': 'text-key-1' }
+      });
 
-      expect(res1.status).toBe(200);
-      expect(res1.text).toBe('Plain text execution #1');
+      expect(res1.statusCode).toBe(200);
+      expect(res1.body).toBe('Plain text execution #1');
+      await flushBackground();
 
       // Replay
-      const res2 = await request(app)
-        .post('/text-endpoint')
-        .set('Idempotency-Key', 'text-key-1');
+      const res2 = await post(app, '/text-endpoint', {
+        headers: { 'Idempotency-Key': 'text-key-1' }
+      });
 
-      expect(res2.status).toBe(200);
-      expect(res2.text).toBe('Plain text execution #1');
+      expect(res2.statusCode).toBe(200);
+      expect(res2.body).toBe('Plain text execution #1');
       expect(res2.headers['idempotent-replayed']).toBe('true');
       expect(callCount).toBe(1);
     });
@@ -566,22 +579,21 @@ describe('Idempotency-Key Middleware', () => {
         release: vi.fn()
       };
 
-      const app = express();
-      app.use(express.json());
+      const app = newApp();
       app.post(
         '/bg-complete-fail',
-        idempotency({ store: rejectingStore, required: true }),
-        (_req, res) => res.status(201).json({ created: true })
+        { ...idempotency({ store: rejectingStore, required: true }) },
+        async (_req, reply) => reply.code(201).send({ created: true })
       );
-      app.use(errorHandler);
 
-      const res = await request(app)
-        .post('/bg-complete-fail')
-        .set('Idempotency-Key', 'bg-key-complete-1')
-        .send({ foo: 'bar' });
+      const res = await post(app, '/bg-complete-fail', {
+        headers: { 'Idempotency-Key': 'bg-key-complete-1' },
+        payload: { foo: 'bar' }
+      });
 
-      expect(res.status).toBe(201);
-      expect(res.body.created).toBe(true);
+      expect(res.statusCode).toBe(201);
+      expect(res.json().created).toBe(true);
+      await flushBackground();
       expect(rejectingStore.complete).toHaveBeenCalledOnce();
     });
 
@@ -592,21 +604,22 @@ describe('Idempotency-Key Middleware', () => {
         release: vi.fn().mockRejectedValue(new Error('Redis failed to release lock'))
       };
 
-      const app = express();
-      app.use(express.json());
+      const app = newApp();
       app.post(
         '/bg-release-fail',
-        idempotency({ store: rejectingStore, required: true }),
-        (_req, _res, next) => next(new Error('Simulated internal server crash'))
+        { ...idempotency({ store: rejectingStore, required: true }) },
+        async () => {
+          throw new Error('Simulated internal server crash');
+        }
       );
-      app.use(errorHandler);
 
-      const res = await request(app)
-        .post('/bg-release-fail')
-        .set('Idempotency-Key', 'bg-key-release-1')
-        .send({ foo: 'bar' });
+      const res = await post(app, '/bg-release-fail', {
+        headers: { 'Idempotency-Key': 'bg-key-release-1' },
+        payload: { foo: 'bar' }
+      });
 
-      expect(res.status).toBe(500);
+      expect(res.statusCode).toBe(500);
+      await flushBackground();
       expect(rejectingStore.release).toHaveBeenCalledOnce();
     });
 
@@ -619,30 +632,30 @@ describe('Idempotency-Key Middleware', () => {
         renewLease: renewLeaseMock
       };
 
-      const app = express();
-      app.use(express.json());
+      const app = newApp();
       app.post(
         '/timer-cleanup-endpoint',
-        idempotency({
-          store: testStore,
-          required: true,
-          enableLeaseRenewal: true,
-          lockTtlMs: 200,
-          leaseRenewalIntervalMs: 50
-        }),
-        (_req, res) => {
-          setTimeout(() => {
-            res.status(200).json({ done: true });
-          }, 80);
+        {
+          ...idempotency({
+            store: testStore,
+            required: true,
+            enableLeaseRenewal: true,
+            lockTtlMs: 200,
+            leaseRenewalIntervalMs: 50
+          })
+        },
+        async (_req, reply) => {
+          await new Promise((resolve) => setTimeout(resolve, 80));
+          return reply.code(200).send({ done: true });
         }
       );
-      app.use(errorHandler);
 
-      const res = await request(app)
-        .post('/timer-cleanup-endpoint')
-        .set('Idempotency-Key', 'timer-key-1');
+      const res = await post(app, '/timer-cleanup-endpoint', {
+        headers: { 'Idempotency-Key': 'timer-key-1' }
+      });
 
-      expect(res.status).toBe(200);
+      expect(res.statusCode).toBe(200);
+      await flushBackground();
       const renewCountAtFinish = renewLeaseMock.mock.calls.length;
 
       // Wait additional intervals to confirm timer is dead and stopped
@@ -659,30 +672,29 @@ describe('Idempotency-Key Middleware', () => {
         renewLease: renewLeaseFailing
       };
 
-      const app = express();
-      app.use(express.json());
+      const app = newApp();
       app.post(
         '/renew-fail-endpoint',
-        idempotency({
-          store: testStore,
-          required: true,
-          enableLeaseRenewal: true,
-          lockTtlMs: 100,
-          leaseRenewalIntervalMs: 20
-        }),
-        (_req, res) => {
-          setTimeout(() => {
-            res.status(200).json({ done: true });
-          }, 60);
+        {
+          ...idempotency({
+            store: testStore,
+            required: true,
+            enableLeaseRenewal: true,
+            lockTtlMs: 100,
+            leaseRenewalIntervalMs: 20
+          })
+        },
+        async (_req, reply) => {
+          await new Promise((resolve) => setTimeout(resolve, 60));
+          return reply.code(200).send({ done: true });
         }
       );
-      app.use(errorHandler);
 
-      const res = await request(app)
-        .post('/renew-fail-endpoint')
-        .set('Idempotency-Key', 'renew-fail-key-1');
+      const res = await post(app, '/renew-fail-endpoint', {
+        headers: { 'Idempotency-Key': 'renew-fail-key-1' }
+      });
 
-      expect(res.status).toBe(200);
+      expect(res.statusCode).toBe(200);
       expect(renewLeaseFailing).toHaveBeenCalled();
     });
   });
