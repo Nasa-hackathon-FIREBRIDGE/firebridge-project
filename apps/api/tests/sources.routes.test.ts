@@ -1,7 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { sourcesService } from '../src/services/sources.service.js';
+
+type App = Awaited<ReturnType<typeof createApp>>;
+
+const apps: App[] = [];
+
+async function buildApp(): Promise<App> {
+  // inject() cannot capture bodies written through @fastify/express, so the Fastify-native routes
+  // under test are exercised without the legacy Express layer (it is covered over real HTTP in app.test.ts).
+  const app = await createApp({ legacyExpress: false });
+  await app.ready();
+  apps.push(app);
+  return app;
+}
+
+afterEach(async () => {
+  await Promise.all(apps.splice(0).map((app) => app.close()));
+  vi.restoreAllMocks();
+});
 
 // Shared fixture for a minimal valid source record returned by the mocked service.
 const minimalSourceRecord = {
@@ -37,17 +54,14 @@ const minimalCreateBody = {
 } as const;
 
 describe('GET /api/v1/sources', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it('returns HTTP 200 with an empty sources array when the database has no matching records', async () => {
     vi.spyOn(sourcesService, 'list').mockResolvedValue({ sources: [], nextCursor: null });
 
-    const response = await request(createApp()).get('/api/v1/sources');
+    const app = await buildApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/sources' });
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
       status: 'ok',
       message: 'Sources retrieved.',
       data: { sources: [], nextCursor: null }
@@ -60,13 +74,14 @@ describe('GET /api/v1/sources', () => {
       nextCursor: null
     } as Awaited<ReturnType<typeof sourcesService.list>>);
 
-    const response = await request(createApp()).get('/api/v1/sources');
+    const app = await buildApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/sources' });
 
-    expect(response.status).toBe(200);
-    expect(response.status).toBe(200);
-    expect(response.body.data.sources).toHaveLength(1);
-    expect(response.body.data.sources[0].id).toBe('source-1');
-    expect(response.body.data.nextCursor).toBeNull();
+    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.sources).toHaveLength(1);
+    expect(response.json().data.sources[0].id).toBe('source-1');
+    expect(response.json().data.nextCursor).toBeNull();
   });
 
   it('validates listing filters and passes them to the service', async () => {
@@ -75,28 +90,32 @@ describe('GET /api/v1/sources', () => {
       nextCursor: null
     } as Awaited<ReturnType<typeof sourcesService.list>>);
 
+    const app = await buildApp();
+
     // Out-of-range limit — rejected before the service is called.
-    const invalidResponse = await request(createApp()).get('/api/v1/sources?limit=101');
-    expect(invalidResponse.status).toBe(400);
+    const invalidResponse = await app.inject({ method: 'GET', url: '/api/v1/sources?limit=101' });
+    expect(invalidResponse.statusCode).toBe(400);
     expect(list).not.toHaveBeenCalled();
 
     // Valid filters — service receives parsed, coerced values.
-    const response = await request(createApp()).get(
-      '/api/v1/sources?kind=hotspots&provider=NASA&limit=10'
-    );
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/sources?kind=hotspots&provider=NASA&limit=10'
+    });
 
-    expect(response.status).toBe(200);
-    expect(response.body.status).toBe('ok');
+    expect(response.statusCode).toBe(200);
+    expect(response.json().status).toBe('ok');
     expect(list).toHaveBeenCalledWith({ kind: 'hotspots', provider: 'NASA', limit: 10 });
   });
 
   it('returns HTTP 400 when an unknown query parameter is supplied', async () => {
     const list = vi.spyOn(sourcesService, 'list');
 
-    const response = await request(createApp()).get('/api/v1/sources?foo=bar');
+    const app = await buildApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/sources?foo=bar' });
 
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
       status: 'error',
       code: 'INVALID_QUERY',
       message: 'Invalid source query.',
@@ -107,11 +126,12 @@ describe('GET /api/v1/sources', () => {
   });
 
   it('returns HTTP 400 when an invalid kind value is supplied', async () => {
-    const response = await request(createApp()).get('/api/v1/sources?kind=invalid_kind');
+    const app = await buildApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/sources?kind=invalid_kind' });
 
-    expect(response.status).toBe(400);
-    expect(response.body.status).toBe('error');
-    expect(response.body.code).toBe('INVALID_QUERY');
+    expect(response.statusCode).toBe(400);
+    expect(response.json().status).toBe('error');
+    expect(response.json().code).toBe('INVALID_QUERY');
   });
 
   it('forwards a cursor query parameter to the service unchanged', async () => {
@@ -120,7 +140,8 @@ describe('GET /api/v1/sources', () => {
       nextCursor: null
     } as Awaited<ReturnType<typeof sourcesService.list>>);
 
-    await request(createApp()).get('/api/v1/sources?cursor=some-uuid-cursor&limit=10');
+    const app = await buildApp();
+    await app.inject({ method: 'GET', url: '/api/v1/sources?cursor=some-uuid-cursor&limit=10' });
 
     expect(list).toHaveBeenCalledWith({
       cursor: 'some-uuid-cursor',
@@ -129,11 +150,12 @@ describe('GET /api/v1/sources', () => {
   });
 
   it('returns HTTP 400 for limit below the minimum (0)', async () => {
-    const response = await request(createApp()).get('/api/v1/sources?limit=0');
+    const app = await buildApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/sources?limit=0' });
 
-    expect(response.status).toBe(400);
-    expect(response.body.status).toBe('error');
-    expect(response.body.code).toBe('INVALID_QUERY');
+    expect(response.statusCode).toBe(400);
+    expect(response.json().status).toBe('error');
+    expect(response.json().code).toBe('INVALID_QUERY');
   });
 
   it('returns HTTP 500 and does not expose internal error details when the database fails', async () => {
@@ -141,17 +163,18 @@ describe('GET /api/v1/sources', () => {
       new Error('relation "firebridge"."sources" does not exist — internal detail')
     );
 
-    const response = await request(createApp()).get('/api/v1/sources');
+    const app = await buildApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/sources' });
 
-    expect(response.status).toBe(500);
-    expect(response.body).toEqual({
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({
       status: 'error',
       code: 'INTERNAL_SERVER_ERROR',
       message: 'Internal server error.',
       data: null
     });
-    expect(JSON.stringify(response.body)).not.toContain('firebridge');
-    expect(JSON.stringify(response.body)).not.toContain('internal detail');
+    expect(JSON.stringify(response.json())).not.toContain('firebridge');
+    expect(JSON.stringify(response.json())).not.toContain('internal detail');
   });
 
   it('returns HTTP 200 with a nextCursor when a subsequent page exists', async () => {
@@ -160,10 +183,11 @@ describe('GET /api/v1/sources', () => {
       nextCursor: 'source-1'
     } as Awaited<ReturnType<typeof sourcesService.list>>);
 
-    const response = await request(createApp()).get('/api/v1/sources?limit=1');
+    const app = await buildApp();
+    const response = await app.inject({ method: 'GET', url: '/api/v1/sources?limit=1' });
 
-    expect(response.status).toBe(200);
-    expect(response.body.data.nextCursor).toBe('source-1');
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.nextCursor).toBe('source-1');
   });
 });
 
@@ -172,10 +196,6 @@ describe('GET /api/v1/sources', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /api/v1/sources', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it('validates and creates a source, returning HTTP 201 with the created record', async () => {
     const create = vi.spyOn(sourcesService, 'create').mockResolvedValue({
       id: 'source-1',
@@ -186,28 +206,39 @@ describe('POST /api/v1/sources', () => {
       metadata: {}
     } as Awaited<ReturnType<typeof sourcesService.create>>);
 
+    const app = await buildApp();
+
     // Non-http URL is rejected before the service is called.
-    const invalidResponse = await request(createApp())
-      .post('/api/v1/sources')
-      .send({ ...minimalCreateBody, documentationUrl: 'file:///local/data' });
-    expect(invalidResponse.status).toBe(400);
+    const invalidResponse = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sources',
+      payload: { ...minimalCreateBody, documentationUrl: 'file:///local/data' }
+    });
+    expect(invalidResponse.statusCode).toBe(400);
     expect(create).not.toHaveBeenCalled();
 
-    const response = await request(createApp()).post('/api/v1/sources').send(minimalCreateBody);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sources',
+      payload: minimalCreateBody
+    });
 
-    expect(response.status).toBe(201);
-    expect(response.body.status).toBe('ok');
-    expect(response.body.data.id).toBe('source-1');
+    expect(response.statusCode).toBe(201);
+    expect(response.json().status).toBe('ok');
+    expect(response.json().data.id).toBe('source-1');
     expect(create).toHaveBeenCalledWith(minimalCreateBody);
   });
 
   it('returns HTTP 400 when required fields are missing', async () => {
-    const response = await request(createApp())
-      .post('/api/v1/sources')
-      .send({ name: 'Incomplete', provider: 'Org' });
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sources',
+      payload: { name: 'Incomplete', provider: 'Org' }
+    });
 
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
       status: 'error',
       code: 'VALIDATION_ERROR',
       message: 'Invalid source payload.',
@@ -216,12 +247,15 @@ describe('POST /api/v1/sources', () => {
   });
 
   it('returns HTTP 400 when an unknown field is present in the body', async () => {
-    const response = await request(createApp())
-      .post('/api/v1/sources')
-      .send({ ...minimalCreateBody, unknownField: 'should be rejected' });
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sources',
+      payload: { ...minimalCreateBody, unknownField: 'should be rejected' }
+    });
 
-    expect(response.status).toBe(400);
-    expect(response.body.code).toBe('VALIDATION_ERROR');
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('VALIDATION_ERROR');
   });
 
   it('returns HTTP 500 and does not expose internal error details when the database fails on create', async () => {
@@ -229,16 +263,21 @@ describe('POST /api/v1/sources', () => {
       new Error('duplicate key value — internal constraint detail')
     );
 
-    const response = await request(createApp()).post('/api/v1/sources').send(minimalCreateBody);
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sources',
+      payload: minimalCreateBody
+    });
 
-    expect(response.status).toBe(500);
-    expect(response.body).toEqual({
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({
       status: 'error',
       code: 'INTERNAL_SERVER_ERROR',
       message: 'Internal server error.',
       data: null
     });
-    expect(JSON.stringify(response.body)).not.toContain('duplicate key');
+    expect(JSON.stringify(response.json())).not.toContain('duplicate key');
   });
 
   it('fails closed with HTTP 503 SERVICE_UNAVAILABLE on POST /api/v1/sources when an Idempotency-Key is provided and the store fails', async () => {
@@ -247,13 +286,16 @@ describe('POST /api/v1/sources', () => {
       new Error('Redis connection lost')
     );
 
-    const response = await request(createApp())
-      .post('/api/v1/sources')
-      .set('Idempotency-Key', 'idemp-source-create-fail-123')
-      .send(minimalCreateBody);
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sources',
+      headers: { 'idempotency-key': 'idemp-source-create-fail-123' },
+      payload: minimalCreateBody
+    });
 
-    expect(response.status).toBe(503);
-    expect(response.body).toEqual({
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
       status: 'error',
       code: 'SERVICE_UNAVAILABLE',
       message: 'Internal server error.',
@@ -273,14 +315,21 @@ describe('POST /api/v1/sources', () => {
 
     const { RedisIdempotencyStore } = await import('../src/middleware/idempotency.js');
     vi.spyOn(RedisIdempotencyStore.prototype, 'acquire').mockResolvedValue({ acquired: true });
-    vi.spyOn(RedisIdempotencyStore.prototype, 'complete').mockResolvedValue(true);
+    const complete = vi.spyOn(RedisIdempotencyStore.prototype, 'complete').mockResolvedValue(true);
 
-    const response = await request(createApp())
-      .post('/api/v1/sources')
-      .set('Idempotency-Key', 'idemp-source-create-123')
-      .send(minimalCreateBody);
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sources',
+      headers: { 'idempotency-key': 'idemp-source-create-123' },
+      payload: minimalCreateBody
+    });
 
-    expect(response.status).toBe(201);
-    expect(response.body.data.id).toBe('source-idemp-1');
+    expect(response.statusCode).toBe(201);
+    expect(response.json().data.id).toBe('source-idemp-1');
+
+    // Let the background completion run before the app is closed and mocks are restored.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(complete).toHaveBeenCalledOnce();
   });
 });

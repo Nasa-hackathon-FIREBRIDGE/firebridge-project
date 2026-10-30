@@ -1,34 +1,37 @@
+import { disconnectDatabase } from '@firebridge/database';
 import { createApp } from './app.js';
-import { disconnectRedis } from './config/redis.js';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
-import { disconnectDatabase } from '@firebridge/database';
+import { disconnectRedis } from './config/redis.js';
 
-const app = createApp();
-const port = env.PORT;
-const server = app.listen(port, () => {
-  logger.info(`FIREBRIDGE API listening on http://localhost:${port}`);
-});
+const SHUTDOWN_TIMEOUT_MS = 10000;
 
-let shuttingDown = false;
+async function main(): Promise<void> {
+  const app = await createApp();
+  const port = env.PORT;
 
-async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
-  if (shuttingDown) {
-    return;
-  }
-  shuttingDown = true;
-  logger.info({ signal }, 'Shutting down FIREBRIDGE API');
+  let shuttingDown = false;
 
-  const forceCloseTimer = setTimeout(() => {
-    logger.error('HTTP server shutdown timed out; closing active connections');
-    server.closeAllConnections();
-  }, 10000);
-  forceCloseTimer.unref();
+  async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+    logger.info({ signal }, 'Shutting down FIREBRIDGE API');
 
-  server.close(async (error) => {
-    clearTimeout(forceCloseTimer);
-    if (error) {
-      logger.error('HTTP server failed to close cleanly');
+    const forceCloseTimer = setTimeout(() => {
+      logger.error('HTTP server shutdown timed out; closing active connections');
+      app.server.closeAllConnections();
+    }, SHUTDOWN_TIMEOUT_MS);
+    forceCloseTimer.unref();
+
+    try {
+      await app.close();
+    } catch (error) {
+      logger.error({ err: error }, 'HTTP server failed to close cleanly');
+      process.exitCode = 1;
+    } finally {
+      clearTimeout(forceCloseTimer);
     }
 
     const results = await Promise.allSettled([disconnectDatabase(), disconnectRedis()]);
@@ -36,8 +39,22 @@ async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
       logger.error('One or more infrastructure clients failed to close cleanly');
       process.exitCode = 1;
     }
+  }
+
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+
+  await app.listen({
+    port,
+    host: '0.0.0.0',
+    // Fastify logs this once per bound address, through the same logger.
+    listenTextResolver: (address) => `FIREBRIDGE API listening on ${address}`
   });
 }
 
-process.once('SIGINT', () => void shutdown('SIGINT'));
-process.once('SIGTERM', () => void shutdown('SIGTERM'));
+main().catch(async (error: unknown) => {
+  logger.error({ err: error }, 'Failed to start FIREBRIDGE API');
+  // Release infrastructure clients so a failed start does not leave open handles behind.
+  await Promise.allSettled([disconnectDatabase(), disconnectRedis()]);
+  process.exit(1);
+});

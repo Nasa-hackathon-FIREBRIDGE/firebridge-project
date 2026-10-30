@@ -2,12 +2,12 @@
  * Unit tests for healthController.
  *
  * These tests exercise the controller directly by constructing lightweight
- * mock Request/Response/NextFunction objects, avoiding any real HTTP server
- * binding (no supertest, no listen). This keeps the suite runnable in network-
- * restricted environments and deterministic in CI.
+ * mock FastifyRequest/FastifyReply objects, avoiding any real HTTP server
+ * binding (no listen). This keeps the suite runnable in network-restricted
+ * environments and deterministic in CI.
  */
-import { describe, expect, it, vi, type MockedFunction } from 'vitest';
-import type { Request, Response, NextFunction } from 'express';
+import { describe, expect, it, vi } from 'vitest';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ReadinessStatus } from '../src/types/api.js';
 
 // ---------------------------------------------------------------------------
@@ -32,22 +32,18 @@ import { healthController } from '../src/controllers/health.controller.js';
 // Test helpers
 // ---------------------------------------------------------------------------
 
-function makeRes() {
-  const res = {
-    status: vi.fn(),
-    json: vi.fn()
-  } as unknown as Response;
-  // Allow chaining: res.status(200).json(...)
-  (res.status as MockedFunction<Response['status']>).mockReturnValue(res);
-  return res;
+function makeReply() {
+  const code = vi.fn();
+  const send = vi.fn();
+  const reply = { code, send } as unknown as FastifyReply;
+  // Allow chaining: reply.code(200).send(...)
+  code.mockReturnValue(reply);
+  send.mockReturnValue(reply);
+  return { reply, code, send };
 }
 
 function makeReq() {
-  return {} as Request;
-}
-
-function makeNext() {
-  return vi.fn() as unknown as NextFunction;
+  return {} as FastifyRequest;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,7 +51,7 @@ function makeNext() {
 // ---------------------------------------------------------------------------
 
 describe('healthController.getLiveStatus', () => {
-  it('returns HTTP 200 with the liveness payload', () => {
+  it('returns HTTP 200 with the liveness payload', async () => {
     const payload = {
       status: 'ok' as const,
       service: 'firebridge-api',
@@ -65,16 +61,16 @@ describe('healthController.getLiveStatus', () => {
     mocks.getLiveStatus.mockReturnValue(payload);
 
     const req = makeReq();
-    const res = makeRes();
+    const { reply, code, send } = makeReply();
 
-    healthController.getLiveStatus(req, res);
+    await healthController.getLiveStatus(req, reply);
 
     expect(mocks.getLiveStatus).toHaveBeenCalledOnce();
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith(payload);
+    expect(code).toHaveBeenCalledWith(200);
+    expect(send).toHaveBeenCalledWith(payload);
   });
 
-  it('does not call getReadiness, prisma, or redis', () => {
+  it('does not call getReadiness, prisma, or redis', async () => {
     mocks.getLiveStatus.mockReturnValue({
       status: 'ok',
       service: 'firebridge-api',
@@ -83,7 +79,7 @@ describe('healthController.getLiveStatus', () => {
     });
     mocks.getReadiness.mockReset();
 
-    healthController.getLiveStatus(makeReq(), makeRes());
+    await healthController.getLiveStatus(makeReq(), makeReply().reply);
 
     expect(mocks.getReadiness).not.toHaveBeenCalled();
   });
@@ -103,11 +99,11 @@ describe('healthController.getReadiness', () => {
     };
     mocks.getReadiness.mockResolvedValue(readyPayload);
 
-    const res = makeRes();
-    await healthController.getReadiness(makeReq(), res, makeNext());
+    const { reply, code, send } = makeReply();
+    await healthController.getReadiness(makeReq(), reply);
 
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith(readyPayload);
+    expect(code).toHaveBeenCalledWith(200);
+    expect(send).toHaveBeenCalledWith(readyPayload);
   });
 
   it('returns HTTP 503 when a required dependency is unavailable', async () => {
@@ -119,11 +115,11 @@ describe('healthController.getReadiness', () => {
     };
     mocks.getReadiness.mockResolvedValue(errorPayload);
 
-    const res = makeRes();
-    await healthController.getReadiness(makeReq(), res, makeNext());
+    const { reply, code, send } = makeReply();
+    await healthController.getReadiness(makeReq(), reply);
 
-    expect(res.status).toHaveBeenCalledWith(503);
-    expect(res.json).toHaveBeenCalledWith(errorPayload);
+    expect(code).toHaveBeenCalledWith(503);
+    expect(send).toHaveBeenCalledWith(errorPayload);
   });
 
   it('returns HTTP 503 when Redis is unavailable', async () => {
@@ -135,25 +131,25 @@ describe('healthController.getReadiness', () => {
     };
     mocks.getReadiness.mockResolvedValue(errorPayload);
 
-    const res = makeRes();
-    await healthController.getReadiness(makeReq(), res, makeNext());
+    const { reply, code } = makeReply();
+    await healthController.getReadiness(makeReq(), reply);
 
-    expect(res.status).toHaveBeenCalledWith(503);
+    expect(code).toHaveBeenCalledWith(503);
   });
 
-  it('forwards unexpected service exceptions to next() without exposing them in the response', async () => {
+  it('propagates unexpected service exceptions to the Fastify error handler without exposing them in the response', async () => {
     const internalError = new Error('private connection string: postgres://user:pass@host');
     mocks.getReadiness.mockRejectedValue(internalError);
 
-    const res = makeRes();
-    const next = makeNext();
-    await healthController.getReadiness(makeReq(), res, next);
+    const { reply, code, send } = makeReply();
+
+    // Fastify 5 routes a rejected async handler to the error handler (replaces next(error)).
+    // The raw error must be rethrown unchanged so the centralized handler can sanitize it.
+    await expect(healthController.getReadiness(makeReq(), reply)).rejects.toBe(internalError);
 
     // The controller must NOT write the response; the error handler does that.
-    expect(res.status).not.toHaveBeenCalled();
-    expect(res.json).not.toHaveBeenCalled();
-    // The raw error is forwarded to next() so the centralized handler can sanitize it.
-    expect(next).toHaveBeenCalledWith(internalError);
+    expect(code).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('does not call getLiveStatus', async () => {
@@ -165,9 +161,8 @@ describe('healthController.getReadiness', () => {
     });
     mocks.getLiveStatus.mockReset();
 
-    await healthController.getReadiness(makeReq(), makeRes(), makeNext());
+    await healthController.getReadiness(makeReq(), makeReply().reply);
 
     expect(mocks.getLiveStatus).not.toHaveBeenCalled();
   });
 });
-

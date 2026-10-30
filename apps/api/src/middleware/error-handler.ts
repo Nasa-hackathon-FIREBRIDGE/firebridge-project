@@ -1,4 +1,4 @@
-import type { ErrorRequestHandler } from 'express';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { logger } from '../config/logger.js';
 import { AppError } from '../errors/app-error.js';
 import { ErrorCodes } from '../types/api.js';
@@ -39,26 +39,21 @@ function getErrorCode(error: unknown, status: number): string {
   }
 }
 
-export const errorHandler: ErrorRequestHandler = (error: unknown, req, res, next) => {
-  if (res.headersSent) {
-    next(error);
-    return;
-  }
+export interface ErrorResponse {
+  status: number;
+  body: { status: 'error'; code: string; message: string; data: null };
+}
 
+/**
+ * Framework-agnostic: logs (sanitized) and builds the public error envelope.
+ * Shared by the Fastify error handler and the legacy Express bridge in app.ts.
+ */
+export function resolveErrorResponse(error: unknown, method: string, path: string): ErrorResponse {
   const status = getStatusCode(error);
   const code = getErrorCode(error, status);
   const errorType = error instanceof Error ? error.name : 'UnknownError';
 
-  logger.error(
-    {
-      statusCode: status,
-      errorCode: code,
-      errorType,
-      method: req.method,
-      path: req.path
-    },
-    'Request failed'
-  );
+  logger.error({ statusCode: status, errorCode: code, errorType, method, path }, 'Request failed');
 
   const message =
     error instanceof AppError && status < 500
@@ -67,10 +62,21 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, req, res, next
         ? 'Internal server error.'
         : 'Request could not be processed.';
 
-  res.status(status).json({
-    status: 'error',
-    code,
-    message,
-    data: null
-  });
-};
+  return { status, body: { status: 'error', code, message, data: null } };
+}
+
+/**
+ * Use with: app.setErrorHandler(errorHandler)
+ */
+export function errorHandler(error: unknown, req: FastifyRequest, reply: FastifyReply): void {
+  // Query string excluded from logs, as Express's req.path did.
+  const { status, body } = resolveErrorResponse(error, req.method, req.url.split('?')[0] ?? '');
+
+  // Express delegated to the default handler here, which destroys the socket.
+  if (reply.raw.headersSent) {
+    req.raw.socket.destroy();
+    return;
+  }
+
+  void reply.code(status).send(body);
+}
