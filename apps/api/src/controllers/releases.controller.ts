@@ -1,7 +1,9 @@
-import type { Request, Response } from 'express';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { plannedResponse } from '../utils/planned-response.js';
 
 export const releasesController = {
-  list: (_req: Request, res: Response) => res.status(501).json(plannedResponse('Release listing is not implemented yet.')),
-  getById: (_req: Request, res: Response) => res.status(501).json(plannedResponse('Release detail lookup is not implemented yet.'))
+  list: async (_req: FastifyRequest, reply: FastifyReply) =>
+    reply.code(501).send(plannedResponse('Release listing is not implemented yet.')),
+  getById: async (_req: FastifyRequest, reply: FastifyReply) =>
+    reply.code(501).send(plannedResponse('Release detail lookup is not implemented yet.'))
 };

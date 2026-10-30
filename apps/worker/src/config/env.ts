@@ -14,7 +14,11 @@ const redisUrlSchema = z
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   LOG_LEVEL: z.string().default('info'),
-  REDIS_URL: redisUrlSchema
+  REDIS_URL: redisUrlSchema,
+  DATABASE_URL: z.string().optional(),
+  OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(1000),
+  OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+  OUTBOX_LEASE_SECONDS: z.coerce.number().int().min(5).max(300).default(30)
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import type { FastifyPluginAsync } from 'fastify';
 import { healthRoutes } from './health.routes.js';
 import { catalogRoutes } from './catalog.routes.js';
 import { sourcesRoutes } from './sources.routes.js';
@@ -17,24 +17,24 @@ import { exportsRoutes } from './exports.routes.js';
 import { jobsRoutes } from './jobs.routes.js';
 import { adminRoutes } from './admin.routes.js';
 
-const router = Router();
+export const apiRoutes: FastifyPluginAsync = async (fastify) => {
+  await fastify.register(healthRoutes, { prefix: '/health' });
+  await fastify.register(catalogRoutes, { prefix: '/catalog' });
+  await fastify.register(sourcesRoutes, { prefix: '/sources' });
+  await fastify.register(releasesRoutes, { prefix: '/releases' });
+  await fastify.register(updatesRoutes, { prefix: '/updates' });
+  await fastify.register(areasRoutes, { prefix: '/areas' });
+  await fastify.register(analysesRoutes, { prefix: '/analyses' });
+  await fastify.register(detectionsRoutes, { prefix: '/detections' });
+  await fastify.register(tilesRoutes, { prefix: '/tiles' });
+  await fastify.register(cellsRoutes, { prefix: '/cells' });
+  await fastify.register(weatherRoutes, { prefix: '/weather' });
+  await fastify.register(reportsRoutes, { prefix: '/reports' });
+  await fastify.register(provenanceRoutes, { prefix: '/provenance' });
+  await fastify.register(explanationsRoutes, { prefix: '/explanations' });
+  await fastify.register(exportsRoutes, { prefix: '/exports' });
+  await fastify.register(jobsRoutes, { prefix: '/jobs' });
+  await fastify.register(adminRoutes, { prefix: '/admin' });
+};
 
-router.use('/health', healthRoutes);
-router.use('/catalog', catalogRoutes);
-router.use('/sources', sourcesRoutes);
-router.use('/releases', releasesRoutes);
-router.use('/updates', updatesRoutes);
-router.use('/areas', areasRoutes);
-router.use('/analyses', analysesRoutes);
-router.use('/detections', detectionsRoutes);
-router.use('/tiles', tilesRoutes);
-router.use('/cells', cellsRoutes);
-router.use('/weather', weatherRoutes);
-router.use('/reports', reportsRoutes);
-router.use('/provenance', provenanceRoutes);
-router.use('/explanations', explanationsRoutes);
-router.use('/exports', exportsRoutes);
-router.use('/jobs', jobsRoutes);
-router.use('/admin', adminRoutes);
-
-export default router;
+export default apiRoutes;

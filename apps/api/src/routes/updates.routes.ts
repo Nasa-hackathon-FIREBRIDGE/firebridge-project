@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import type { FastifyPluginAsync } from 'fastify';
 import { updatesController } from '../controllers/updates.controller.js';
 
-export const updatesRoutes = Router();
-
-updatesRoutes.get('/', updatesController.list);
-updatesRoutes.post('/', updatesController.create);
+export const updatesRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get('/', updatesController.list);
+  fastify.post('/', updatesController.create);
+};

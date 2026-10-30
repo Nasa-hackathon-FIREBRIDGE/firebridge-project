@@ -1,80 +1,40 @@
 import fastifyCompress from '@fastify/compress';
 import fastifyCors from '@fastify/cors';
-import fastifyExpress from '@fastify/express';
 import fastifyFormbody from '@fastify/formbody';
 import fastifyHelmet from '@fastify/helmet';
 import fastifySwagger, { type FastifyStaticSwaggerOptions } from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
-import compression from 'compression';
-import express, { type ErrorRequestHandler } from 'express';
 import Fastify from 'fastify';
 import swaggerJsdoc from 'swagger-jsdoc';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
-import { errorHandler, resolveErrorResponse } from './middleware/error-handler.js';
-import { NOT_FOUND_BODY, notFoundHandler } from './middleware/not-found.js';
-import { SECURITY_HEADERS, securityHeaders } from './middleware/security.js';
-import { healthRoutes } from './routes/health.routes.js';
-import { sourcesRoutes } from './routes/sources.routes.js';
-import apiRouter from './routes/index.js';
+import { errorHandler } from './middleware/error-handler.js';
+import { notFoundHandler } from './middleware/not-found.js';
+import { securityHeaders } from './middleware/security.js';
+import { apiRoutes } from './routes/index.js';
 
-const JSON_BODY_LIMIT_BYTES = 1024 * 1024; // express.json({ limit: '1mb' })
-const URLENCODED_BODY_LIMIT_BYTES = 100 * 1024; // express.urlencoded() default limit ('100kb')
+const JSON_BODY_LIMIT_BYTES = 1024 * 1024; // 1MB
+const URLENCODED_BODY_LIMIT_BYTES = 100 * 1024; // 100KB
 const SWAGGER_UI_PREFIX = '/api-docs';
 
-// Prefixes served by Fastify-native routes. The Express layer must neither answer them nor read
-// their body (Fastify would then wait forever on an already-consumed stream).
-const FASTIFY_NATIVE_PREFIXES = [SWAGGER_UI_PREFIX, '/api/v1/health', '/api/v1/sources'];
-
-// Legacy Express responses bypass Fastify's reply, so security headers must be set on the raw response.
-const legacySecurityHeaders: express.RequestHandler = (_req, res, next) => {
-  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
-    res.setHeader(name, value);
-  }
-  next();
-};
-
-// Express answers its own unmatched paths (as before the migration). Letting them fall through to
-// Fastify after compression() has patched the raw response crashes with ERR_HTTP_HEADERS_SENT.
-// Native prefixes never reach this handler: they leave the Express layer first.
-const legacyNotFoundHandler: express.RequestHandler = (_req, res) => {
-  res.status(404).json(NOT_FOUND_BODY);
-};
-
-// Legacy Express routes still call next(err); render the same sanitized envelope as the Fastify handler.
-const legacyErrorHandler: ErrorRequestHandler = (error: unknown, req, res, next) => {
-  if (res.headersSent) {
-    next(error);
-    return;
-  }
-  const { status, body } = resolveErrorResponse(error, req.method, req.path);
-  res.status(status).json(body);
-};
-
 export interface CreateAppOptions {
-  /**
-   * Mounts the legacy Express layer (routes not migrated yet). Default: true.
-   * Fastify's inject() cannot capture response bodies written through @fastify/express
-   * (Express swaps the prototype of the raw response), so tests of Fastify-native routes
-   * pass false. Everything else must keep the default.
-   */
+  /** Kept for interface compatibility with existing test runners; Express is fully removed. */
   legacyExpress?: boolean;
 }
 
-export async function createApp({ legacyExpress = true }: CreateAppOptions = {}) {
+export async function createApp(_options: CreateAppOptions = {}) {
   const app = Fastify({
     loggerInstance: logger,
-    // The Express app did not log individual requests; keep log output unchanged.
     disableRequestLogging: true,
     bodyLimit: JSON_BODY_LIMIT_BYTES
   });
 
-  // --- Global Fastify handlers: set on the ROOT instance before any plugin/route ---------------
+  // --- Global Fastify hooks & handlers: set on the ROOT instance -----------------------------
   app.addHook('onRequest', securityHeaders);
   app.setErrorHandler(errorHandler);
   app.setNotFoundHandler(notFoundHandler);
 
-  // --- Fastify-native layer -------------------------------------------------------------------
+  // --- Security & content encoding plugins ----------------------------------------------------
   await app.register(fastifyHelmet, { crossOriginResourcePolicy: { policy: 'cross-origin' } });
   await app.register(fastifyCors, {
     origin(origin, callback) {
@@ -85,13 +45,12 @@ export async function createApp({ legacyExpress = true }: CreateAppOptions = {})
 
       callback(null, env.CORS_ORIGINS.includes(origin));
     },
-    // Express `cors` defaults; @fastify/cors only allows GET,HEAD,POST by default.
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE']
   });
   await app.register(fastifyCompress);
   await app.register(fastifyFormbody, { bodyLimit: URLENCODED_BODY_LIMIT_BYTES });
 
-  // --- Swagger (spec is still generated by swagger-jsdoc from the route JSDoc) ----------------
+  // --- Swagger documentation ------------------------------------------------------------------
   const swaggerDefinition = {
     openapi: '3.0.0',
     info: {
@@ -105,37 +64,12 @@ export async function createApp({ legacyExpress = true }: CreateAppOptions = {})
 
   await app.register(fastifySwagger, {
     mode: 'static',
-    // swagger-jsdoc returns a plain object; it is a complete OpenAPI 3 document.
     specification: { document: swaggerSpec } as FastifyStaticSwaggerOptions['specification']
   });
   await app.register(fastifySwaggerUi, { routePrefix: SWAGGER_UI_PREFIX });
 
-  // --- Migrated routes (native Fastify) -------------------------------------------------------
-  await app.register(healthRoutes, { prefix: '/api/v1/health' });
-  await app.register(sourcesRoutes, { prefix: '/api/v1/sources' });
-
-  if (legacyExpress) {
-    // --- Legacy Express layer (routes not migrated yet) -----------------------------------------
-    await app.register(fastifyExpress);
-
-    // Native prefixes leave the Express layer immediately (@fastify/express' use() takes one handler per call).
-    for (const prefix of FASTIFY_NATIVE_PREFIXES) {
-      app.use(prefix, (_req, _res, next) => next('router'));
-    }
-
-    app.use(express.json({ limit: '1mb' }));
-    app.use(express.urlencoded({ extended: true }));
-    app.use(legacySecurityHeaders);
-    // @fastify/compress cannot see content types set by Express (res.json/res.set), so the legacy
-    // layer keeps Express' own compression middleware for its responses.
-    app.use(compression());
-    // apiRouter must NOT mount health/sources anymore.
-    app.use('/api/v1', apiRouter);
-    app.use(legacyNotFoundHandler);
-    app.use(legacyErrorHandler);
-
-    app.express.locals.logger = logger;
-  }
+  // --- Native Fastify API routes (/api/v1) ---------------------------------------------------
+  await app.register(apiRoutes, { prefix: '/api/v1' });
 
   return app;
 }

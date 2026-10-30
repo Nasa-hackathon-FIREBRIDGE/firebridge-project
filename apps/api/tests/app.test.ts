@@ -8,15 +8,13 @@ type App = Awaited<ReturnType<typeof createApp>>;
 const apps: App[] = [];
 
 async function buildApp(): Promise<App> {
-  // inject() cannot capture bodies written through @fastify/express, so the Fastify-native routes
-  // are exercised without the legacy Express layer; the layer itself is covered over real HTTP below.
-  const app = await createApp({ legacyExpress: false });
+  const app = await createApp();
   await app.ready();
   apps.push(app);
   return app;
 }
 
-/** Full app (legacy Express layer enabled) listening on an ephemeral port. */
+/** Full Fastify app listening on an ephemeral port. */
 async function listenFullApp(): Promise<{ app: App; baseUrl: string }> {
   const app = await createApp();
   apps.push(app);
@@ -69,8 +67,8 @@ describe('FIREBRIDGE API', () => {
     expect(response.json().checks.workers).toBe('not_checked');
   });
 
-  // Full-stack checks with the legacy Express layer enabled (real HTTP, since inject() cannot read its bodies).
-  it('serves native routes with security headers when the legacy Express layer is enabled', async () => {
+  // Full-stack checks over real HTTP with Fastify
+  it('serves native routes with security headers over real HTTP', async () => {
     const { baseUrl } = await listenFullApp();
 
     const response = await fetch(`${baseUrl}/api/v1/health/live`);
@@ -82,7 +80,7 @@ describe('FIREBRIDGE API', () => {
     expect(response.headers.get('referrer-policy')).toBe('no-referrer');
   });
 
-  it('answers unknown paths with the 404 envelope and security headers when the legacy Express layer is enabled', async () => {
+  it('answers unknown paths with the 404 envelope and security headers over real HTTP', async () => {
     const { baseUrl } = await listenFullApp();
 
     for (const path of ['/nope', '/api/v1/nope', '/api/v1/health/nope']) {

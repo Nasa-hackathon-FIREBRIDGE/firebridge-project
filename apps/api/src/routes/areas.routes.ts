@@ -1,7 +1,8 @@
-import { Router } from 'express';
+import type { FastifyPluginAsync } from 'fastify';
 import { areasController } from '../controllers/areas.controller.js';
 
-export const areasRoutes = Router();
-
-areasRoutes.get('/', areasController.list);
-areasRoutes.get('/:areaId', areasController.getById);
+export const areasRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get('/', areasController.list);
+  fastify.post('/', areasController.create);
+  fastify.get('/:area_id', areasController.getById);
+};

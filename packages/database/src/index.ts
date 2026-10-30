@@ -1,4 +1,12 @@
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
+
+if (!process.env.DATABASE_URL) {
+  const rootEnvPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../.env');
+  dotenv.config({ path: rootEnvPath });
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;

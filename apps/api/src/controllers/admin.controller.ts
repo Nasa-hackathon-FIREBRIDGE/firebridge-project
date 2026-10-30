@@ -1,7 +1,9 @@
-import type { Request, Response } from 'express';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { plannedResponse } from '../utils/planned-response.js';
 
 export const adminController = {
-  status: (_req: Request, res: Response) => res.status(501).json(plannedResponse('Administrative status is not implemented yet.')),
-  refresh: (_req: Request, res: Response) => res.status(501).json(plannedResponse('Administrative refresh action is not implemented yet.'))
+  status: async (_req: FastifyRequest, reply: FastifyReply) =>
+    reply.code(501).send(plannedResponse('Admin status lookup is not implemented yet.')),
+  refresh: async (_req: FastifyRequest, reply: FastifyReply) =>
+    reply.code(501).send(plannedResponse('Admin cache refresh is not implemented yet.'))
 };

@@ -8,6 +8,9 @@ export const MAX_CURSOR_LENGTH = 512;
 export interface CursorFilters {
   kind?: string;
   provider?: string;
+  area_id?: string;
+  status?: string;
+  [key: string]: string | undefined;
 }
 
 export interface CursorPayload {
@@ -104,11 +107,10 @@ export function decodeCursor(
 
   // Validate filter coherence: cursor created for one filter cannot be reused under another
   if (expectedFilters) {
-    if (expectedFilters.kind !== undefined && payload.filters?.kind !== expectedFilters.kind) {
-      throw new InvalidCursorError('Cursor does not match requested query kind filter.');
-    }
-    if (expectedFilters.provider !== undefined && payload.filters?.provider !== expectedFilters.provider) {
-      throw new InvalidCursorError('Cursor does not match requested query provider filter.');
+    for (const [key, expectedValue] of Object.entries(expectedFilters)) {
+      if (expectedValue !== undefined && payload.filters?.[key] !== expectedValue) {
+        throw new InvalidCursorError(`Cursor does not match requested query ${key} filter.`);
+      }
     }
   }
 
@@ -117,4 +119,3 @@ export function decodeCursor(
     filters: payload.filters
   };
 }
-

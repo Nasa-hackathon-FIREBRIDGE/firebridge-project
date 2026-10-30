@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
+import { shutdownManager } from '../src/shutdown/shutdown-manager.js';
 import { workerStatus } from '../src/worker.js';
 
 describe('FIREBRIDGE worker', () => {
-  it('reports that no processors are registered with a valid status timestamp', () => {
-    expect(workerStatus.status).toBe('not_configured');
+  afterAll(async () => {
+    await shutdownManager.shutdown();
+  });
+
+  it('reports running status and registered processors with a valid timestamp', () => {
+    expect(workerStatus.status).toBe('running');
     expect(workerStatus.service).toBe('firebridge-worker');
+    expect(workerStatus.processorsRegistered).toContain('analysis.requested');
 
     const startedAt = new Date(workerStatus.startedAt);
     expect(Number.isNaN(startedAt.getTime())).toBe(false);

@@ -5,31 +5,1042 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "firebridge"]
+  schemas  = ["firebridge", "public"]
 }
 
-// HealthCheck table intentionally omitted:
-// Liveness and readiness checks are stateless; no persistent health records are stored.
-
 model Source {
-  id                String  @id
-  name              String
-  provider          String
-  kind              String
-  platform          String?
-  instrument        String?
-  product           String
-  collection        String
-  processingStream  String  @map("processing_stream")
-  documentationUrl  String  @map("documentation_url")
-  citation          String
-  licenseInfo       String  @map("license_info")
-  nativeResolutionM Float?  @map("native_resolution_m")
-  schemaVersion     String  @map("schema_version")
-  metadata          Json    @default("{}")
+  id                                                         String              @id
+  name                                                       String
+  provider                                                   String
+  kind                                                       String
+  platform                                                   String?
+  instrument                                                 String?
+  product                                                    String
+  collection                                                 String
+  processingStream                                           String              @map("processing_stream")
+  documentationUrl                                           String              @map("documentation_url")
+  citation                                                   String
+  licenseInfo                                                String              @map("license_info")
+  nativeResolutionM                                          Float?              @map("native_resolution_m")
+  schemaVersion                                              String              @map("schema_version")
+  metadata                                                   Json                @default("{}")
+  assets                                                     assets[]
+  detections                                                 detections[]
+  feed_sources                                               feed_sources[]
+  model_versions_model_versions_reference_source_idTosources model_versions[]    @relation("model_versions_reference_source_idTosources")
+  model_versions_model_versions_source_idTosources           model_versions[]    @relation("model_versions_source_idTosources")
+  observations                                               observations[]
+  weather_locations                                          weather_locations[]
+  weather_summaries                                          weather_summaries[]
 
-  @@index([kind])
-  @@index([provider])
   @@map("sources")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ai_explanations {
+  id                    String             @id @db.Uuid
+  snapshot_id           String             @db.Uuid
+  language              String
+  question              String
+  provider              String
+  model_id              String
+  prompt_version        String
+  tool_contract_version String
+  output_json           Json?
+  status                String
+  validation_report     Json?
+  tool_trace_uri        String?
+  input_tokens          Int?
+  output_tokens         Int?
+  cache_key             String             @unique
+  created_at            DateTime           @default(now()) @db.Timestamptz(6)
+  completed_at          DateTime?          @db.Timestamptz(6)
+  evidence_snapshots    evidence_snapshots @relation(fields: [snapshot_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  api_jobs              api_jobs[]
+
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model analyses {
+  id                   String                 @id @db.Uuid
+  area_id              String                 @db.Uuid
+  release_id           String                 @db.Uuid
+  start_date           DateTime               @db.Date
+  end_date_exclusive   DateTime               @db.Date
+  time_basis           String
+  metric_key           String
+  grid_id              String?
+  selection_policy     String
+  weighting_version    String
+  baseline_spec        Json?
+  weather_policy       Json
+  news_policy          Json
+  request_spec         Json
+  cache_key            String                 @unique
+  status               String
+  error_code           String?
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  completed_at         DateTime?              @db.Timestamptz(6)
+  areas                areas                  @relation(fields: [area_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  grids                grids?                 @relation(fields: [grid_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  metric_definitions   metric_definitions     @relation(fields: [metric_key], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  data_releases        data_releases          @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  analysis_components  analysis_components[]
+  analysis_event_links analysis_event_links[]
+  api_jobs             api_jobs[]
+  calendar_periods     calendar_periods[]
+  evidence_snapshots   evidence_snapshots[]
+  weather_summaries    weather_summaries[]
+
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model analysis_components {
+  analysis_id   String         @db.Uuid
+  component     String
+  release_id    String?        @db.Uuid
+  status        String
+  reasons       Json           @default("[]")
+  analyses      analyses       @relation(fields: [analysis_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  data_releases data_releases? @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([analysis_id, component])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model analysis_event_links {
+  analysis_id          String          @db.Uuid
+  event_id             String          @db.Uuid
+  relation             String
+  match_method_version String
+  temporal_match       Json
+  spatial_match        Json
+  independence         String
+  evidence_note        String
+  reviewed_by          String?
+  reviewed_at          DateTime?       @db.Timestamptz(6)
+  analyses             analyses        @relation(fields: [analysis_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reported_events      reported_events @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([analysis_id, event_id, match_method_version])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model api_jobs {
+  id                  String           @id @db.Uuid
+  kind                String
+  analysis_id         String?          @db.Uuid
+  explanation_id      String?          @db.Uuid
+  requested_by        String
+  request_hash        String
+  idempotency_key     String
+  request_spec        Json
+  status              String
+  attempt             Int              @default(0)
+  lease_expires_at    DateTime?        @db.Timestamptz(6)
+  progress            Json             @default("{}")
+  result_manifest_uri String?
+  result_sha256       String?
+  result_byte_size    BigInt?
+  expires_at          DateTime?        @db.Timestamptz(6)
+  error_code          String?
+  created_at          DateTime         @default(now()) @db.Timestamptz(6)
+  completed_at        DateTime?        @db.Timestamptz(6)
+  analyses            analyses?        @relation(fields: [analysis_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ai_explanations     ai_explanations? @relation(fields: [explanation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([requested_by, idempotency_key])
+  @@index([status, created_at], map: "jobs_status")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model area_cells {
+  area_id              String     @db.Uuid
+  cell_id              BigInt
+  overlap_land_area_m2 Float
+  weighting_version    String
+  areas                areas      @relation(fields: [area_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  grid_cells           grid_cells @relation(fields: [cell_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([area_id, cell_id, weighting_version])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model areas {
+  id                      String                    @id @db.Uuid
+  name                    String
+  version                 String
+  geom                    Unsupported("geometry")
+  geometry_sha256         String
+  display_timezone        String
+  provenance              String
+  created_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  analyses                analyses[]
+  area_cells              area_cells[]
+  ingestion_subscriptions ingestion_subscriptions[]
+
+  @@unique([geometry_sha256, version])
+  @@index([geom], map: "areas_geom_gist", type: Gist)
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model assets {
+  id                  String                   @id @db.Uuid
+  source_id           String
+  native_key          String
+  revision            String
+  source_url          String
+  storage_uri         String
+  sha256              String
+  byte_size           BigInt
+  time_start          DateTime?                @db.Timestamptz(6)
+  time_end            DateTime?                @db.Timestamptz(6)
+  footprint           Unsupported("geometry")?
+  retrieved_at        DateTime                 @db.Timestamptz(6)
+  validation_status   String
+  metadata            Json                     @default("{}")
+  sources             Source                   @relation(fields: [source_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  detections          detections[]
+  fetch_assets        fetch_assets[]
+  grids               grids[]
+  news_reports        news_reports[]
+  observation_assets  observation_assets[]
+  quality_issues      quality_issues[]
+  release_assets      release_assets[]
+  source_availability source_availability[]
+  weather_values      weather_values[]
+
+  @@unique([id, source_id])
+  @@unique([source_id, native_key, revision, sha256])
+  @@index([footprint], map: "assets_footprint_gist", type: Gist)
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model calendar_periods {
+  analysis_id                String   @db.Uuid
+  period_start               DateTime @db.Date
+  period_end_exclusive       DateTime @db.Date
+  resolution                 String
+  response_numerator_m2_days Float
+  eligible_land_m2_days      Float
+  possible_land_m2_days      Float
+  response_value             Float?   @default(dbgenerated("(response_numerator_m2_days / NULLIF(eligible_land_m2_days, (0)::double precision))"))
+  coverage_fraction          Float?   @default(dbgenerated("(eligible_land_m2_days / possible_land_m2_days)"))
+  observed_weight_fraction   Float?
+  valid_cell_days            BigInt
+  baseline_year_count        Int      @default(0)
+  seasonal_percentile        Float?
+  uncertainty                Json?
+  status                     String
+  reasons                    Json     @default("[]")
+  analyses                   analyses @relation(fields: [analysis_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([analysis_id, period_start, resolution])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model daily_activity {
+  release_id         String             @db.Uuid
+  cell_id            BigInt
+  reporting_date     DateTime           @db.Date
+  time_basis         String
+  metric_key         String
+  selection_policy   String
+  observation_id     String?            @db.Uuid
+  prediction_id      String?            @db.Uuid
+  response_value     Float?
+  status             String
+  candidate_count    Int
+  reasons            Json               @default("[]")
+  grid_cells         grid_cells         @relation(fields: [cell_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  metric_definitions metric_definitions @relation(fields: [metric_key], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  observations       observations?      @relation(fields: [observation_id, release_id, cell_id], references: [id, release_id, cell_id], onDelete: NoAction, onUpdate: NoAction)
+  predictions        predictions?       @relation(fields: [prediction_id, release_id, cell_id], references: [id, release_id, cell_id], onDelete: NoAction, onUpdate: NoAction)
+  data_releases      data_releases      @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([release_id, cell_id, reporting_date, time_basis, metric_key, selection_policy])
+  @@index([release_id, reporting_date, metric_key], map: "daily_activity_period")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model data_partitions {
+  id                                                                                String                   @id @db.Uuid
+  pipeline_run_id                                                                   String                   @db.Uuid
+  kind                                                                              String
+  series_key                                                                        String
+  partition_key                                                                     String
+  support_spec                                                                      Json
+  storage_uri                                                                       String
+  sha256                                                                            String
+  input_manifest_uri                                                                String
+  schema_version                                                                    String
+  row_count                                                                         BigInt
+  serving_complete                                                                  Boolean
+  validation_status                                                                 String
+  created_at                                                                        DateTime                 @default(now()) @db.Timestamptz(6)
+  pipeline_runs                                                                     pipeline_runs            @relation(fields: [pipeline_run_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  partition_dependencies_partition_dependencies_input_partition_idTodata_partitions partition_dependencies[] @relation("partition_dependencies_input_partition_idTodata_partitions")
+  partition_dependencies_partition_dependencies_partition_idTodata_partitions       partition_dependencies[] @relation("partition_dependencies_partition_idTodata_partitions")
+  partition_detections                                                              partition_detections[]
+  release_partitions                                                                release_partitions[]
+
+  @@unique([id, series_key, partition_key])
+  @@unique([series_key, partition_key, sha256])
+  @@index([series_key, partition_key, created_at(sort: Desc)], map: "partitions_key")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model data_releases {
+  id                                                             String                @id @db.Uuid
+  name                                                           String                @unique
+  status                                                         String
+  stream                                                         String
+  code_version                                                   String
+  config                                                         Json
+  config_sha256                                                  String
+  manifest_uri                                                   String
+  parent_release_id                                              String?               @db.Uuid
+  dataset_kind                                                   String
+  scope_key                                                      String
+  observation_cutoff                                             DateTime              @db.Timestamptz(6)
+  validation_report_uri                                          String?
+  created_at                                                     DateTime              @default(now()) @db.Timestamptz(6)
+  published_at                                                   DateTime?             @db.Timestamptz(6)
+  analyses                                                       analyses[]
+  analysis_components                                            analysis_components[]
+  daily_activity                                                 daily_activity[]
+  data_releases                                                  data_releases?        @relation("data_releasesTodata_releases", fields: [parent_release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_data_releases                                            data_releases[]       @relation("data_releasesTodata_releases")
+  evaluations                                                    evaluations[]
+  feature_sets                                                   feature_sets[]
+  matched_pairs                                                  matched_pairs[]
+  observations                                                   observations[]
+  pipeline_runs                                                  pipeline_runs[]
+  predictions                                                    predictions[]
+  release_aliases                                                release_aliases[]
+  release_assets                                                 release_assets[]
+  release_changes_release_changes_from_release_idTodata_releases release_changes[]     @relation("release_changes_from_release_idTodata_releases")
+  release_changes_release_changes_to_release_idTodata_releases   release_changes[]     @relation("release_changes_to_release_idTodata_releases")
+  release_partitions                                             release_partitions[]
+
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model detections {
+  id                   BigInt                  @id @default(autoincrement())
+  asset_id             String                  @db.Uuid
+  source_id            String
+  native_record_key    String
+  record_sha256        String
+  identity_key         String?
+  identity_method      String
+  processing_level     String
+  acquired_at          DateTime                @db.Timestamptz(6)
+  geom                 Unsupported("geometry")
+  confidence_raw       String?
+  confidence_scheme    String
+  type_raw             String?
+  day_night            String?
+  frp_mw               Float?
+  brightness_bands     Json                    @default("{}")
+  scan_km              Float?
+  track_km             Float?
+  cross_track_sample   Int?
+  native_fields        Json                    @default("{}")
+  assets               assets                  @relation(fields: [asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources              Source                  @relation(fields: [source_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  partition_detections partition_detections[]
+
+  @@unique([asset_id, native_record_key])
+  @@unique([source_id, record_sha256])
+  @@index([geom], map: "detections_geom_gist", type: Gist)
+  @@index([source_id, acquired_at], map: "detections_source_time")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model evaluations {
+  id                      String         @id @db.Uuid
+  model_id                String         @db.Uuid
+  release_id              String         @db.Uuid
+  experiment              String
+  slice_key               String
+  split_manifest_uri      String
+  sample_count            BigInt
+  positive_count          BigInt
+  independent_block_count Int
+  metrics                 Json
+  baseline_metrics        Json
+  uncertainty_method      String?
+  report_uri              String
+  model_versions          model_versions @relation(fields: [model_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  data_releases           data_releases  @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([model_id, release_id, experiment, slice_key])
+  @@schema("firebridge")
+}
+
+model evidence_snapshots {
+  id              String            @id @db.Uuid
+  analysis_id     String            @db.Uuid
+  schema_version  String
+  evidence_json   Json
+  sha256          String
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  ai_explanations ai_explanations[]
+  analyses        analyses          @relation(fields: [analysis_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([analysis_id, sha256])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model feature_sets {
+  id                 String           @id @db.Uuid
+  release_id         String           @db.Uuid
+  version            String
+  artifact_uri       String
+  sha256             String
+  feature_contract   Json
+  split_manifest_uri String
+  split_sha256       String
+  row_count          BigInt
+  created_at         DateTime         @default(now()) @db.Timestamptz(6)
+  data_releases      data_releases    @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  model_versions     model_versions[]
+
+  @@schema("firebridge")
+}
+
+model feed_sources {
+  feed_id             String
+  source_id           String
+  selector            Json
+  ingestion_feeds     ingestion_feeds       @relation(fields: [feed_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources             Source                @relation(fields: [source_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  source_availability source_availability[]
+
+  @@id([feed_id, source_id])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model fetch_assets {
+  fetch_run_id String     @db.Uuid
+  asset_id     String     @db.Uuid
+  role         String
+  page_key     String
+  assets       assets     @relation(fields: [asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  fetch_runs   fetch_runs @relation(fields: [fetch_run_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([fetch_run_id, asset_id, role, page_key])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model fetch_runs {
+  id                      String                  @id @db.Uuid
+  subscription_id         String                  @db.Uuid
+  pipeline_run_id         String?                 @db.Uuid
+  request_key             String
+  attempt                 Int
+  query_start             DateTime                @db.Timestamptz(6)
+  query_end_exclusive     DateTime                @db.Timestamptz(6)
+  query_basis             String
+  sanitized_request       Json
+  status                  String
+  enumeration_complete    Boolean                 @default(false)
+  page_count              Int                     @default(0)
+  record_count            BigInt?
+  started_at              DateTime?               @db.Timestamptz(6)
+  completed_at            DateTime?               @db.Timestamptz(6)
+  max_observation_at      DateTime?               @db.Timestamptz(6)
+  http_status             Int?
+  retry_after             DateTime?               @db.Timestamptz(6)
+  error_code              String?
+  fetch_assets            fetch_assets[]
+  pipeline_runs           pipeline_runs?          @relation(fields: [pipeline_run_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestion_subscriptions ingestion_subscriptions @relation(fields: [subscription_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestion_checkpoints   ingestion_checkpoints[]
+  ingestion_gaps          ingestion_gaps[]
+
+  @@unique([subscription_id, request_key, attempt])
+  @@index([subscription_id, started_at(sort: Desc)], map: "fetch_runs_recent")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model grid_cells {
+  id             BigInt                  @id @default(autoincrement())
+  grid_id        String
+  grid_x         Int
+  grid_y         Int
+  geom           Unsupported("geometry")
+  area_m2        Float
+  land_area_m2   Float
+  area_cells     area_cells[]
+  daily_activity daily_activity[]
+  grids          grids                   @relation(fields: [grid_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  matched_pairs  matched_pairs[]
+  observations   observations[]
+  predictions    predictions[]
+
+  @@unique([grid_id, grid_x, grid_y])
+  @@index([geom], map: "grid_cells_geom_gist", type: Gist)
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model grids {
+  id                 String                  @id
+  version            String
+  projection_srid    Int
+  cell_size_m        Float
+  origin_x_m         Float
+  origin_y_m         Float
+  supported_extent   Unsupported("geometry")
+  land_mask_asset_id String                  @db.Uuid
+  construction_spec  Json
+  analyses           analyses[]
+  grid_cells         grid_cells[]
+  assets             assets                  @relation(fields: [land_mask_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ingestion_checkpoints {
+  subscription_id         String                  @db.Uuid
+  stage                   String
+  cursor_basis            String
+  committed_until         DateTime?               @db.Timestamptz(6)
+  cursor_json             Json                    @default("{}")
+  last_success_run_id     String?                 @db.Uuid
+  updated_at              DateTime                @db.Timestamptz(6)
+  generation              BigInt                  @default(0)
+  fetch_runs              fetch_runs?             @relation(fields: [last_success_run_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestion_subscriptions ingestion_subscriptions @relation(fields: [subscription_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([subscription_id, stage])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ingestion_feeds {
+  id                      String                    @id
+  provider                String
+  adapter                 String
+  adapter_version         String
+  endpoint_template       String
+  credential_ref          String?
+  rate_limit_group        String
+  capability_spec         Json
+  state                   String
+  verified_at             DateTime?                 @db.Timestamptz(6)
+  feed_sources            feed_sources[]
+  ingestion_subscriptions ingestion_subscriptions[]
+
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ingestion_gaps {
+  id                      String                  @id @db.Uuid
+  subscription_id         String                  @db.Uuid
+  gap_start               DateTime                @db.Timestamptz(6)
+  gap_end_exclusive       DateTime                @db.Timestamptz(6)
+  kind                    String
+  status                  String
+  discovered_at           DateTime                @db.Timestamptz(6)
+  last_attempt_at         DateTime?               @db.Timestamptz(6)
+  retry_after             DateTime?               @db.Timestamptz(6)
+  resolved_by_run_id      String?                 @db.Uuid
+  evidence                Json
+  fetch_runs              fetch_runs?             @relation(fields: [resolved_by_run_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestion_subscriptions ingestion_subscriptions @relation(fields: [subscription_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status, retry_after], map: "gaps_pending")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ingestion_subscriptions {
+  id                    String                  @id @db.Uuid
+  feed_id               String
+  area_id               String                  @db.Uuid
+  scope_key             String
+  mode                  String
+  interval_seconds      Int
+  overlap_seconds       Int
+  history_start         DateTime                @db.Timestamptz(6)
+  fixed_end_exclusive   DateTime?               @db.Timestamptz(6)
+  request_config        Json
+  config_sha256         String
+  enabled               Boolean                 @default(false)
+  next_due_at           DateTime?               @db.Timestamptz(6)
+  lease_owner           String?
+  lease_expires_at      DateTime?               @db.Timestamptz(6)
+  fetch_runs            fetch_runs[]
+  ingestion_checkpoints ingestion_checkpoints[]
+  ingestion_gaps        ingestion_gaps[]
+  areas                 areas                   @relation(fields: [area_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestion_feeds       ingestion_feeds         @relation(fields: [feed_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([feed_id, scope_key, mode, config_sha256])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model matched_pairs {
+  id                                                                                   String        @id @db.Uuid
+  release_id                                                                           String        @db.Uuid
+  cell_id                                                                              BigInt
+  series_key                                                                           String
+  reference_observation_id                                                             String        @db.Uuid
+  source_observation_id                                                                String        @db.Uuid
+  time_delta_seconds                                                                   Int
+  shared_usable_land_m2                                                                Float
+  shared_usable_fraction                                                               Float
+  shared_support_uri                                                                   String
+  eligible                                                                             Boolean
+  reference_target                                                                     Boolean?
+  source_any_on_shared_support                                                         Boolean?
+  split_name                                                                           String?
+  block_id                                                                             String?
+  episode_group_id                                                                     String?
+  exclusion_reasons                                                                    Json          @default("[]")
+  grid_cells                                                                           grid_cells    @relation(fields: [cell_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  observations_matched_pairs_reference_observation_id_release_id_cell_idToobservations observations  @relation("matched_pairs_reference_observation_id_release_id_cell_idToobservations", fields: [reference_observation_id, release_id, cell_id], references: [id, release_id, cell_id], onDelete: NoAction, onUpdate: NoAction)
+  data_releases                                                                        data_releases @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  observations_matched_pairs_source_observation_id_release_id_cell_idToobservations    observations  @relation("matched_pairs_source_observation_id_release_id_cell_idToobservations", fields: [source_observation_id, release_id, cell_id], references: [id, release_id, cell_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([release_id, series_key, reference_observation_id])
+  @@unique([release_id, series_key, source_observation_id])
+  @@index([release_id, series_key, split_name], map: "pairs_split")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model metric_definitions {
+  id             String           @id
+  version        String
+  unit           String
+  family         String
+  description    String
+  definition     Json
+  requires_masks Boolean
+  requires_model Boolean
+  analyses       analyses[]
+  daily_activity daily_activity[]
+
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model model_versions {
+  id                                                  String        @id @db.Uuid
+  name                                                String
+  version                                             String
+  feature_set_id                                      String        @db.Uuid
+  source_id                                           String
+  reference_source_id                                 String
+  algorithm                                           String
+  artifact_uri                                        String
+  sha256                                              String
+  target_definition                                   Json
+  support_domain                                      Json
+  calibration_manifest_uri                            String
+  status                                              String
+  created_at                                          DateTime      @default(now()) @db.Timestamptz(6)
+  evaluations                                         evaluations[]
+  feature_sets                                        feature_sets  @relation(fields: [feature_set_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources_model_versions_reference_source_idTosources Source        @relation("model_versions_reference_source_idTosources", fields: [reference_source_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources_model_versions_source_idTosources           Source        @relation("model_versions_source_idTosources", fields: [source_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  predictions                                         predictions[]
+
+  @@unique([name, version])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model news_reports {
+  id                     String            @id @db.Uuid
+  asset_id               String            @db.Uuid
+  canonical_url          String
+  title                  String
+  publisher              String
+  language               String
+  published_at           DateTime?         @db.Timestamptz(6)
+  publication_precision  String
+  retrieved_at           DateTime          @db.Timestamptz(6)
+  content_sha256         String
+  summary                String?
+  original_reporting_url String?
+  syndication_group      String?
+  source_lineage         String
+  extraction_version     String
+  review_status          String
+  assets                 assets            @relation(fields: [asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reported_events        reported_events[]
+
+  @@unique([canonical_url, content_sha256, extraction_version])
+  @@index([published_at], map: "news_reports_published")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model observation_assets {
+  observation_id String       @db.Uuid
+  asset_id       String       @db.Uuid
+  role           String
+  assets         assets       @relation(fields: [asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  observations   observations @relation(fields: [observation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([observation_id, asset_id, role])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model observations {
+  id                                                                                    String               @id @db.Uuid
+  release_id                                                                            String               @db.Uuid
+  cell_id                                                                               BigInt
+  source_id                                                                             String
+  pass_key                                                                              String
+  time_start                                                                            DateTime             @db.Timestamptz(6)
+  time_end                                                                              DateTime             @db.Timestamptz(6)
+  representative_time                                                                   DateTime             @db.Timestamptz(6)
+  local_solar_date                                                                      DateTime             @db.Date
+  regime                                                                                String
+  land_area_m2                                                                          Float
+  usable_land_m2                                                                        Float?
+  cloud_land_m2                                                                         Float?
+  invalid_land_m2                                                                       Float?
+  unobserved_land_m2                                                                    Float?
+  usable_support_uri                                                                    String?
+  detection_links_uri                                                                   String?
+  coverage_status                                                                       String
+  retained_detection_count                                                              Int?
+  retained_any                                                                          Boolean?
+  eligible                                                                              Boolean
+  exclusion_reasons                                                                     Json                 @default("[]")
+  qa_policy_version                                                                     String
+  geometry_summary                                                                      Json                 @default("{}")
+  daily_activity                                                                        daily_activity[]
+  matched_pairs_matched_pairs_reference_observation_id_release_id_cell_idToobservations matched_pairs[]      @relation("matched_pairs_reference_observation_id_release_id_cell_idToobservations")
+  matched_pairs_matched_pairs_source_observation_id_release_id_cell_idToobservations    matched_pairs[]      @relation("matched_pairs_source_observation_id_release_id_cell_idToobservations")
+  observation_assets                                                                    observation_assets[]
+  grid_cells                                                                            grid_cells           @relation(fields: [cell_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  data_releases                                                                         data_releases        @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources                                                                               Source               @relation(fields: [source_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  predictions                                                                           predictions[]
+
+  @@unique([id, release_id, cell_id])
+  @@unique([release_id, cell_id, source_id, pass_key, qa_policy_version])
+  @@index([release_id, cell_id, representative_time], map: "observations_cell_time")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model outbox_events {
+  id               String    @id @db.Uuid
+  event_type       String
+  aggregate_id     String
+  dedupe_key       String    @unique
+  payload          Json
+  status           String
+  attempts         Int       @default(0)
+  available_at     DateTime  @db.Timestamptz(6)
+  lease_expires_at DateTime? @db.Timestamptz(6)
+  delivered_at     DateTime? @db.Timestamptz(6)
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model partition_dependencies {
+  partition_id                                                               String          @db.Uuid
+  input_partition_id                                                         String          @db.Uuid
+  role                                                                       String
+  data_partitions_partition_dependencies_input_partition_idTodata_partitions data_partitions @relation("partition_dependencies_input_partition_idTodata_partitions", fields: [input_partition_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  data_partitions_partition_dependencies_partition_idTodata_partitions       data_partitions @relation("partition_dependencies_partition_idTodata_partitions", fields: [partition_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([partition_id, input_partition_id, role])
+  @@schema("firebridge")
+}
+
+model partition_detections {
+  partition_id    String          @db.Uuid
+  detection_id    BigInt
+  detections      detections      @relation(fields: [detection_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  data_partitions data_partitions @relation(fields: [partition_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([partition_id, detection_id])
+  @@index([detection_id, partition_id], map: "partition_detections_reverse")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model pipeline_runs {
+  id                  String            @id @db.Uuid
+  release_id          String?           @db.Uuid
+  stage               String
+  idempotency_key     String            @unique
+  status              String
+  code_version        String
+  config              Json
+  input_manifest_uri  String
+  output_manifest_uri String?
+  started_at          DateTime?         @db.Timestamptz(6)
+  finished_at         DateTime?         @db.Timestamptz(6)
+  error_code          String?
+  log_uri             String?
+  data_partitions     data_partitions[]
+  fetch_runs          fetch_runs[]
+  data_releases       data_releases?    @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  quality_issues      quality_issues[]
+
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model predictions {
+  id                   String           @id @db.Uuid
+  release_id           String           @db.Uuid
+  cell_id              BigInt
+  observation_id       String           @db.Uuid
+  model_id             String           @db.Uuid
+  response_probability Float?
+  status               String
+  support_reasons      Json             @default("[]")
+  features_uri         String
+  uncertainty          Json?
+  daily_activity       daily_activity[]
+  grid_cells           grid_cells       @relation(fields: [cell_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  model_versions       model_versions   @relation(fields: [model_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  observations         observations     @relation(fields: [observation_id, release_id, cell_id], references: [id, release_id, cell_id], onDelete: NoAction, onUpdate: NoAction)
+  data_releases        data_releases    @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([id, release_id, cell_id])
+  @@unique([observation_id, model_id])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model quality_issues {
+  id              String        @id @db.Uuid
+  pipeline_run_id String        @db.Uuid
+  asset_id        String?       @db.Uuid
+  rule_id         String
+  severity        String
+  status          String
+  affected_count  BigInt
+  sample_locator  Json
+  explanation     String
+  resolution_note String?
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  assets          assets?       @relation(fields: [asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pipeline_runs   pipeline_runs @relation(fields: [pipeline_run_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([pipeline_run_id, severity, status], map: "issues_run")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model release_aliases {
+  alias         String
+  scope_key     String
+  release_id    String        @db.Uuid
+  generation    BigInt        @default(0)
+  updated_at    DateTime      @db.Timestamptz(6)
+  data_releases data_releases @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([alias, scope_key])
+  @@schema("firebridge")
+}
+
+model release_assets {
+  release_id    String        @db.Uuid
+  asset_id      String        @db.Uuid
+  role          String
+  assets        assets        @relation(fields: [asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  data_releases data_releases @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([release_id, asset_id, role])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model release_changes {
+  id                                                           String                   @id @db.Uuid
+  from_release_id                                              String                   @db.Uuid
+  to_release_id                                                String                   @db.Uuid
+  series_key                                                   String
+  affected_start                                               DateTime                 @db.Timestamptz(6)
+  affected_end_exclusive                                       DateTime                 @db.Timestamptz(6)
+  affected_area                                                Unsupported("geometry")?
+  reason                                                       String
+  diff_manifest_uri                                            String
+  created_at                                                   DateTime                 @default(now()) @db.Timestamptz(6)
+  data_releases_release_changes_from_release_idTodata_releases data_releases            @relation("release_changes_from_release_idTodata_releases", fields: [from_release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  data_releases_release_changes_to_release_idTodata_releases   data_releases            @relation("release_changes_to_release_idTodata_releases", fields: [to_release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([to_release_id], map: "release_changes_to")
+  @@schema("firebridge")
+}
+
+model release_partitions {
+  release_id      String          @db.Uuid
+  series_key      String
+  partition_key   String
+  partition_id    String          @db.Uuid
+  data_partitions data_partitions @relation(fields: [partition_id, series_key, partition_key], references: [id, series_key, partition_key], onDelete: NoAction, onUpdate: NoAction)
+  data_releases   data_releases   @relation(fields: [release_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([release_id, series_key, partition_key])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model reported_events {
+  id                      String                   @id @db.Uuid
+  report_id               String                   @db.Uuid
+  claim_index             Int
+  event_start             DateTime?                @db.Date
+  event_end_exclusive     DateTime?                @db.Date
+  date_precision          String
+  place_text              String?
+  location                Unsupported("geometry")?
+  location_precision      String
+  location_uncertainty_m  Float?
+  geocoding_method        String?
+  event_cluster_key       String?
+  reported_event_type     String?
+  reported_burned_area_ha Float?
+  reported_cause          String?
+  claim_summary           String
+  review_status           String
+  reviewed_by             String?
+  reviewed_at             DateTime?                @db.Timestamptz(6)
+  analysis_event_links    analysis_event_links[]
+  news_reports            news_reports             @relation(fields: [report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([report_id, claim_index])
+  @@index([event_start, event_end_exclusive], map: "reported_events_dates")
+  @@index([location], map: "reported_events_geom_gist", type: Gist)
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model source_availability {
+  feed_id                 String
+  source_id               String
+  checked_at              DateTime     @db.Timestamptz(6)
+  available_start         DateTime?    @db.Timestamptz(6)
+  available_end_exclusive DateTime?    @db.Timestamptz(6)
+  status                  String
+  evidence_asset_id       String?      @db.Uuid
+  detail                  Json
+  assets                  assets?      @relation(fields: [evidence_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  feed_sources            feed_sources @relation(fields: [feed_id, source_id], references: [feed_id, source_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([feed_id, source_id, checked_at])
+  @@index([feed_id, source_id, checked_at(sort: Desc)], map: "source_availability_recent")
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model spatial_ref_sys {
+  srid      Int     @id
+  auth_name String? @db.VarChar(256)
+  auth_srid Int?
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
+
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model weather_locations {
+  id                  String                   @id @db.Uuid
+  source_id           String
+  native_location_key String
+  support_kind        String
+  geom                Unsupported("geometry")
+  footprint           Unsupported("geometry")?
+  elevation_m         Float?
+  native_resolution_m Float?
+  metadata            Json                     @default("{}")
+  sources             Source                   @relation(fields: [source_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  weather_values      weather_values[]
+
+  @@unique([id, source_id])
+  @@unique([source_id, native_location_key])
+  @@index([geom], map: "weather_location_geom_gist", type: Gist)
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model weather_summaries {
+  id                         String   @id @db.Uuid
+  analysis_id                String   @db.Uuid
+  source_id                  String
+  variable                   String
+  unit                       String
+  period_start               DateTime @db.Timestamptz(6)
+  period_end                 DateTime @db.Timestamptz(6)
+  statistic                  String
+  value                      Float?
+  spatial_method             String
+  spatial_weights_uri        String
+  input_manifest_uri         String
+  temporal_coverage_fraction Float
+  spatial_coverage_fraction  Float
+  status                     String
+  reasons                    Json     @default("[]")
+  analyses                   analyses @relation(fields: [analysis_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources                    Source   @relation(fields: [source_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([analysis_id, source_id, variable, period_start, period_end, statistic])
+  @@schema("firebridge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model weather_values {
+  id                BigInt            @id @default(autoincrement())
+  location_id       String            @db.Uuid
+  source_id         String
+  asset_id          String            @db.Uuid
+  variable          String
+  unit              String
+  valid_start       DateTime          @db.Timestamptz(6)
+  valid_end         DateTime          @db.Timestamptz(6)
+  issued_at         DateTime?         @db.Timestamptz(6)
+  available_at      DateTime?         @db.Timestamptz(6)
+  data_kind         String
+  statistic         String
+  value             Float?
+  quality_status    String
+  derivation        Json              @default("{}")
+  assets            assets            @relation(fields: [asset_id, source_id], references: [id, source_id], onDelete: NoAction, onUpdate: NoAction)
+  weather_locations weather_locations @relation(fields: [location_id, source_id], references: [id, source_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([asset_id, location_id, variable, valid_start, valid_end])
+  @@index([location_id, variable, valid_start], map: "weather_values_lookup")
   @@schema("firebridge")
 }

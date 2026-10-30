@@ -4,8 +4,8 @@
 -- Serving tables contain bounded, published datasets. Global raw data stays in Parquet.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE SCHEMA firebridge;
-SET LOCAL search_path = firebridge, public;
+CREATE SCHEMA IF NOT EXISTS firebridge;
+SET search_path = firebridge, public;
 
 -- Catalog: exact product, collection and processing stream, not just a satellite name.
 CREATE TABLE sources (
