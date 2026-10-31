@@ -1,6 +1,6 @@
 import { testServer } from './helpers/http.js';
 import request from './helpers/http.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   BadRequestError,
   ConflictError,
@@ -9,6 +9,27 @@ import {
 } from '../src/errors/app-error.js';
 
 describe('errorHandler', () => {
+  it('logs sanitized request fields without the error message or query string', async () => {
+    const log = vi.fn();
+    const app = testServer();
+    app.get('/failure', async (req) => {
+      req.log.error = log;
+      throw new Error('sensitive database details');
+    });
+    await request(app).get('/failure?token=private-query');
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 500,
+        errorCode: 'INTERNAL_SERVER_ERROR',
+        errorType: 'Error',
+        method: 'GET',
+        path: '/failure'
+      }),
+      'Request failed'
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain('sensitive database details');
+    expect(JSON.stringify(log.mock.calls)).not.toContain('private-query');
+  });
   it('does not expose internal messages or pass invalid status codes to Fastify and returns 500 with code', async () => {
     const app = testServer();
     app.get('/failure', (_req, _res) => {

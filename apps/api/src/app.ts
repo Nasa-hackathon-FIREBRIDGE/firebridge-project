@@ -2,12 +2,14 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import compress from '@fastify/compress';
+import formbody from '@fastify/formbody';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { randomUUID } from 'node:crypto';
 import { env } from './config/env.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { notFoundHandler } from './middleware/not-found.js';
+import { securityHeaders } from './middleware/security.js';
 import apiRoutes from './routes/index.js';
 import { createDatabase, type SnapshotDatabase } from './repositories/database.js';
 import { CatalogRepository } from './repositories/catalog.repository.js';
@@ -47,8 +49,13 @@ export function createApp(
   app.addHook('onRequest', async (request, reply) => {
     reply.header('X-Request-Id', request.id);
   });
-  app.register(helmet);
+  app.addHook('onRequest', securityHeaders);
+  app.register(helmet, {
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    frameguard: { action: 'deny' }
+  });
   app.register(cors, {
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
     origin: (origin, callback) =>
       callback(
         null,
@@ -58,6 +65,7 @@ export function createApp(
       )
   });
   app.register(compress);
+  app.register(formbody, { bodyLimit: 100 * 1024 });
   app.register(swagger, { openapi: { info: { title: 'FIREBRIDGE API', version: '1.0.0' } } });
   app.register(swaggerUi, { routePrefix: '/api-docs' });
   app.register(apiRoutes, { prefix: '/api/v1' });

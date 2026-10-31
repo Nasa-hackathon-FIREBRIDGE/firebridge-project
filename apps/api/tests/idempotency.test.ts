@@ -1,4 +1,4 @@
-import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyRequest } from 'fastify';
 import { testServer } from './helpers/http.js';
 import request from './helpers/http.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -491,22 +491,22 @@ describe('Idempotency-Key Middleware', () => {
 
   describe('Response Replay Header Filtering & Non-JSON Handling', () => {
     it('filters out hop-by-hop and sensitive headers during replay while preserving contract headers', () => {
-      const mockRes = {
-        getHeaders: () => ({
-          'content-type': 'application/json',
-          etag: '"abc123"',
-          'set-cookie': 'session=secret123',
-          connection: 'keep-alive',
-          'x-request-id': 'req-xyz'
-        })
-      } as unknown as FastifyReply;
-
-      const safe = getSafeReplayHeaders(mockRes);
+      const safe = getSafeReplayHeaders({
+        'content-type': 'application/json',
+        etag: '"abc123"',
+        'set-cookie': 'session=secret123',
+        connection: 'keep-alive',
+        'x-request-id': 'req-xyz',
+        'content-encoding': 'gzip',
+        'content-length': 42
+      });
       expect(safe['content-type']).toBe('application/json');
       expect(safe.etag).toBe('"abc123"');
       expect(safe['set-cookie']).toBeUndefined();
       expect(safe.connection).toBeUndefined();
       expect(safe['x-request-id']).toBeUndefined();
+      expect(safe['content-encoding']).toBeUndefined();
+      expect(safe['content-length']).toBeUndefined();
     });
 
     it('replays plain text and binary buffer responses accurately', async () => {

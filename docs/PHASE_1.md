@@ -72,11 +72,15 @@ Les grands compteurs sont des chaînes décimales. Les sources normalisées sont
 
 ## Intégration du socle et des Sources
 
+L’API utilise Fastify 5 pour toutes les routes, y compris les ressources encore en `501`. Les plugins CORS, sécurité, compression et formulaires sont natifs Fastify. Swagger est généré depuis les schémas des routes : l’interface est disponible à `/api-docs/` et le document OpenAPI à `/api-docs/json`.
+
 La logique Sources de `main` est adaptée à Fastify et conserve Prisma. Les lectures de phase 1 conservent leurs requêtes SQL paramétrées. `sources-cursor.ts` gère les curseurs Sources avec `PAGINATION_SECRET`, tandis que `cursor.ts` gère les membres de release avec `CURSOR_SECRET`.
 
 La readiness vérifie PostgreSQL et Redis, puis le catalogue via un provider propre à l’application. Une base connectée ne suffit pas à déclarer l’API prête si aucune release n’est servable. Créer une source ne publie pas de release et ne remplace pas l’ingestion.
 
 L’idempotence des créations de sources utilise les hooks Fastify et conserve les stores Redis et mémoire du socle. Les tests de phase 0 et de phase 1 sont exécutés ensemble. La file de jobs durable, l’authentification métier et l’harmonisation restent hors de cette livraison.
+
+Le cache d’idempotence conserve la réponse applicative avant compression. Chaque rejeu négocie sa propre compression et recalcule sa longueur ; les anciens en-têtes `Content-Encoding` et `Content-Length` ne sont pas rejoués. Le `request_id` correspond toujours à la requête courante. Les tests couvrent les rejeux gzip et les changements d’encodage entre deux appels.
 
 ## Validation et limites
 

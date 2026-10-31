@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
+import type { FastifyRequest, RouteShorthandOptions } from 'fastify';
 import { redis, ensureRedisConnected } from '../config/redis.js';
 import { logger } from '../config/logger.js';
 import {
@@ -481,6 +481,7 @@ export function validateIdempotencyKeyFormat(rawKey: unknown): string {
  * Unauthenticated callers cannot spoof arbitrary client/tenant identifiers via headers.
  * If req.user is set (authenticated session), the user or tenant ID is trusted.
  * Otherwise, the request falls back to the isolated 'unauthenticated' scope partition.
+ * Authentication must populate the trusted identity before this route's preHandler.
  */
 export function defaultScopeResolver(req: FastifyRequest): string {
   const user = (req as { user?: { tenantId?: string; id?: string } }).user;
@@ -520,14 +521,16 @@ const STRIPPED_REPLAY_HEADERS = new Set([
   'date',
   'authorization',
   'x-request-id',
-  'idempotent-replayed'
+  'idempotent-replayed',
+  // Cache the application payload; negotiate compression and length for each response.
+  'content-encoding',
+  'content-length'
 ]);
 
 export function getSafeReplayHeaders(
-  res: Pick<FastifyReply, 'getHeaders'>
+  rawHeaders: Record<string, number | string | string[] | undefined>
 ): Record<string, string> {
   const safeHeaders: Record<string, string> = {};
-  const rawHeaders = res.getHeaders();
 
   for (const [key, value] of Object.entries(rawHeaders)) {
     const lowerKey = key.toLowerCase();
@@ -617,7 +620,9 @@ export function idempotency(options: IdempotencyOptions = {}): RouteShorthandOpt
             'Idempotency-Key was already used with a different request payload.'
           );
         }
-        for (const [name, value] of Object.entries(record.headers ?? {})) reply.header(name, value);
+        // Filter on replay too, including records written by older API versions.
+        for (const [name, value] of Object.entries(getSafeReplayHeaders(record.headers ?? {})))
+          reply.header(name, value);
         reply.header('Idempotent-Replayed', 'true').status(record.statusCode);
         if (record.responsePayload?.bodyType === 'buffer')
           return reply.send(Buffer.from(record.responsePayload.base64 ?? '', 'base64'));
@@ -647,6 +652,8 @@ export function idempotency(options: IdempotencyOptions = {}): RouteShorthandOpt
         state.timer.unref();
       }
     },
+    // @fastify/compress appends its onSend hook after this route hook. Persist the
+    // uncompressed representation and headers before the compression hook runs.
     async onSend(request, reply, payload) {
       const state = states.get(request);
       if (!state || state.finished) return payload;
@@ -681,7 +688,7 @@ export function idempotency(options: IdempotencyOptions = {}): RouteShorthandOpt
           state.hash,
           reply.statusCode,
           body,
-          getSafeReplayHeaders(reply),
+          getSafeReplayHeaders(reply.getHeaders()),
           retentionTtlSec,
           representation
         );

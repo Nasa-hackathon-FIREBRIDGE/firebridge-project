@@ -29,7 +29,17 @@ export function errorHandler(error: FastifyError, request: FastifyRequest, reply
           : status >= 500
             ? 'Internal server error.'
             : 'Malformed request.';
-  if (status >= 500) request.log.error({ code, request_id: request.id }, 'Request failed');
+  request.log.error(
+    {
+      statusCode: status,
+      errorCode: code,
+      errorType: error instanceof Error ? error.name : 'UnknownError',
+      request_id: request.id,
+      method: request.method,
+      path: request.url.split('?')[0]
+    },
+    'Request failed'
+  );
   return reply.status(status).send({
     ...envelope(request, null),
     status: 'error',
