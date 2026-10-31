@@ -12,7 +12,7 @@ Ce document décrit les conventions nécessaires au raccordement entre les endpo
 
 Les lectures de phase 1 utilisent une transaction `REPEATABLE READ READ ONLY`. Elles ne déclenchent ni acquisition fournisseur, ni publication de release, ni migration.
 
-Le [SQL de conception](../packages/database/prisma/sql/firebridge_schema_v2.sql) décrit le schéma attendu. Les migrations reprises de `main` créent `public.HealthCheck` et `firebridge.sources`. Les autres tables restent à ajouter par migrations additives. Le SQL de conception ne doit pas être appliqué par-dessus les migrations existantes.
+Le [SQL de conception](../packages/database/prisma/sql/firebridge_schema_v2.sql) décrit le schéma attendu. Les deux premières migrations créent `public.HealthCheck` et `firebridge.sources`. La migration `20261031000000_phase1_catalog_versions` ajoute PostGIS et les 15 tables nécessaires à ces lectures, avec leurs clés étrangères, contraintes et index. Les tables des phases suivantes ne sont pas créées. Le SQL de conception ne doit pas être appliqué par-dessus les migrations existantes.
 
 ## Contrat à respecter côté ingestion
 
@@ -84,12 +84,12 @@ Le cache d’idempotence conserve la réponse applicative avant compression. Cha
 
 ## Validation et limites
 
-Les tests exécutent les requêtes SQL de métadonnées dans PostgreSQL embarqué et utilisent des fixtures isolées. Les types géométriques y sont adaptés. Ils ne valident ni PostGIS réel, ni les migrations sur une instance Docker, ni une ingestion NASA.
+Les tests rapides appliquent la chaîne des migrations dans PostgreSQL embarqué et utilisent des fixtures isolées. Les types géométriques y sont adaptés. La suite `test:postgres` vérifie séparément les endpoints, les types PostGIS, les contraintes SQL et la readiness PostgreSQL/Redis sur les services Docker. Elle est limitée à la base `firebridge_phase1_test` et au scope `phase1_test` pour ses données fictives ; aucun téléchargement NASA n’est effectué. Les commandes sont dans le [README](../README.md).
 
 Avant l’intégration finale :
 
-1. Appliquer les migrations métier sur une base de développement.
-2. Ajouter les migrations de phase 1 et publier un petit jeu réel avec ses métadonnées.
+1. Appliquer les migrations sur une base de développement et exécuter `test:postgres` sur la base dédiée.
+2. Faire publier par l’ingestion un petit jeu réel avec ses métadonnées, sans réutiliser le scope de test.
 3. Rejouer les endpoints via `http://localhost:3000/api-docs/`.
 4. Comparer les réponses à l’inventaire et aux versions publiés.
 5. Vérifier qu’une nouvelle publication change les aliases sans modifier les anciennes releases.

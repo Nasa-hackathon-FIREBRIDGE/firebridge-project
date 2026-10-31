@@ -1,3 +1,6 @@
+// SQL migrations preserve PostGIS types, CHECK constraints and partial indexes.
+// Prisma maps migrated metadata; spatial reads/writes use parameterized SQL.
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -5,14 +8,11 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "firebridge"]
+  schemas  = ["firebridge", "public"]
 }
 
-// HealthCheck table intentionally omitted:
-// Liveness and readiness checks are stateless; no persistent health records are stored.
-
 model Source {
-  id                String  @id
+  id                String       @id
   name              String
   provider          String
   kind              String
@@ -20,16 +20,321 @@ model Source {
   instrument        String?
   product           String
   collection        String
-  processingStream  String  @map("processing_stream")
-  documentationUrl  String  @map("documentation_url")
+  processingStream  String       @map("processing_stream")
+  documentationUrl  String       @map("documentation_url")
   citation          String
-  licenseInfo       String  @map("license_info")
-  nativeResolutionM Float?  @map("native_resolution_m")
-  schemaVersion     String  @map("schema_version")
-  metadata          Json    @default("{}")
+  licenseInfo       String       @map("license_info")
+  nativeResolutionM Float?       @map("native_resolution_m")
+  schemaVersion     String       @map("schema_version")
+  metadata          Json         @default("{}")
+  assets            Asset[]
+  feedSources       FeedSource[]
 
   @@index([kind])
   @@index([provider])
   @@map("sources")
   @@schema("firebridge")
+}
+
+model Area {
+  id                     String                  @id @db.Uuid
+  name                   String
+  version                String
+  geom                   Unsupported("geometry")
+  geometrySha256         String                  @map("geometry_sha256")
+  displayTimezone        String                  @map("display_timezone")
+  provenance             String
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  ingestionSubscriptions IngestionSubscription[]
+
+  @@unique([geometrySha256, version])
+  @@index([geom], map: "areas_geom_gist", type: Gist)
+  @@map("areas")
+  @@schema("firebridge")
+}
+
+model Asset {
+  id                 String                   @id @db.Uuid
+  sourceId           String                   @map("source_id")
+  nativeKey          String                   @map("native_key")
+  revision           String
+  sourceUrl          String                   @map("source_url")
+  storageUri         String                   @map("storage_uri")
+  sha256             String
+  byteSize           BigInt                   @map("byte_size")
+  timeStart          DateTime?                @map("time_start") @db.Timestamptz(6)
+  timeEnd            DateTime?                @map("time_end") @db.Timestamptz(6)
+  footprint          Unsupported("geometry")?
+  retrievedAt        DateTime                 @map("retrieved_at") @db.Timestamptz(6)
+  validationStatus   String                   @map("validation_status")
+  metadata           Json                     @default("{}")
+  sources            Source                   @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  grids              Grid[]
+  releaseAssets      ReleaseAsset[]
+  sourceAvailability SourceAvailability[]
+
+  @@unique([id, sourceId])
+  @@unique([sourceId, nativeKey, revision, sha256])
+  @@index([footprint], map: "assets_footprint_gist", type: Gist)
+  @@map("assets")
+  @@schema("firebridge")
+}
+
+model DataPartition {
+  id                String             @id @db.Uuid
+  pipelineRunId     String             @map("pipeline_run_id") @db.Uuid
+  kind              String
+  seriesKey         String             @map("series_key")
+  partitionKey      String             @map("partition_key")
+  supportSpec       Json               @map("support_spec")
+  storageUri        String             @map("storage_uri")
+  sha256            String
+  inputManifestUri  String             @map("input_manifest_uri")
+  schemaVersion     String             @map("schema_version")
+  rowCount          BigInt             @map("row_count")
+  servingComplete   Boolean            @map("serving_complete")
+  validationStatus  String             @map("validation_status")
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  pipelineRuns      PipelineRun        @relation(fields: [pipelineRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  releasePartitions ReleasePartition[]
+
+  @@unique([id, seriesKey, partitionKey])
+  @@unique([seriesKey, partitionKey, sha256])
+  @@index([seriesKey, partitionKey, createdAt(sort: Desc)], map: "partitions_key")
+  @@map("data_partitions")
+  @@schema("firebridge")
+}
+
+model DataRelease {
+  id                  String             @id @db.Uuid
+  name                String             @unique
+  status              String
+  stream              String
+  codeVersion         String             @map("code_version")
+  config              Json
+  configSha256        String             @map("config_sha256")
+  manifestUri         String             @map("manifest_uri")
+  parentReleaseId     String?            @map("parent_release_id") @db.Uuid
+  datasetKind         String             @map("dataset_kind")
+  scopeKey            String             @map("scope_key")
+  observationCutoff   DateTime           @map("observation_cutoff") @db.Timestamptz(6)
+  validationReportUri String?            @map("validation_report_uri")
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  publishedAt         DateTime?          @map("published_at") @db.Timestamptz(6)
+  dataReleases        DataRelease?       @relation("data_releasesTodata_releases", fields: [parentReleaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  childReleases       DataRelease[]      @relation("data_releasesTodata_releases")
+  pipelineRuns        PipelineRun[]
+  releaseAliases      ReleaseAlias[]
+  releaseAssets       ReleaseAsset[]
+  changesFrom         ReleaseChange[]    @relation("release_changes_from_release_idTodata_releases")
+  changesTo           ReleaseChange[]    @relation("release_changes_to_release_idTodata_releases")
+  releasePartitions   ReleasePartition[]
+
+  @@index([scopeKey, status], map: "data_releases_scope_status")
+  @@map("data_releases")
+  @@schema("firebridge")
+}
+
+model FeedSource {
+  feedId             String               @map("feed_id")
+  sourceId           String               @map("source_id")
+  selector           Json
+  ingestionFeeds     IngestionFeed        @relation(fields: [feedId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources            Source               @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sourceAvailability SourceAvailability[]
+
+  @@id([feedId, sourceId])
+  @@map("feed_sources")
+  @@schema("firebridge")
+}
+
+model Grid {
+  id               String                  @id
+  version          String
+  projectionSrid   Int                     @map("projection_srid")
+  cellSizeM        Float                   @map("cell_size_m")
+  originXM         Float                   @map("origin_x_m")
+  originYM         Float                   @map("origin_y_m")
+  supportedExtent  Unsupported("geometry") @map("supported_extent")
+  landMaskAssetId  String                  @map("land_mask_asset_id") @db.Uuid
+  constructionSpec Json                    @map("construction_spec")
+  assets           Asset                   @relation(fields: [landMaskAssetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("grids")
+  @@schema("firebridge")
+}
+
+model IngestionFeed {
+  id                     String                  @id
+  provider               String
+  adapter                String
+  adapterVersion         String                  @map("adapter_version")
+  endpointTemplate       String                  @map("endpoint_template")
+  credentialRef          String?                 @map("credential_ref")
+  rateLimitGroup         String                  @map("rate_limit_group")
+  capabilitySpec         Json                    @map("capability_spec")
+  state                  String
+  verifiedAt             DateTime?               @map("verified_at") @db.Timestamptz(6)
+  feedSources            FeedSource[]
+  ingestionSubscriptions IngestionSubscription[]
+
+  @@map("ingestion_feeds")
+  @@schema("firebridge")
+}
+
+model IngestionSubscription {
+  id                String        @id @db.Uuid
+  feedId            String        @map("feed_id")
+  areaId            String        @map("area_id") @db.Uuid
+  scopeKey          String        @map("scope_key")
+  mode              String
+  intervalSeconds   Int           @map("interval_seconds")
+  overlapSeconds    Int           @map("overlap_seconds")
+  historyStart      DateTime      @map("history_start") @db.Timestamptz(6)
+  fixedEndExclusive DateTime?     @map("fixed_end_exclusive") @db.Timestamptz(6)
+  requestConfig     Json          @map("request_config")
+  configSha256      String        @map("config_sha256")
+  enabled           Boolean       @default(false)
+  nextDueAt         DateTime?     @map("next_due_at") @db.Timestamptz(6)
+  leaseOwner        String?       @map("lease_owner")
+  leaseExpiresAt    DateTime?     @map("lease_expires_at") @db.Timestamptz(6)
+  areas             Area          @relation(fields: [areaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestionFeeds    IngestionFeed @relation(fields: [feedId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([feedId, scopeKey, mode, configSha256])
+  @@map("ingestion_subscriptions")
+  @@schema("firebridge")
+}
+
+model MetricDefinition {
+  id            String  @id
+  version       String
+  unit          String
+  family        String
+  description   String
+  definition    Json
+  requiresMasks Boolean @map("requires_masks")
+  requiresModel Boolean @map("requires_model")
+
+  @@map("metric_definitions")
+  @@schema("firebridge")
+}
+
+model PipelineRun {
+  id                String          @id @db.Uuid
+  releaseId         String?         @map("release_id") @db.Uuid
+  stage             String
+  idempotencyKey    String          @unique @map("idempotency_key")
+  status            String
+  codeVersion       String          @map("code_version")
+  config            Json
+  inputManifestUri  String          @map("input_manifest_uri")
+  outputManifestUri String?         @map("output_manifest_uri")
+  startedAt         DateTime?       @map("started_at") @db.Timestamptz(6)
+  finishedAt        DateTime?       @map("finished_at") @db.Timestamptz(6)
+  errorCode         String?         @map("error_code")
+  logUri            String?         @map("log_uri")
+  dataPartitions    DataPartition[]
+  dataReleases      DataRelease?    @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("pipeline_runs")
+  @@schema("firebridge")
+}
+
+model ReleaseAlias {
+  alias        String
+  scopeKey     String      @map("scope_key")
+  releaseId    String      @map("release_id") @db.Uuid
+  generation   BigInt      @default(0)
+  updatedAt    DateTime    @map("updated_at") @db.Timestamptz(6)
+  dataReleases DataRelease @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([alias, scopeKey])
+  @@index([releaseId], map: "release_aliases_release")
+  @@map("release_aliases")
+  @@schema("firebridge")
+}
+
+model ReleaseAsset {
+  releaseId    String      @map("release_id") @db.Uuid
+  assetId      String      @map("asset_id") @db.Uuid
+  role         String
+  assets       Asset       @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases DataRelease @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([releaseId, assetId, role])
+  @@map("release_assets")
+  @@schema("firebridge")
+}
+
+model ReleaseChange {
+  id                   String                   @id @db.Uuid
+  fromReleaseId        String                   @map("from_release_id") @db.Uuid
+  toReleaseId          String                   @map("to_release_id") @db.Uuid
+  seriesKey            String                   @map("series_key")
+  affectedStart        DateTime                 @map("affected_start") @db.Timestamptz(6)
+  affectedEndExclusive DateTime                 @map("affected_end_exclusive") @db.Timestamptz(6)
+  affectedArea         Unsupported("geometry")? @map("affected_area")
+  reason               String
+  diffManifestUri      String                   @map("diff_manifest_uri")
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  fromRelease          DataRelease              @relation("release_changes_from_release_idTodata_releases", fields: [fromReleaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  toRelease            DataRelease              @relation("release_changes_to_release_idTodata_releases", fields: [toReleaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([toReleaseId], map: "release_changes_to")
+  @@map("release_changes")
+  @@schema("firebridge")
+}
+
+model ReleasePartition {
+  releaseId      String        @map("release_id") @db.Uuid
+  seriesKey      String        @map("series_key")
+  partitionKey   String        @map("partition_key")
+  partitionId    String        @map("partition_id") @db.Uuid
+  dataPartitions DataPartition @relation(fields: [partitionId, seriesKey, partitionKey], references: [id, seriesKey, partitionKey], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases   DataRelease   @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([releaseId, seriesKey, partitionKey])
+  @@map("release_partitions")
+  @@schema("firebridge")
+}
+
+model SourceAvailability {
+  feedId                String     @map("feed_id")
+  sourceId              String     @map("source_id")
+  checkedAt             DateTime   @map("checked_at") @db.Timestamptz(6)
+  availableStart        DateTime?  @map("available_start") @db.Timestamptz(6)
+  availableEndExclusive DateTime?  @map("available_end_exclusive") @db.Timestamptz(6)
+  status                String
+  evidenceAssetId       String?    @map("evidence_asset_id") @db.Uuid
+  detail                Json
+  assets                Asset?     @relation(fields: [evidenceAssetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  feedSources           FeedSource @relation(fields: [feedId, sourceId], references: [feedId, sourceId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([feedId, sourceId, checkedAt])
+  @@index([feedId, sourceId, checkedAt(sort: Desc)], map: "source_availability_recent")
+  @@map("source_availability")
+  @@schema("firebridge")
+}
+
+// Legacy migration table; health endpoints remain stateless.
+model HealthCheck {
+  id        String   @id
+  createdAt DateTime @default(now())
+  status    String
+
+  @@schema("public")
+}
+
+// Owned and populated by PostGIS; excluded from the Prisma Client.
+model SpatialReferenceSystem {
+  srid      Int     @id
+  authName  String? @map("auth_name") @db.VarChar(256)
+  authSrid  Int?    @map("auth_srid")
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
+
+  @@map("spatial_ref_sys")
+  @@ignore
+  @@schema("public")
 }

@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
-    exclude: ['**/*.js', 'dist/**', 'node_modules/**'],
+    exclude: ['tests/postgres/**', '**/*.js', 'dist/**', 'node_modules/**'],
     env: {
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',

@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import type { SnapshotDatabase } from '../../src/repositories/database.js';
 
 export const ids = {
@@ -11,42 +11,23 @@ export const ids = {
 };
 export async function testDatabase() {
   const db = new PGlite();
-  const schema = await readFile(
-    new URL('../../../../packages/database/prisma/sql/firebridge_schema_v2.sql', import.meta.url),
-    'utf8'
-  );
-  const tables = new Set([
-    'sources',
-    'assets',
-    'data_releases',
-    'release_assets',
-    'pipeline_runs',
-    'areas',
-    'grids',
-    'metric_definitions',
-    'ingestion_feeds',
-    'feed_sources',
-    'source_availability',
-    'ingestion_subscriptions',
-    'data_partitions',
-    'release_partitions',
-    'release_aliases',
-    'release_changes'
-  ]);
-  // Use the production table definitions. Only PostGIS geometry is replaced: these tests
-  // exercise catalog SQL, not spatial predicates. PostGIS remains required in production.
-  const statements = [...schema.matchAll(/CREATE TABLE (\w+) \([\s\S]*?\n\);/g)]
-    .filter((match) => tables.has(match[1]))
-    .map((match) =>
-      match[0]
+  const migrations = new URL('../../../../packages/database/prisma/migrations/', import.meta.url);
+  for (const name of (await readdir(migrations)).sort()) {
+    if (!/^\d+_/.test(name)) continue;
+    const sql = await readFile(new URL(name + '/migration.sql', migrations), 'utf8');
+    // Metadata SQL uses the actual migration chain. Only PostGIS is adapted for PGlite;
+    // the separate PostgreSQL suite validates the extension and real spatial types.
+    await db.exec(
+      sql
+        .replace(/CREATE EXTENSION IF NOT EXISTS postgis(?: WITH SCHEMA public)?;/g, '')
         .replace(/geometry\([^)]*\)/g, 'jsonb')
         .replace('ST_IsValid(geom) AND NOT ST_IsEmpty(geom)', 'geom IS NOT NULL')
+        .replace(/CREATE INDEX \w+ ON \w+ USING gist\([^)]*\);/g, '')
     );
-  await db.exec('CREATE SCHEMA firebridge; SET search_path=firebridge,public;');
+  }
   await db.exec(
-    `CREATE FUNCTION public.ST_AsGeoJSON(jsonb) RETURNS text LANGUAGE sql IMMUTABLE AS 'SELECT $1::text';`
+    `CREATE FUNCTION public.ST_AsGeoJSON(jsonb) RETURNS text LANGUAGE sql IMMUTABLE AS 'SELECT $1::text'`
   );
-  for (const sql of statements) await db.exec(sql);
   const adapter: SnapshotDatabase = {
     snapshot: (read) =>
       db.transaction(async (tx) => {
@@ -60,12 +41,15 @@ export async function testDatabase() {
   };
   return { db, adapter };
 }
-export async function seed(db: PGlite) {
+export async function seed(db: { exec(sql: string): Promise<unknown> }, postgis = false) {
   await db.exec(
     'TRUNCATE firebridge.sources,firebridge.data_releases,firebridge.areas,firebridge.metric_definitions,firebridge.ingestion_feeds CASCADE'
   );
   const hash = 'a'.repeat(64);
-  await db.exec(`
+  const areaGeometry = postgis
+    ? "ST_Multi(ST_GeomFromText('POLYGON((-8 30,-7 30,-7 31,-8 31,-8 30))',4326))"
+    : "'{}'";
+  const sql = `
     INSERT INTO firebridge.sources
       (id,name,provider,kind,platform,instrument,product,collection,processing_stream,documentation_url,citation,license_info,schema_version)
     VALUES
@@ -76,7 +60,7 @@ export async function seed(db: PGlite) {
       ('native_detections_v1','1','detections','native_detections','Native counts','{}',false,false),
       ('harmonized_v1','1','dimensionless_reference_response','harmonized_response','Not validated','{}',true,true);
     INSERT INTO firebridge.areas VALUES
-      ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Morocco','1','{}','${hash}','Africa/Casablanca','fixture',now());
+      ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Morocco','1',${areaGeometry},'${hash}','Africa/Casablanca','fixture',now());
     INSERT INTO firebridge.ingestion_feeds VALUES
       ('modis','NASA','adapter','1','https://private.example/MAP_KEY/secret','secret','NASA','{}','active','2026-10-24Z'),
       ('unverified','NASA','adapter','1','private','private','NASA','{}','unverified',null);
@@ -119,5 +103,16 @@ export async function seed(db: PGlite) {
     INSERT INTO firebridge.release_changes VALUES
       ('20000000-0000-4000-8000-000000000001','${ids.old}','${ids.current}','terra','2024-01-17Z','2024-01-19Z',null,'provider_revision','s3://private/diff','2026-10-23Z'),
       ('20000000-0000-4000-8000-000000000002','${ids.current}','${ids.next}','terra','2024-01-19Z','2024-01-20Z',null,'new_data','s3://private/diff','2026-10-24Z');
-  `);
+  `;
+  // The spatial fixture is exclusively for the explicitly named PostgreSQL test database.
+  // Its scope and public release names keep synthetic data visible during manual checks.
+  await db.exec(
+    postgis
+      ? sql
+          .replaceAll("'morocco'", "'phase1_test'")
+          .replaceAll("'old'", "'TEST ONLY - old'")
+          .replaceAll("'current'", "'TEST ONLY - current'")
+          .replaceAll("'next'", "'TEST ONLY - next'")
+      : sql
+  );
 }
