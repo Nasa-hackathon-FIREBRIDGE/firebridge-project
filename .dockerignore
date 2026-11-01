@@ -3,6 +3,8 @@ npm-debug.log
 .git
 coverage
 .env
+.env.local
+documents/
 **/dist
 **/.DS_Store
 apps/api/scripts/demo.ts

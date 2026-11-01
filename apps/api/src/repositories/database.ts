@@ -6,6 +6,7 @@ export interface SqlReader {
 }
 export interface SnapshotDatabase {
   snapshot<T>(read: (db: SqlReader) => Promise<T>): Promise<T>;
+  transaction?<T>(write: (db: SqlReader) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 export function createDatabase(connectionString: string): SnapshotDatabase {
@@ -19,28 +20,30 @@ export function createDatabase(connectionString: string): SnapshotDatabase {
   pool.on('error', () => {
     /* Requests report a sanitized 503 while the pool reconnects. */
   });
-  return {
-    async snapshot<T>(read: (db: SqlReader) => Promise<T>) {
-      const client = await pool.connect().catch(() => {
-        throw new ApiError(503, 'DATABASE_UNAVAILABLE', 'The database is unavailable.');
+  async function transaction<T>(read: (db: SqlReader) => Promise<T>, readOnly: boolean) {
+    const client = await pool.connect().catch(() => {
+      throw new ApiError(503, 'DATABASE_UNAVAILABLE', 'The database is unavailable.');
+    });
+    try {
+      await client.query(readOnly ? 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY' : 'BEGIN');
+      const result = await read({
+        async query<R>(sql: string, params: unknown[] = []) {
+          return (await client.query(sql, params)).rows as R[];
+        }
       });
-      try {
-        await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-        const result = await read({
-          async query<R>(sql: string, params: unknown[] = []) {
-            return (await client.query(sql, params)).rows as R[];
-          }
-        });
-        await client.query('COMMIT');
-        return result;
-      } catch (error) {
-        await client.query('ROLLBACK').catch(() => {});
-        if (error instanceof ApiError) throw error;
-        throw new ApiError(503, 'SNAPSHOT_UNAVAILABLE', 'No usable service snapshot is available.');
-      } finally {
-        client.release();
-      }
-    },
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(503, 'SNAPSHOT_UNAVAILABLE', 'No usable service snapshot is available.');
+    } finally {
+      client.release();
+    }
+  }
+  return {
+    snapshot: (read) => transaction(read, true),
+    transaction: (write) => transaction(write, false),
     close: () => pool.end()
   };
 }

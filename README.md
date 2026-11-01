@@ -2,9 +2,11 @@
 
 FIREBRIDGE est le backend du projet NASA Space Apps Challenge « Harmonization of MODIS and VIIRS Hot Spots ». Il utilise TypeScript, Fastify et PostgreSQL/PostGIS, avec un worker séparé pour les traitements longs.
 
-La phase 1 implémente le catalogue et les versions. La phase 2 apporte les zones, les analyses et les jobs. La phase 3 lit les détections, le résumé, le calendrier natif et la provenance sous `/api/v1/analyses/{id}`. Les routes Sources sont également implémentées ; les autres ressources restent des squelettes `501`.
+La phase 1 implémente le catalogue et les versions. La phase 2 apporte les zones, les analyses et les jobs. La phase 3 lit les détections, le résumé, le calendrier natif et la provenance sous `/api/v1/analyses/{id}`. Les routes Sources et les opérations de phase 5 sont également implémentées ; les ressources des phases 4 et 6 restent à développer.
 
-Les guides de [phase 1](docs/PHASE_1.md) et de [phase 3](docs/PHASE_3.md) décrivent les contrats d’intégration, les limites et la compatibilité des migrations. Le [contrat HTTP](API.md) décrit les paramètres et les réponses. Les documents de conception fournis par l’équipe restent dans `documents/`.
+Les guides de [phase 1](docs/PHASE_1.md), de [phase 3](docs/PHASE_3.md) et de [phase 5](docs/PHASE_5.md) décrivent les contrats d’intégration, les limites et la compatibilité des migrations. Le [contrat HTTP](API.md) décrit les paramètres et les réponses. Les documents de conception fournis par l’équipe restent dans `documents/`.
+
+La phase 5 ajoute les six endpoints d’opérations d’ingestion : abonnements, backfills, relances, tentatives, lacunes et disponibilité par source. Les demandes sont enregistrées atomiquement dans PostgreSQL et l’outbox ; le worker prépare des tentatives bornées. **Le téléchargement, la publication NASA et le scheduler périodique restent à implémenter.** Les jobs planifiés restent `queued`, au stade `awaiting_fetch_executor`, sans résultat de téléchargement inventé. L’administration exige un `INGESTION_ADMIN_TOKEN` ; voir le guide pour les capacités des feeds, les budgets et les fixtures isolées.
 
 ## Architecture overview
 
@@ -42,6 +44,8 @@ npm run prisma:deploy --workspace @firebridge/database
 Les trois premières migrations créent `public.HealthCheck`, `firebridge.sources`, puis les 15 tables nécessaires au catalogue et aux versions : assets, releases, membres, runs, zones, grilles, métriques, feeds, disponibilités, abonnements et partitions. La nouvelle migration active PostGIS, préserve les tables existantes et n’insère aucune donnée. Le fichier `firebridge_schema_v2.sql` reste un artefact de conception : ne pas l’exécuter par-dessus les migrations.
 
 La quatrième migration, `20261101000000_phase2_native_serving`, réconcilie le schéma complet de la branche phase 2 en ajoutant seulement les 31 tables restantes. Les trois premières migrations et les données existantes sont conservées. Une base créée avec l’ancienne migration consolidée de la branche phase 2 doit être reprise séparément : voir le [guide phase 3](docs/PHASE_3.md).
+
+La cinquième migration, `20261101010000_analysis_request_keys`, ajoute le registre durable des clés de requêtes d’analyse. La clé de cache tient désormais compte des releases satellite/météo/rapports sélectionnées et des politiques de la demande. Une même demande avec de nouvelles versions peut créer une analyse distincte ; un rejeu avec le même `Idempotency-Key` conserve le résultat d’origine. Aucun ancien résultat n’est réécrit. Voir le [contrat de réutilisation](docs/PHASE_3.md#création-et-réutilisation-des-analyses).
 
 Le modèle Prisma conserve aussi la table historique `HealthCheck` et une correspondance ignorée par le client pour `spatial_ref_sys`, qui appartient à PostGIS. Les champs spatiaux sont `Unsupported("geometry")` ; les contraintes `CHECK`, les types spatiaux précis et les index partiels restent définis dans les migrations SQL. Toute nouvelle migration doit préserver ces éléments.
 

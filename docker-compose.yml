@@ -40,6 +40,7 @@ services:
       PORT: 3000
       DEFAULT_SCOPE_KEY: ${DEFAULT_SCOPE_KEY:-morocco}
       CURSOR_SECRET: ${CURSOR_SECRET:?Set CURSOR_SECRET in .env to at least 32 characters}
+      INGESTION_ADMIN_TOKEN: ${INGESTION_ADMIN_TOKEN:-}
       DATABASE_URL: postgresql://firebridge:firebridge@postgres:5432/firebridge
       REDIS_URL: redis://redis:6379
     depends_on:

@@ -45,6 +45,10 @@ const schema = z
     CORS_ORIGINS: corsOrigins,
     PAGINATION_SECRET: z.string().min(16).default(defaultPaginationSecret),
     CURSOR_SECRET: z.string().min(32),
+    INGESTION_ADMIN_TOKEN: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().min(32).optional()
+    ),
     DEFAULT_SCOPE_KEY: z.string().min(1).default('morocco'),
     MAX_AOI_VERTICES: z.coerce.number().int().positive().default(5000),
     MAX_AOI_AREA_KM2: z.coerce.number().positive().default(250000),

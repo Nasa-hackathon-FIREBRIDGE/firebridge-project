@@ -17,6 +17,7 @@ import { explanationsRoutes } from './explanations.routes.js';
 import { exportsRoutes } from './exports.routes.js';
 import { jobsRoutes } from './jobs.routes.js';
 import { adminRoutes } from './admin.routes.js';
+import { ingestionRoutes } from './ingestion.routes.js';
 
 const apiRoutes: FastifyPluginAsync = async (app) => {
   app.register(healthRoutes, { prefix: '/health' });
@@ -37,6 +38,7 @@ const apiRoutes: FastifyPluginAsync = async (app) => {
   app.register(exportsRoutes, { prefix: '/exports' });
   app.register(jobsRoutes, { prefix: '/jobs' });
   app.register(adminRoutes, { prefix: '/admin' });
+  app.register(ingestionRoutes);
 };
 
 export default apiRoutes;

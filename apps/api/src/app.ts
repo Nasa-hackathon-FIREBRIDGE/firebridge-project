@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import compress from '@fastify/compress';
@@ -18,14 +18,17 @@ import type { ReadinessProbes } from './services/health.service.js';
 import { NativeResultsRepository } from './repositories/native-results.repository.js';
 import { NativeResultsService } from './services/native-results.service.js';
 import { envelope } from './utils/response.js';
+import { IngestionRepository } from './repositories/ingestion.repository.js';
+import { IngestionService } from './services/ingestion.service.js';
 
 export function createApp(
   options: {
     database?: SnapshotDatabase;
     logger?: boolean;
     readinessChecks?: Partial<ReadinessProbes>;
+    ingestionAdminToken?: string;
   } = {}
-) {
+): FastifyInstance {
   const app = Fastify({
     logger: options.logger ?? { level: env.LOG_LEVEL },
     genReqId: () => randomUUID(),
@@ -35,6 +38,8 @@ export function createApp(
   const database = options.database ?? createDatabase(env.DATABASE_URL);
   const catalogService = new CatalogService(new CatalogRepository(database), env);
   app.decorate('catalogService', catalogService);
+  app.decorate('ingestionService', new IngestionService(new IngestionRepository(database), env));
+  app.decorate('ingestionAdminToken', options.ingestionAdminToken ?? env.INGESTION_ADMIN_TOKEN);
   app.decorate(
     'nativeResultsService',
     new NativeResultsService(new NativeResultsRepository(database), env)
@@ -80,7 +85,12 @@ export function createApp(
   });
   app.register(compress);
   app.register(formbody, { bodyLimit: 100 * 1024 });
-  app.register(swagger, { openapi: { info: { title: 'FIREBRIDGE API', version: '1.0.0' } } });
+  app.register(swagger, {
+    openapi: {
+      info: { title: 'FIREBRIDGE API', version: '1.0.0' },
+      components: { securitySchemes: { ingestionAdmin: { type: 'http', scheme: 'bearer' } } }
+    }
+  });
   app.register(swaggerUi, { routePrefix: '/api-docs' });
   app.register(apiRoutes, { prefix: '/api/v1' });
   app.setNotFoundHandler(notFoundHandler);

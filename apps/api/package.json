@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:postgres": "vitest run --config vitest.postgres.config.ts",
     "fixtures:phase3": "tsx tests/helpers/seed-native-cli.ts",
+    "fixtures:phase5": "tsx tests/helpers/seed-ingestion-cli.ts",
     "pretest:postgres": "npm run build --workspace @firebridge/database",
     "predev": "npm run build --workspace @firebridge/database",
     "prebuild": "npm run build --workspace @firebridge/database",
