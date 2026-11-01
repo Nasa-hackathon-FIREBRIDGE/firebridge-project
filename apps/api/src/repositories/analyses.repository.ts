@@ -11,7 +11,13 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@firebridge/database';
 import { Prisma } from '@prisma/client';
-import { BadRequestError, NotFoundError, ServiceUnavailableError } from '../errors/app-error.js';
+import {
+  AppError,
+  BadRequestError,
+  IdempotencyConflictError,
+  ServiceUnavailableError
+} from '../errors/app-error.js';
+import { computeAnalysisCacheKey, computeAnalysisRequestHash } from '../utils/analysis-cache.js';
 
 export interface DataReleaseRecord {
   id: string;
@@ -89,8 +95,7 @@ export interface CreateAnalysisTransactionInput {
   weather_policy: unknown;
   news_policy: unknown;
   request_spec: Record<string, unknown>;
-  cache_key: string;
-  idempotency_key: string;
+  idempotency_key?: string;
   requested_by: string;
 }
 
@@ -98,7 +103,7 @@ async function wrapDbCall<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (error) {
-    if (error instanceof BadRequestError || error instanceof NotFoundError || error instanceof ServiceUnavailableError) {
+    if (error instanceof AppError) {
       throw error;
     }
 
@@ -107,14 +112,80 @@ async function wrapDbCall<T>(fn: () => Promise<T>): Promise<T> {
       message.includes('ECONNREFUSED') ||
       message.includes('ETIMEDOUT') ||
       message.includes('connection') ||
-      (error instanceof Prisma.PrismaClientInitializationError) ||
-      (error instanceof Prisma.PrismaClientRustPanicError)
+      error instanceof Prisma.PrismaClientInitializationError ||
+      error instanceof Prisma.PrismaClientRustPanicError
     ) {
       throw new ServiceUnavailableError('Database is currently unavailable.');
     }
 
     throw error;
   }
+}
+
+async function bindRequestKey(
+  tx: Prisma.TransactionClient,
+  input: CreateAnalysisTransactionInput,
+  key: string,
+  hash: string,
+  jobId: string
+) {
+  await tx.$executeRaw`INSERT INTO firebridge.analysis_request_keys
+    (requested_by,idempotency_key,request_hash,job_id)
+    VALUES (${input.requested_by},${key},${hash},${jobId}::uuid)`;
+}
+
+async function replayRequest(
+  tx: Prisma.TransactionClient,
+  input: CreateAnalysisTransactionInput,
+  hash: string
+): Promise<AnalysisDetail | null> {
+  if (!input.idempotency_key) return null;
+  type Replay = {
+    job_id: string;
+    analysis_id: string | null;
+    kind: string;
+    request_hash: string;
+    request_spec: Record<string, unknown>;
+  };
+  const bindings = await tx.$queryRaw<Replay[]>`SELECT j.id::text AS job_id,j.analysis_id::text,
+    j.kind,k.request_hash,j.request_spec FROM firebridge.analysis_request_keys k
+    JOIN firebridge.api_jobs j ON j.id=k.job_id
+    WHERE k.requested_by=${input.requested_by} AND k.idempotency_key=${input.idempotency_key}`;
+  // Preserve retry behavior for requests created before the additive migration.
+  const legacy = bindings.length
+    ? []
+    : await tx.$queryRaw<Replay[]>`
+    SELECT id::text AS job_id,analysis_id::text,kind,request_hash,request_spec
+    FROM firebridge.api_jobs WHERE requested_by=${input.requested_by}
+    AND idempotency_key=${input.idempotency_key}`;
+  const row = bindings[0] ?? legacy[0];
+  if (!row) return null;
+  const legacyIntent = {
+    ...row.request_spec,
+    area_id:
+      typeof row.request_spec.area_id === 'string'
+        ? row.request_spec.area_id.toLowerCase()
+        : row.request_spec.area_id
+  };
+  if (
+    row.kind !== 'analysis' ||
+    !row.analysis_id ||
+    (row.request_hash !== hash &&
+      (bindings.length > 0 || computeAnalysisRequestHash(legacyIntent) !== hash))
+  )
+    throw new IdempotencyConflictError('This key already identifies a different request.');
+  const detail = await analysesRepository.findById(row.analysis_id, tx, row.job_id);
+  if (!detail) throw new ServiceUnavailableError('The original analysis request is unavailable.');
+  if (!bindings.length) await bindRequestKey(tx, input, input.idempotency_key, hash, row.job_id);
+  return detail;
+}
+
+function isConcurrentCreation(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  return (
+    ['P2034', 'P2002'].includes(error.code) ||
+    (error.code === 'P2010' && ['40001', '40P01', '23505'].includes(String(error.meta?.code)))
+  );
 }
 
 export const analysesRepository = {
@@ -136,9 +207,12 @@ export const analysesRepository = {
   /**
    * Finds an existing analysis by its canonical cache key.
    */
-  async findByCacheKey(cacheKey: string): Promise<AnalysisDetail | null> {
+  async findByCacheKey(
+    cacheKey: string,
+    tx: Prisma.TransactionClient = prisma
+  ): Promise<AnalysisDetail | null> {
     return wrapDbCall(async () => {
-      const rows = await prisma.$queryRaw<AnalysisRecord[]>`
+      const rows = await tx.$queryRaw<AnalysisRecord[]>`
         SELECT
           id::text,
           area_id::text,
@@ -167,7 +241,7 @@ export const analysesRepository = {
       const analysis = rows[0];
       if (!analysis) return null;
 
-      const components = await prisma.$queryRaw<AnalysisComponentRecord[]>`
+      const components = await tx.$queryRaw<AnalysisComponentRecord[]>`
         SELECT
           analysis_id::text,
           component,
@@ -178,7 +252,7 @@ export const analysesRepository = {
         WHERE analysis_id = ${analysis.id}::uuid;
       `;
 
-      const jobs = await prisma.$queryRaw<ApiJobRecord[]>`
+      const jobs = await tx.$queryRaw<ApiJobRecord[]>`
         SELECT
           id::text,
           kind,
@@ -197,6 +271,7 @@ export const analysesRepository = {
           completed_at
         FROM firebridge.api_jobs
         WHERE analysis_id = ${analysis.id}::uuid
+          AND kind = 'analysis'
         ORDER BY created_at DESC
         LIMIT 1;
       `;
@@ -212,14 +287,19 @@ export const analysesRepository = {
   /**
    * Finds an analysis by primary key (id).
    */
-  async findById(analysisId: string): Promise<AnalysisDetail | null> {
+  async findById(
+    analysisId: string,
+    tx: Prisma.TransactionClient = prisma,
+    jobId: string | null = null
+  ): Promise<AnalysisDetail | null> {
     return wrapDbCall(async () => {
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(analysisId)) {
         return null;
       }
 
-      const rows = await prisma.$queryRaw<AnalysisRecord[]>`
+      const rows = await tx.$queryRaw<AnalysisRecord[]>`
         SELECT
           id::text,
           area_id::text,
@@ -248,7 +328,7 @@ export const analysesRepository = {
       const analysis = rows[0];
       if (!analysis) return null;
 
-      const components = await prisma.$queryRaw<AnalysisComponentRecord[]>`
+      const components = await tx.$queryRaw<AnalysisComponentRecord[]>`
         SELECT
           analysis_id::text,
           component,
@@ -259,7 +339,7 @@ export const analysesRepository = {
         WHERE analysis_id = ${analysisId}::uuid;
       `;
 
-      const jobs = await prisma.$queryRaw<ApiJobRecord[]>`
+      const jobs = await tx.$queryRaw<ApiJobRecord[]>`
         SELECT
           id::text,
           kind,
@@ -278,6 +358,7 @@ export const analysesRepository = {
           completed_at
         FROM firebridge.api_jobs
         WHERE analysis_id = ${analysisId}::uuid
+          AND kind = 'analysis' AND (${jobId}::uuid IS NULL OR id=${jobId}::uuid)
         ORDER BY created_at DESC
         LIMIT 1;
       `;
@@ -298,28 +379,33 @@ export const analysesRepository = {
     input: CreateAnalysisTransactionInput
   ): Promise<{ detail: AnalysisDetail; created: boolean }> {
     return wrapDbCall(async () => {
-      // 1. First check if equivalent analysis already exists (idempotency check)
-      const existing = await analysesRepository.findByCacheKey(input.cache_key);
-      if (existing) {
-        return { detail: existing, created: false };
-      }
-
-      // Ensure metric definition exists
-      await analysesRepository.ensureMetricDefinition(input.metric_key);
-
-      // Execute atomic transaction with REPEATABLE READ
-      return await prisma.$transaction(
-        async (tx) => {
-          // 2. Validate area exists
-          const areaRows = await tx.$queryRaw<{ id: string }[]>`
+      const requestHash = computeAnalysisRequestHash(input.request_spec);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          return await prisma.$transaction(
+            async (tx) => {
+              // An explicit retry refers to its original result, even after publication changes.
+              const replay = await replayRequest(tx, input, requestHash);
+              if (replay) return { detail: replay, created: false };
+              // 2. Validate area exists
+              const areaRows = await tx.$queryRaw<{ id: string }[]>`
             SELECT id::text FROM firebridge.areas WHERE id = ${input.area_id}::uuid LIMIT 1;
           `;
-          if (areaRows.length === 0) {
-            throw new BadRequestError(`Area with id '${input.area_id}' does not exist.`, 'VALIDATION_ERROR');
-          }
+              if (areaRows.length === 0) {
+                throw new BadRequestError(
+                  `Area with id '${input.area_id}' does not exist.`,
+                  'VALIDATION_ERROR'
+                );
+              }
 
-          // 3. Resolve published satellite release covering the observation window
-          const satelliteReleases = await tx.$queryRaw<DataReleaseRecord[]>`
+              await tx.$executeRaw`INSERT INTO firebridge.metric_definitions
+            (id,version,unit,family,description,definition,requires_masks,requires_model)
+            VALUES (${input.metric_key},'1.0.0','count','native_detections',
+              'Native satellite detections count v1','{}'::jsonb,false,false)
+            ON CONFLICT (id) DO NOTHING`;
+
+              // 3. Resolve published satellite release covering the observation window
+              const satelliteReleases = await tx.$queryRaw<DataReleaseRecord[]>`
             SELECT
               id::text,
               name,
@@ -335,16 +421,16 @@ export const analysesRepository = {
             LIMIT 1;
           `;
 
-          const satelliteRelease = satelliteReleases[0];
-          if (!satelliteRelease) {
-            throw new BadRequestError(
-              'No published satellite release covers the requested time window.',
-              'NO_COMPATIBLE_RELEASE'
-            );
-          }
+              const satelliteRelease = satelliteReleases[0];
+              if (!satelliteRelease) {
+                throw new BadRequestError(
+                  'No published satellite release covers the requested time window.',
+                  'NO_COMPATIBLE_RELEASE'
+                );
+              }
 
-          // Resolve optional weather and reports releases
-          const weatherReleases = await tx.$queryRaw<DataReleaseRecord[]>`
+              // Resolve optional weather and reports releases
+              const weatherReleases = await tx.$queryRaw<DataReleaseRecord[]>`
             SELECT id::text, name, status, stream, dataset_kind, observation_cutoff
             FROM firebridge.data_releases
             WHERE dataset_kind = 'weather'
@@ -353,9 +439,9 @@ export const analysesRepository = {
             ORDER BY observation_cutoff DESC, created_at DESC
             LIMIT 1;
           `;
-          const weatherRelease = weatherReleases[0] ?? null;
+              const weatherRelease = weatherReleases[0] ?? null;
 
-          const reportReleases = await tx.$queryRaw<DataReleaseRecord[]>`
+              const reportReleases = await tx.$queryRaw<DataReleaseRecord[]>`
             SELECT id::text, name, status, stream, dataset_kind, observation_cutoff
             FROM firebridge.data_releases
             WHERE dataset_kind = 'reports'
@@ -364,14 +450,33 @@ export const analysesRepository = {
             ORDER BY observation_cutoff DESC, created_at DESC
             LIMIT 1;
           `;
-          const reportRelease = reportReleases[0] ?? null;
+              const reportRelease = reportReleases[0] ?? null;
 
-          const analysisId = randomUUID();
-          const jobId = randomUUID();
-          const outboxId = randomUUID();
+              // Freeze the complete version selection before looking for reusable results.
+              const cacheKey = computeAnalysisCacheKey({
+                request_spec: input.request_spec,
+                requested_by: input.requested_by,
+                satellite_release_id: satelliteRelease.id,
+                weather_release_id: weatherRelease?.id ?? null,
+                reports_release_id: reportRelease?.id ?? null
+              });
+              const idempotencyKey = input.idempotency_key ?? `auto:${cacheKey}`;
+              const existing = await analysesRepository.findByCacheKey(cacheKey, tx);
+              if (existing) {
+                if (input.idempotency_key) {
+                  if (!existing.job)
+                    throw new ServiceUnavailableError('The cached analysis job is unavailable.');
+                  await bindRequestKey(tx, input, idempotencyKey, requestHash, existing.job.id);
+                }
+                return { detail: existing, created: false };
+              }
 
-          // 4. Insert into analyses
-          await tx.$executeRaw`
+              const analysisId = randomUUID();
+              const jobId = randomUUID();
+              const outboxId = randomUUID();
+
+              // 4. Insert into analyses
+              await tx.$executeRaw`
             INSERT INTO firebridge.analyses (
               id,
               area_id,
@@ -404,14 +509,14 @@ export const analysesRepository = {
               ${JSON.stringify(input.weather_policy)}::jsonb,
               ${JSON.stringify(input.news_policy)}::jsonb,
               ${JSON.stringify(input.request_spec)}::jsonb,
-              ${input.cache_key},
+              ${cacheKey},
               'queued'
             );
           `;
 
-          // 5. Insert analysis_components
-          // Satellite component (always ready since resolved)
-          await tx.$executeRaw`
+              // 5. Insert analysis_components
+              // Satellite component (always ready since resolved)
+              await tx.$executeRaw`
             INSERT INTO firebridge.analysis_components (
               analysis_id, component, release_id, status, reasons
             ) VALUES (
@@ -423,9 +528,9 @@ export const analysesRepository = {
             );
           `;
 
-          // Weather historical component
-          if (weatherRelease) {
-            await tx.$executeRaw`
+              // Weather historical component
+              if (weatherRelease) {
+                await tx.$executeRaw`
               INSERT INTO firebridge.analysis_components (
                 analysis_id, component, release_id, status, reasons
               ) VALUES (
@@ -436,8 +541,8 @@ export const analysesRepository = {
                 '[]'::jsonb
               );
             `;
-          } else {
-            await tx.$executeRaw`
+              } else {
+                await tx.$executeRaw`
               INSERT INTO firebridge.analysis_components (
                 analysis_id, component, release_id, status, reasons
               ) VALUES (
@@ -448,11 +553,11 @@ export const analysesRepository = {
                 '["No published weather release covers this window"]'::jsonb
               );
             `;
-          }
+              }
 
-          // Reports component
-          if (reportRelease) {
-            await tx.$executeRaw`
+              // Reports component
+              if (reportRelease) {
+                await tx.$executeRaw`
               INSERT INTO firebridge.analysis_components (
                 analysis_id, component, release_id, status, reasons
               ) VALUES (
@@ -463,8 +568,8 @@ export const analysesRepository = {
                 '[]'::jsonb
               );
             `;
-          } else {
-            await tx.$executeRaw`
+              } else {
+                await tx.$executeRaw`
               INSERT INTO firebridge.analysis_components (
                 analysis_id, component, release_id, status, reasons
               ) VALUES (
@@ -475,10 +580,10 @@ export const analysesRepository = {
                 '["No published reports release covers this window"]'::jsonb
               );
             `;
-          }
+              }
 
-          // 6. Insert api_jobs
-          await tx.$executeRaw`
+              // 6. Insert api_jobs
+              await tx.$executeRaw`
             INSERT INTO firebridge.api_jobs (
               id,
               kind,
@@ -497,8 +602,8 @@ export const analysesRepository = {
               ${analysisId}::uuid,
               NULL,
               ${input.requested_by},
-              ${input.cache_key},
-              ${input.idempotency_key},
+              ${requestHash},
+              ${idempotencyKey},
               ${JSON.stringify(input.request_spec)}::jsonb,
               'queued',
               0,
@@ -506,8 +611,10 @@ export const analysesRepository = {
             );
           `;
 
-          // 7. Insert transactional outbox event
-          await tx.$executeRaw`
+              await bindRequestKey(tx, input, idempotencyKey, requestHash, jobId);
+
+              // 7. Insert transactional outbox event
+              await tx.$executeRaw`
             INSERT INTO firebridge.outbox_events (
               id,
               event_type,
@@ -536,8 +643,8 @@ export const analysesRepository = {
             );
           `;
 
-          // Retrieve created records to return
-          const analysisRows = await tx.$queryRaw<AnalysisRecord[]>`
+              // Retrieve created records to return
+              const analysisRows = await tx.$queryRaw<AnalysisRecord[]>`
             SELECT
               id::text,
               area_id::text,
@@ -562,7 +669,7 @@ export const analysesRepository = {
             WHERE id = ${analysisId}::uuid;
           `;
 
-          const componentRows = await tx.$queryRaw<AnalysisComponentRecord[]>`
+              const componentRows = await tx.$queryRaw<AnalysisComponentRecord[]>`
             SELECT
               analysis_id::text,
               component,
@@ -573,7 +680,7 @@ export const analysesRepository = {
             WHERE analysis_id = ${analysisId}::uuid;
           `;
 
-          const jobRows = await tx.$queryRaw<ApiJobRecord[]>`
+              const jobRows = await tx.$queryRaw<ApiJobRecord[]>`
             SELECT
               id::text,
               kind,
@@ -594,20 +701,27 @@ export const analysesRepository = {
             WHERE id = ${jobId}::uuid;
           `;
 
-          return {
-            detail: {
-              analysis: analysisRows[0]!,
-              components: componentRows,
-              job: jobRows[0]!
+              return {
+                detail: {
+                  analysis: analysisRows[0]!,
+                  components: componentRows,
+                  job: jobRows[0]!
+                },
+                created: true
+              };
             },
-            created: true
-          };
-        },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
-          timeout: 10000
+            {
+              isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+              timeout: 10000
+            }
+          );
+        } catch (error) {
+          if (!isConcurrentCreation(error)) throw error;
+          if (attempt === 2)
+            throw new ServiceUnavailableError('Concurrent analysis creation; retry the request.');
         }
-      );
+      }
+      throw new ServiceUnavailableError('Analysis creation is unavailable.');
     });
   },
 

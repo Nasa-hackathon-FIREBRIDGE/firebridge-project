@@ -465,27 +465,28 @@ model AnalysisEventLink {
 }
 
 model ApiJob {
-  id                String         @id @db.Uuid
-  kind              String
-  analysisId        String?        @map("analysis_id") @db.Uuid
-  explanationId     String?        @map("explanation_id") @db.Uuid
-  requestedBy       String         @map("requested_by")
-  requestHash       String         @map("request_hash")
-  idempotencyKey    String         @map("idempotency_key")
-  requestSpec       Json           @map("request_spec")
-  status            String
-  attempt           Int            @default(0)
-  leaseExpiresAt    DateTime?      @map("lease_expires_at") @db.Timestamptz(6)
-  progress          Json           @default("{}")
-  resultManifestUri String?        @map("result_manifest_uri")
-  resultSha256      String?        @map("result_sha256")
-  resultByteSize    BigInt?        @map("result_byte_size")
-  expiresAt         DateTime?      @map("expires_at") @db.Timestamptz(6)
-  errorCode         String?        @map("error_code")
-  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  completedAt       DateTime?      @map("completed_at") @db.Timestamptz(6)
-  analyses          Analysis?      @relation(fields: [analysisId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  aiExplanations    AiExplanation? @relation(fields: [explanationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  analysisRequestKeys AnalysisRequestKey[]
+  id                  String               @id @db.Uuid
+  kind                String
+  analysisId          String?              @map("analysis_id") @db.Uuid
+  explanationId       String?              @map("explanation_id") @db.Uuid
+  requestedBy         String               @map("requested_by")
+  requestHash         String               @map("request_hash")
+  idempotencyKey      String               @map("idempotency_key")
+  requestSpec         Json                 @map("request_spec")
+  status              String
+  attempt             Int                  @default(0)
+  leaseExpiresAt      DateTime?            @map("lease_expires_at") @db.Timestamptz(6)
+  progress            Json                 @default("{}")
+  resultManifestUri   String?              @map("result_manifest_uri")
+  resultSha256        String?              @map("result_sha256")
+  resultByteSize      BigInt?              @map("result_byte_size")
+  expiresAt           DateTime?            @map("expires_at") @db.Timestamptz(6)
+  errorCode           String?              @map("error_code")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt         DateTime?            @map("completed_at") @db.Timestamptz(6)
+  analyses            Analysis?            @relation(fields: [analysisId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  aiExplanations      AiExplanation?       @relation(fields: [explanationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([requestedBy, idempotencyKey])
   @@index([status, createdAt], map: "jobs_status")
@@ -878,6 +879,20 @@ model Observation {
   @@unique([releaseId, cellId, sourceId, passKey, qaPolicyVersion])
   @@index([releaseId, cellId, representativeTime], map: "observations_cell_time")
   @@map("observations")
+  @@schema("firebridge")
+}
+
+model AnalysisRequestKey {
+  requestedBy    String   @map("requested_by")
+  idempotencyKey String   @map("idempotency_key")
+  requestHash    String   @map("request_hash")
+  jobId          String   @map("job_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  apiJobs        ApiJob   @relation(fields: [jobId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([requestedBy, idempotencyKey])
+  @@index([jobId], map: "analysis_request_keys_job")
+  @@map("analysis_request_keys")
   @@schema("firebridge")
 }
 

@@ -19,7 +19,19 @@ La phase 2 proposait une migration consolidée pour une base vide et supprimait 
 
 Pour une base créée avec notre historique partagé : `npm run prisma:deploy --workspace @firebridge/database`. Aucun seed ni effacement de données n’est effectué par les migrations.
 
+La cinquième migration, `20261101010000_analysis_request_keys`, ajoute seulement le registre des clés de requête décrit ci-dessous. Elle conserve l’historique existant et n’efface aucune analyse.
+
 **Une base initialisée avec la migration consolidée de la branche phase 2 possède un historique différent.** Ne pas appliquer la chaîne additive par-dessus. Pour le développement, créer une nouvelle base avec l’historique commun, ou préparer une reprise de baseline après revue des données. Aucun reset ou changement manuel de `_prisma_migrations` n’est effectué automatiquement.
+
+## Création et réutilisation des analyses
+
+La création sélectionne les versions satellite, météo et rapports dans la transaction avant de calculer la clé de cache. Cette clé inclut les UUIDs sélectionnés (ou `null` pour les composants absents), les paramètres normalisés, les politiques baseline/météo/rapports et l’identité fournie par le serveur. L’ordre des clés d’un objet JSON ne change pas son empreinte. La recherche d’une analyse réutilisable se fait dans le même snapshot `REPEATABLE READ`. Les contraintes d’unicité et les reprises de transaction gèrent les créations concurrentes.
+
+Une nouvelle version des données peut produire une nouvelle analyse, sans modifier l’ancienne. À l’inverse, un `Idempotency-Key` explicite désigne le rejeu d’une demande précise : même clé et même demande renvoient son résultat d’origine, même après une publication. Utiliser une nouvelle clé, ou omettre cet en-tête facultatif, pour une nouvelle demande avec les versions alors sélectionnées. Modifier la demande sous la même clé renvoie `409`.
+
+Le registre `analysis_request_keys` permet à plusieurs clés de requête de retrouver un même job réutilisé, sans lancer de travail supplémentaire. Les anciennes analyses restent accessibles par leur ID. Leurs clés de cache antérieures ne sont pas réécrites : une demande sans clé peut créer une nouvelle analyse une fois après la mise à jour. Les anciens jobs conservent leur comportement de rejeu explicite grâce à leur clé et leur demande enregistrées.
+
+Cette correction porte sur l’identité du cache et le rejeu des demandes. Elle ne remplace pas la politique existante de résolution des releases par un nouveau contrat scope/alias et n’ajoute pas de publication NASA.
 
 ## Lecture reproductible
 

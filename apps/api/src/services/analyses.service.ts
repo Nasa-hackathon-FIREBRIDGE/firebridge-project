@@ -1,46 +1,18 @@
-import { createHash } from 'node:crypto';
-import { NotFoundError } from '../errors/app-error.js';
+import { InvalidIdempotencyKeyError, NotFoundError } from '../errors/app-error.js';
 import {
   analysesRepository,
   type AnalysisDetail,
   type AnalysisRecord
 } from '../repositories/analyses.repository.js';
 import { decodeCursor, encodeCursor } from '../utils/sources-cursor.js';
-import type {
-  AnalysisCreateInput,
-  AnalysisListQuery
-} from '../validators/analyses.validator.js';
+import type { AnalysisCreateInput, AnalysisListQuery } from '../validators/analyses.validator.js';
 
 export interface CreateAnalysisResult {
   detail: AnalysisDetail;
   created: boolean;
 }
 
-export function computeAnalysisCacheKey(input: {
-  area_id: string;
-  start_date: string;
-  end_date_exclusive: string;
-  time_basis: string;
-  metric_key: string;
-  grid_id: null;
-  data_mode: string;
-  selection_policy: string;
-  weighting_version: string;
-}): string {
-  const canonical = {
-    area_id: input.area_id.toLowerCase(),
-    data_mode: input.data_mode,
-    end_date_exclusive: input.end_date_exclusive,
-    grid_id: input.grid_id,
-    metric_key: input.metric_key,
-    selection_policy: input.selection_policy,
-    start_date: input.start_date,
-    time_basis: input.time_basis,
-    weighting_version: input.weighting_version
-  };
-
-  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
-}
+export { computeAnalysisCacheKey } from '../utils/analysis-cache.js';
 
 export const analysesService = {
   /**
@@ -59,22 +31,12 @@ export const analysesService = {
     const FIXED_GRID_ID = null;
     const FIXED_DATA_MODE = 'standard_only';
 
-    const cacheKey = computeAnalysisCacheKey({
-      area_id: input.area_id,
-      start_date: input.start_date,
-      end_date_exclusive: input.end_date_exclusive,
-      time_basis: input.time_basis,
-      metric_key: FIXED_METRIC_KEY,
-      grid_id: FIXED_GRID_ID,
-      data_mode: FIXED_DATA_MODE,
-      selection_policy: input.selection_policy,
-      weighting_version: input.weighting_version
-    });
-
-    const idempotencyKey = idempotencyKeyHeader?.trim() || `auto:${cacheKey}`;
+    const idempotencyKey = idempotencyKeyHeader?.trim() || undefined;
+    if (idempotencyKey && !/^[\x21-\x7e]{1,256}$/.test(idempotencyKey))
+      throw new InvalidIdempotencyKeyError();
 
     const requestSpec: Record<string, unknown> = {
-      area_id: input.area_id,
+      area_id: input.area_id.toLowerCase(),
       start_date: input.start_date,
       end_date_exclusive: input.end_date_exclusive,
       time_basis: input.time_basis,
@@ -89,7 +51,7 @@ export const analysesService = {
     };
 
     return await analysesRepository.createAnalysisTransaction({
-      area_id: input.area_id,
+      area_id: input.area_id.toLowerCase(),
       start_date: input.start_date,
       end_date_exclusive: input.end_date_exclusive,
       time_basis: input.time_basis,
@@ -101,7 +63,6 @@ export const analysesService = {
       weather_policy: input.weather_policy,
       news_policy: input.news_policy,
       request_spec: requestSpec,
-      cache_key: cacheKey,
       idempotency_key: idempotencyKey,
       requested_by: requestedBy
     });
@@ -124,9 +85,7 @@ export const analysesService = {
     const nonSatelliteComponents = detail.components.filter((c) => c.component !== 'satellite');
 
     const satelliteReady = satelliteComponent?.status === 'ready';
-    const hasIncompleteOtherComponents = nonSatelliteComponents.some(
-      (c) => c.status !== 'ready'
-    );
+    const hasIncompleteOtherComponents = nonSatelliteComponents.some((c) => c.status !== 'ready');
 
     let effectiveStatus = detail.analysis.status;
     if (satelliteReady && hasIncompleteOtherComponents) {
