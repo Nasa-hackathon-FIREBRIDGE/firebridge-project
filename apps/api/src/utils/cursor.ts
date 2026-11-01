@@ -108,7 +108,7 @@ export function decodeCursor(
   // Validate filter coherence: cursor created for one filter cannot be reused under another
   if (expectedFilters) {
     for (const [key, expectedValue] of Object.entries(expectedFilters)) {
-      if (expectedValue !== undefined && payload.filters?.[key] !== expectedValue) {
+      if (payload.filters?.[key] !== expectedValue) {
         throw new InvalidCursorError(`Cursor does not match requested query ${key} filter.`);
       }
     }

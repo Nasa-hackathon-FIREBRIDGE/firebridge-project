@@ -6,3 +6,4 @@ coverage/
 .vitest/
 .DS_Store
 npm-debug.log*
+.data/

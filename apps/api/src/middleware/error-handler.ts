@@ -18,6 +18,7 @@ function getErrorCode(error: unknown, status: number): string {
   if (error instanceof AppError && error.code) {
     return error.code;
   }
+  if (status >= 500) return status === 503 ? ErrorCodes.SERVICE_UNAVAILABLE : ErrorCodes.INTERNAL_SERVER_ERROR;
 
   if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') {
     return error.code;

@@ -1,6 +1,14 @@
 # FIREBRIDGE
 
-FIREBRIDGE is a modular monolith backend foundation for wildfire monitoring, analysis, and operational reporting. The project is organized as a TypeScript + Express API with supporting worker and shared package layers.
+Phase 4 mapping and asynchronous exports are implemented with Fastify 5. See
+[the verified audit](docs/API_AUDIT.md), [test report](docs/API_TEST_REPORT.md),
+[fixtures](docs/TEST_FIXTURES.md) and [testing guide](docs/API_TESTING_GUIDE.md).
+`npm run audit:api -- --preview` describes the safe workflow; `npm run audit:api`
+executes it against isolated test databases and separate containers on port 3104.
+Existing services on port 3000 are preserved. Normal deployment authentication
+still requires a trusted identity verifier.
+
+FIREBRIDGE is a modular monolith backend foundation for wildfire monitoring, analysis, and operational reporting. The project is organized as a TypeScript + Fastify API with supporting worker and shared package layers.
 
 ## Architecture overview
 
@@ -38,17 +46,16 @@ docker compose up -d postgres redis
 
 For production deployments, set `CORS_ORIGINS` to a comma-separated allowlist of
 browser origins. In development, CORS remains permissive unless an allowlist is
-provided. The worker currently has no registered BullMQ processors; it does not
-consume jobs and reports `not_configured` rather than claiming to be healthy.
+provided. The worker registers analysis and export processors; its Docker
+healthcheck verifies a live Redis heartbeat from those processors.
 
 ## Database next step
 
-The first Sources API module now has a Prisma model and an additive migration
-proposal in `packages/database/prisma/migrations/20261029030000_add_sources`.
-That migration has not been applied. Review and apply it only through the usual
-approved database migration process. The `firebridge_schema_v2.sql` file remains
-a design artifact for a separate `firebridge` schema and PostGIS-backed domain
-tables; it has not been applied and must not be used as a migration.
+The inspected local database already contains the v2 `firebridge` schema,
+PostGIS and 14 historical analyses. Do not replay the schema SQL or reset
+migrations. Four additive Phase 4 job indexes are proposed in
+`20261031000000_phase4_serving_indexes`; they were not applied to that database.
+See the audit for the verified catalog and preservation checks.
 
 ## Notes
 

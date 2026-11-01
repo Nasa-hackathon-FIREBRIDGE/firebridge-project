@@ -43,11 +43,15 @@
     ],
     "areas": [
       "GET /areas",
+      "POST /areas",
       "GET /areas/:areaId"
     ],
     "analyses": [
       "GET /analyses",
-      "POST /analyses"
+      "POST /analyses",
+      "GET /analyses/:id",
+      "GET /analyses/:id/tiles/:layer/:z/:x/:y.mvt",
+      "POST /analyses/:id/exports"
     ],
     "detections": [
       "GET /detections",
@@ -83,12 +87,13 @@
     ],
     "jobs": [
       "GET /jobs",
-      "GET /jobs/:jobId"
+      "GET /jobs/:jobId",
+      "GET /jobs/:id/download"
     ],
     "admin": [
       "GET /admin/status",
       "POST /admin/refresh"
     ]
   },
-  "implementationStatus": "scaffolded"
+  "implementationStatus": "partially_implemented_see_docs_API_AUDIT"
 }

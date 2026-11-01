@@ -9,7 +9,7 @@ const apps: App[] = [];
 async function buildApp(): Promise<App> {
   // inject() cannot capture bodies written through @fastify/express, so the Fastify-native routes
   // under test are exercised without the legacy Express layer (it is covered over real HTTP in app.test.ts).
-  const app = await createApp({ legacyExpress: false });
+  const app = await createApp();
   await app.ready();
   apps.push(app);
   return app;

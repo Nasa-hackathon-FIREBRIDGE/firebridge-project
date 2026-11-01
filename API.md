@@ -2,19 +2,25 @@
 
 This document describes the API foundation (Phase 0) and contract for the FIREBRIDGE backend.
 
+The current route inventory, authentication requirements and actual test results
+are in [docs/API_AUDIT.md](docs/API_AUDIT.md) and
+[docs/API_TEST_REPORT.md](docs/API_TEST_REPORT.md). See
+[docs/API_TESTING_GUIDE.md](docs/API_TESTING_GUIDE.md) for isolated Docker and curl
+commands. The original server on port 3000 is intentionally preserved.
+
 ---
 
 ## 1. API Root and Architecture
 
 - **Base URL:** `/api/v1`
-- **Architecture:** Node.js, Express, TypeScript, Prisma ORM (PostgreSQL/PostGIS), Redis.
+- **Architecture:** Node.js, Fastify 5, TypeScript, Prisma ORM (PostgreSQL/PostGIS), Redis.
 - **Port:** Configured via `PORT` (default `3000`).
 
 ---
 
 ## 2. Response Envelope & Error Codes Contract
 
-All endpoints adhere to a standardized JSON envelope contract.
+JSON endpoints adhere to a standardized envelope contract. Phase 4 tiles and downloads return binary/streamed bodies on success. See [PHASE4.md](PHASE4.md) for their contracts, security prerequisites and verification commands.
 
 ### 2.1 Success Response
 

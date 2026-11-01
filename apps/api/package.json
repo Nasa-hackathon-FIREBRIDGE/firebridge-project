@@ -5,9 +5,9 @@
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
-    "predev": "npm run build --workspace @firebridge/database",
+    "predev": "npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
     "dev": "tsx watch src/server.ts",
-    "prebuild": "npm run build --workspace @firebridge/database",
+    "prebuild": "npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "vitest run"
@@ -20,18 +20,15 @@
     "@fastify/swagger": "^9.9.2",
     "@fastify/swagger-ui": "^6.1.2",
     "@firebridge/database": "^1.0.0",
+    "@firebridge/results": "^1.0.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.12.7",
-    "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "pino": "^10.4.0",
-    "pino-http": "^11.0.0",
-    "swagger-jsdoc": "^6.3.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "supertest": "^7.0.0",
     "tsx": "^4.19.1",
     "vitest": "^2.1.8"
   }

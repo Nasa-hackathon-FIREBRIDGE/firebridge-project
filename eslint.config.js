@@ -15,6 +15,7 @@ module.exports = [
     ]
   },
   js.configs.recommended,
+  { languageOptions: { globals: globals.node } },
   {
     files: ['**/*.ts'],
     languageOptions: {

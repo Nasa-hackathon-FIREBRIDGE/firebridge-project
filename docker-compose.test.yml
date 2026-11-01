@@ -1,0 +1,26 @@
+# Temporary, isolated test configuration for the existing API and worker only.
+# Requires a verified backup and a separately provisioned *_test database.
+services:
+  api:
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: ${FIREBRIDGE_TEST_DATABASE_URL:?Set the isolated container database URL}
+      REDIS_URL: redis://redis:6379/15
+      FIREBRIDGE_TEST_AUTH_FILE: /run/firebridge/test-auth.json
+    ports: !override
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - ./.data/audit/test-auth.json:/run/firebridge/test-auth.json:ro
+      - audit_exports:/app/.data/exports
+  worker:
+    environment:
+      NODE_ENV: test
+      WORKER_AUTOSTART: 'true'
+      DATABASE_URL: ${FIREBRIDGE_TEST_DATABASE_URL:?Set the isolated container database URL}
+      REDIS_URL: redis://redis:6379/15
+      EXPORT_RETENTION_SECONDS: '180'
+      EXPORT_CLEANUP_INTERVAL_SECONDS: '10'
+    volumes:
+      - audit_exports:/app/.data/exports
+volumes:
+  audit_exports:

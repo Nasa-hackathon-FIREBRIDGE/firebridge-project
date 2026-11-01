@@ -4,5 +4,6 @@ import { idempotency } from '../middleware/idempotency.js';
 
 export const sourcesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/', sourcesController.list);
-  fastify.post('/', { ...idempotency({ required: false }) }, sourcesController.create);
+  const hooks = idempotency({ required: false });
+  fastify.post('/', { ...hooks, schema: { tags: ['Sources'], summary: 'Create a source' } }, sourcesController.create);
 };

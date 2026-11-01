@@ -10,6 +10,8 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { areasService } from '../services/areas.service.js';
 import { ErrorCodes } from '../types/api.js';
 import { areaCreateSchema, areaListQuerySchema } from '../validators/areas.validator.js';
+import { parseResultInput } from '../validators/results.validator.js';
+import { uuidSchema } from '@firebridge/results';
 
 export const areasController = {
   /**
@@ -100,7 +102,7 @@ export const areasController = {
       });
     }
 
-    const area = await areasService.getAreaById(areaId);
+    const area = await areasService.getAreaById(parseResultInput(uuidSchema, areaId));
 
     return reply.code(200).send({
       status: 'ok',

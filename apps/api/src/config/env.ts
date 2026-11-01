@@ -39,6 +39,7 @@ const envSchema = z
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
     DATABASE_URL: postgresUrlSchema,
     REDIS_URL: redisUrlSchema,
+    ANALYSIS_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
     CORS_ORIGINS: corsOriginsSchema,
     PAGINATION_SECRET: z.string().min(16).default(DEFAULT_DEV_PAGINATION_SECRET)
   })

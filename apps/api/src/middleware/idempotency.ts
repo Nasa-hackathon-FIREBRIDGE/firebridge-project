@@ -714,14 +714,13 @@ export function idempotency(options: IdempotencyOptions = {}): IdempotencyHooks 
     // Premature connection close: release the lock (equivalent of res.on('close')).
     reply.raw.once('close', () => {
       state.stopRenewal();
-      if (state.finalized) {
+      // A normal socket close may precede route-level onResponse hooks when a
+      // root async hook yields. Only an aborted response finalizes here.
+      if (state.finalized || reply.raw.writableEnded) {
         return;
       }
       state.finalized = true;
-
-      if (!reply.raw.writableEnded) {
-        releaseLock(state, 'Failed to release idempotency lock on premature connection close');
-      }
+      releaseLock(state, 'Failed to release idempotency lock on premature connection close');
     });
   };
 

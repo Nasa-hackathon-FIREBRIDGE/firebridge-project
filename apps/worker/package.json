@@ -5,18 +5,20 @@
   "type": "module",
   "main": "dist/worker.js",
   "scripts": {
-    "predev": "npm run build --workspace @firebridge/database",
+    "predev": "npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
     "dev": "tsx watch src/worker.ts",
-    "prebuild": "npm run build --workspace @firebridge/database",
+    "prebuild": "npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/worker.js",
     "test": "vitest run"
   },
   "dependencies": {
     "@firebridge/database": "^1.0.0",
+    "@firebridge/results": "^1.0.0",
     "bullmq": "^6.4.2",
     "dotenv": "^16.4.7",
     "ioredis": "^5.6.0",
+    "parquetjs-lite": "0.8.7",
     "pino": "^10.4.0",
     "zod": "^4.6.7"
   },

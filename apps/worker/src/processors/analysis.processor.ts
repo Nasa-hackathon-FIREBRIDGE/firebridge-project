@@ -1,149 +1,42 @@
-/**
- * Analysis Job Processor
- *
- * Consumes `analysis.requested` jobs from the BullMQ queue and executes the
- * analysis lifecycle, advancing stages and updating component and job statuses.
- */
-
-import { prisma } from '@firebridge/database';
-import type { Job } from 'bullmq';
+import { DelayedError, UnrecoverableError, type Job } from 'bullmq';
+import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
+import { AnalysisLeaseLost, InvalidAnalysisTask, workerAnalysesRepository } from '../repositories/analyses.repository.js';
+import { analysisJobSchema, type AnalysisJobPayload } from '../validators/queue-payload.js';
 
-export interface AnalysisJobPayload {
-  analysis_id: string;
-  job_id: string;
-  area_id: string;
-  metric_key: string;
-  start_date: string;
-  end_date_exclusive: string;
-}
+export type { AnalysisJobPayload } from '../validators/queue-payload.js';
 
 export async function processAnalysisJob(job: Job<AnalysisJobPayload>): Promise<void> {
-  const { analysis_id, job_id, area_id } = job.data;
-
-  logger.info({ jobId: job.id, analysisId: analysis_id, apiJobId: job_id }, 'Processing analysis job');
-
+  const parsed = analysisJobSchema.safeParse(job.data);
+  if (!parsed.success) throw new UnrecoverableError('Invalid analysis task payload.');
+  const payload = parsed.data;
+  const result = await workerAnalysesRepository.claim(payload).catch((error: unknown) => {
+    if (error instanceof InvalidAnalysisTask) throw new UnrecoverableError(error.message);
+    throw new Error('Analysis claim unavailable.');
+  });
+  if (result.kind === 'done') return;
+  if (result.kind === 'busy') {
+    await job.moveToDelayed(Math.max(Date.now() + 1000, result.until + 1000), job.token);
+    throw new DelayedError();
+  }
+  const { claim } = result;
+  const started = Date.now();
   try {
-    // 1. Transition to running state
-    await prisma.$executeRaw`
-      UPDATE firebridge.api_jobs
-      SET
-        status = 'running',
-        attempt = attempt + 1,
-        progress = '{"percent": 10, "stage": "resolving_data"}'::jsonb
-      WHERE id = ${job_id}::uuid;
-    `;
-
-    await prisma.$executeRaw`
-      UPDATE firebridge.analyses
-      SET status = 'running'
-      WHERE id = ${analysis_id}::uuid;
-    `;
-
-    // 2. Verify analysis and area exist
-    const analysisRows = await prisma.$queryRaw<{ id: string }[]>`
-      SELECT id::text FROM firebridge.analyses WHERE id = ${analysis_id}::uuid LIMIT 1;
-    `;
-    if (analysisRows.length === 0) {
-      throw new Error(`Analysis with id '${analysis_id}' does not exist.`);
-    }
-
-    const areaRows = await prisma.$queryRaw<{ id: string }[]>`
-      SELECT id::text FROM firebridge.areas WHERE id = ${area_id}::uuid LIMIT 1;
-    `;
-    if (areaRows.length === 0) {
-      throw new Error(`Area with id '${area_id}' does not exist.`);
-    }
-
-    // 3. Stage: loading detections
-    await prisma.$executeRaw`
-      UPDATE firebridge.api_jobs
-      SET progress = '{"percent": 50, "stage": "loading_detections"}'::jsonb
-      WHERE id = ${job_id}::uuid;
-    `;
-
-    // 4. Stage: aggregating
-    await prisma.$executeRaw`
-      UPDATE firebridge.api_jobs
-      SET progress = '{"percent": 80, "stage": "aggregating"}'::jsonb
-      WHERE id = ${job_id}::uuid;
-    `;
-
-    // 5. Check components to determine final status
-    type ComponentRow = {
-      component: string;
-      status: string;
-      release_id: string | null;
-    };
-
-    const components = await prisma.$queryRaw<ComponentRow[]>`
-      SELECT component, status, release_id::text
-      FROM firebridge.analysis_components
-      WHERE analysis_id = ${analysis_id}::uuid;
-    `;
-
-    const satelliteComponent = components.find((c) => c.component === 'satellite');
-    const nonSatelliteComponents = components.filter((c) => c.component !== 'satellite');
-
-    const satelliteReady = satelliteComponent?.status === 'ready';
-    const hasIncompleteOtherComponents = nonSatelliteComponents.some((c) => c.status !== 'ready');
-
-    let finalAnalysisStatus: 'ready' | 'partial' = 'ready';
-    let finalJobStatus: 'succeeded' | 'partial' = 'succeeded';
-
-    if (satelliteReady && hasIncompleteOtherComponents) {
-      finalAnalysisStatus = 'partial';
-      finalJobStatus = 'partial';
-    }
-
-    // 6. Complete analysis and job
-    await prisma.$executeRaw`
-      UPDATE firebridge.analyses
-      SET
-        status = ${finalAnalysisStatus},
-        completed_at = now()
-      WHERE id = ${analysis_id}::uuid;
-    `;
-
-    await prisma.$executeRaw`
-      UPDATE firebridge.api_jobs
-      SET
-        status = ${finalJobStatus},
-        progress = '{"percent": 100, "stage": "completed"}'::jsonb,
-        completed_at = now()
-      WHERE id = ${job_id}::uuid;
-    `;
-
-    logger.info(
-      { analysisId: analysis_id, apiJobId: job_id, status: finalAnalysisStatus },
-      'Analysis job completed successfully'
-    );
+    // The current processor only evaluates resolved components. Keep this bounded;
+    // future long-running computation must renew the SQL lease and fence every write.
+    const status = await workerAnalysesRepository.complete(payload, claim);
+    logger.info({ apiJobId: claim.id, analysisId: claim.analysisId, attempt: claim.attempt,
+      status, durationMs: Date.now() - started }, 'Analysis completed');
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error(
-      { err: error, analysisId: analysis_id, apiJobId: job_id },
-      'Analysis job processing failed'
-    );
-
-    await prisma.$executeRaw`
-      UPDATE firebridge.analyses
-      SET
-        status = 'failed',
-        error_code = 'PROCESSING_ERROR',
-        completed_at = now()
-      WHERE id = ${analysis_id}::uuid;
-    `;
-
-    await prisma.$executeRaw`
-      UPDATE firebridge.api_jobs
-      SET
-        status = 'failed',
-        error_code = 'PROCESSING_ERROR',
-        completed_at = now()
-      WHERE id = ${job_id}::uuid;
-    `;
-
-    throw new Error(`Job processing failed: ${errorMessage}`);
+    const terminal = error instanceof InvalidAnalysisTask || claim.attempt >= env.ANALYSIS_MAX_ATTEMPTS
+      || job.attemptsMade + 1 >= (job.opts?.attempts ?? env.ANALYSIS_MAX_ATTEMPTS);
+    if (!(error instanceof AnalysisLeaseLost)) {
+      try { await workerAnalysesRepository.fail(payload, claim, terminal); }
+      catch { throw new Error('Analysis state update unavailable.'); }
+    }
+    logger.warn({ apiJobId: claim.id, analysisId: claim.analysisId, attempt: claim.attempt, terminal,
+      reason: error instanceof AnalysisLeaseLost ? 'lease_lost' : 'processing_failed' }, 'Analysis attempt failed');
+    if (terminal) throw new UnrecoverableError('Analysis processing failed.');
+    throw new Error('Analysis processing failed.');
   }
 }
-

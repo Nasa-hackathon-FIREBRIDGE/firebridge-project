@@ -1,0 +1,15 @@
+{
+  "name": "@firebridge/results",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": { ".": "./dist/index.js", "./storage": "./dist/storage.js" },
+  "scripts": { "build": "tsc -p tsconfig.json" },
+  "dependencies": {
+    "@firebridge/database": "^1.0.0",
+    "@prisma/client": "^6.1.0",
+    "zod": "^4.6.7"
+  }
+}

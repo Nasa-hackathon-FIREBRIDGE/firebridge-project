@@ -70,7 +70,6 @@ export const analysesService = {
       selection_policy: input.selection_policy,
       weighting_version: input.weighting_version
     });
-
     const idempotencyKey = idempotencyKeyHeader?.trim() || `auto:${cacheKey}`;
 
     const requestSpec: Record<string, unknown> = {
@@ -129,7 +128,7 @@ export const analysesService = {
     );
 
     let effectiveStatus = detail.analysis.status;
-    if (satelliteReady && hasIncompleteOtherComponents) {
+    if (['ready', 'partial'].includes(detail.analysis.status) && satelliteReady && hasIncompleteOtherComponents) {
       // Per specification: if only satellite is ready, status is partial
       effectiveStatus = 'partial';
     }

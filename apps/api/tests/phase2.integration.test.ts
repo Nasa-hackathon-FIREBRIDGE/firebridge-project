@@ -332,7 +332,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
     expect(json.data.area_id).toBe(createdAreaId);
     expect(json.data.components).toHaveLength(3);
     // Since satellite is ready but weather/reports are missing, status is partial
-    expect(json.data.status).toBe('partial');
+    expect(json.data.status).toBe('queued');
     expect(json.data.job.id).toBe(createdJobId);
   });
 

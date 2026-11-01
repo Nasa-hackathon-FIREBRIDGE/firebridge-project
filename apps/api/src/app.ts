@@ -2,10 +2,9 @@ import fastifyCompress from '@fastify/compress';
 import fastifyCors from '@fastify/cors';
 import fastifyFormbody from '@fastify/formbody';
 import fastifyHelmet from '@fastify/helmet';
-import fastifySwagger, { type FastifyStaticSwaggerOptions } from '@fastify/swagger';
+import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
-import swaggerJsdoc from 'swagger-jsdoc';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { errorHandler } from './middleware/error-handler.js';
@@ -31,6 +30,10 @@ export async function createApp(_options: CreateAppOptions = {}) {
 
   // --- Global Fastify hooks & handlers: set on the ROOT instance -----------------------------
   app.addHook('onRequest', securityHeaders);
+  app.addHook('onResponse', async (request, reply) => {
+    request.log.info({ method: request.method, route: request.routeOptions.url ?? 'unmatched',
+      statusCode: reply.statusCode, durationMs: reply.elapsedTime, requestId: request.id }, 'HTTP request completed');
+  });
   app.setErrorHandler(errorHandler);
   app.setNotFoundHandler(notFoundHandler);
 
@@ -38,7 +41,7 @@ export async function createApp(_options: CreateAppOptions = {}) {
   await app.register(fastifyHelmet, { crossOriginResourcePolicy: { policy: 'cross-origin' } });
   await app.register(fastifyCors, {
     origin(origin, callback) {
-      if (!origin || (env.NODE_ENV !== 'production' && env.CORS_ORIGINS.length === 0)) {
+      if (!origin) {
         callback(null, true);
         return;
       }
@@ -58,13 +61,10 @@ export async function createApp(_options: CreateAppOptions = {}) {
       version: '1.0.0',
       description: 'OpenAPI specification for the FIREBRIDGE backend foundation.'
     },
-    servers: [{ url: `http://localhost:${env.PORT}/api/v1` }]
+    servers: [{ url: '/' }]
   };
-  const swaggerSpec = swaggerJsdoc({ definition: swaggerDefinition, apis: ['./src/routes/*.ts'] });
-
   await app.register(fastifySwagger, {
-    mode: 'static',
-    specification: { document: swaggerSpec } as FastifyStaticSwaggerOptions['specification']
+    openapi: swaggerDefinition
   });
   await app.register(fastifySwaggerUi, { routePrefix: SWAGGER_UI_PREFIX });
 
