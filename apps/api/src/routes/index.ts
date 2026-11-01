@@ -6,6 +6,7 @@ import { releasesRoutes } from './releases.routes.js';
 import { updatesRoutes } from './updates.routes.js';
 import { areasRoutes } from './areas.routes.js';
 import { analysesRoutes } from './analyses.routes.js';
+import { nativeResultsRoutes } from './native-results.routes.js';
 import { detectionsRoutes } from './detections.routes.js';
 import { tilesRoutes } from './tiles.routes.js';
 import { cellsRoutes } from './cells.routes.js';
@@ -25,6 +26,7 @@ const apiRoutes: FastifyPluginAsync = async (app) => {
   app.register(updatesRoutes, { prefix: '/updates' });
   app.register(areasRoutes, { prefix: '/areas' });
   app.register(analysesRoutes, { prefix: '/analyses' });
+  app.register(nativeResultsRoutes, { prefix: '/analyses' });
   app.register(detectionsRoutes, { prefix: '/detections' });
   app.register(tilesRoutes, { prefix: '/tiles' });
   app.register(cellsRoutes, { prefix: '/cells' });

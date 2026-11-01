@@ -14,6 +14,7 @@ if (decodeURIComponent(new URL(databaseUrl).pathname) !== '/firebridge_phase1_te
 export default defineConfig({
   test: {
     include: ['tests/postgres/**/*.test.ts'],
+    fileParallelism: false,
     hookTimeout: 30000,
     testTimeout: 10000,
     env: {

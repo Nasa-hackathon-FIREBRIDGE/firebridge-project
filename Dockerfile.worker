@@ -11,6 +11,6 @@ RUN npm ci
 
 COPY . .
 
-RUN npm run build --workspace @firebridge/worker
+RUN DATABASE_URL="postgresql://postgres:postgres@localhost:5432/firebridge?schema=firebridge" npm run build --workspace @firebridge/worker
 
 CMD ["npm", "run", "start", "--workspace", "@firebridge/worker"]

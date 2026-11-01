@@ -26,8 +26,16 @@
     "sources": ["GET /sources", "POST /sources"],
     "releases": ["GET /releases/:release_id"],
     "updates": ["GET /updates"],
-    "areas": ["GET /areas", "GET /areas/:areaId"],
-    "analyses": ["GET /analyses", "POST /analyses"],
+    "areas": ["GET /areas", "POST /areas", "GET /areas/:area_id"],
+    "analyses": [
+      "GET /analyses",
+      "POST /analyses",
+      "GET /analyses/:id",
+      "GET /analyses/:id/detections",
+      "GET /analyses/:id/summary",
+      "GET /analyses/:id/calendar",
+      "GET /analyses/:id/provenance"
+    ],
     "detections": ["GET /detections", "POST /detections"],
     "tiles": ["GET /tiles", "GET /tiles/:tileId"],
     "cells": ["GET /cells", "GET /cells/:cellId"],
@@ -36,10 +44,10 @@
     "provenance": ["GET /provenance", "GET /provenance/:id"],
     "explanations": ["GET /explanations", "POST /explanations"],
     "exports": ["GET /exports", "POST /exports"],
-    "jobs": ["GET /jobs", "GET /jobs/:jobId"],
+    "jobs": ["GET /jobs", "GET /jobs/:id"],
     "admin": ["GET /admin/status", "POST /admin/refresh"]
   },
-  "implementationStatus": "phase-1-implemented",
+  "implementationStatus": "phase-1-2-3-implemented",
   "implementedEndpoints": [
     "GET /health/live",
     "GET /health/ready",
@@ -47,6 +55,17 @@
     "GET /releases/:release_id",
     "GET /updates",
     "GET /sources",
-    "POST /sources"
+    "POST /sources",
+    "GET /areas",
+    "POST /areas",
+    "GET /areas/:area_id",
+    "GET /analyses",
+    "POST /analyses",
+    "GET /analyses/:id",
+    "GET /jobs/:id",
+    "GET /analyses/:id/detections",
+    "GET /analyses/:id/summary",
+    "GET /analyses/:id/calendar",
+    "GET /analyses/:id/provenance"
   ]
 }

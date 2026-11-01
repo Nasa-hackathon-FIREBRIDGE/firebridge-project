@@ -15,6 +15,9 @@ import { createDatabase, type SnapshotDatabase } from './repositories/database.j
 import { CatalogRepository } from './repositories/catalog.repository.js';
 import { CatalogService } from './services/catalog.service.js';
 import type { ReadinessProbes } from './services/health.service.js';
+import { NativeResultsRepository } from './repositories/native-results.repository.js';
+import { NativeResultsService } from './services/native-results.service.js';
+import { envelope } from './utils/response.js';
 
 export function createApp(
   options: {
@@ -32,6 +35,10 @@ export function createApp(
   const database = options.database ?? createDatabase(env.DATABASE_URL);
   const catalogService = new CatalogService(new CatalogRepository(database), env);
   app.decorate('catalogService', catalogService);
+  app.decorate(
+    'nativeResultsService',
+    new NativeResultsService(new NativeResultsRepository(database), env)
+  );
   app.decorate('readinessChecks', options.readinessChecks ?? {});
   app.decorate('phase1ReadinessProvider', {
     async isCatalogueServable() {
@@ -50,12 +57,19 @@ export function createApp(
     reply.header('X-Request-Id', request.id);
   });
   app.addHook('onRequest', securityHeaders);
+  // Phase 2 handlers retain their status/message fields and gain the shared envelope.
+  app.addHook('preSerialization', async (request, _reply, payload) => {
+    if (payload && typeof payload === 'object' && 'data' in payload && !('request_id' in payload))
+      return { ...payload, ...envelope(request, payload.data) };
+    return payload;
+  });
   app.register(helmet, {
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     frameguard: { action: 'deny' }
   });
   app.register(cors, {
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+    exposedHeaders: ['ETag', 'X-Request-Id', 'X-Data-Release-Id', 'Idempotent-Replayed'],
     origin: (origin, callback) =>
       callback(
         null,

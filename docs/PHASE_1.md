@@ -12,7 +12,7 @@ Ce document décrit les conventions nécessaires au raccordement entre les endpo
 
 Les lectures de phase 1 utilisent une transaction `REPEATABLE READ READ ONLY`. Elles ne déclenchent ni acquisition fournisseur, ni publication de release, ni migration.
 
-Le [SQL de conception](../packages/database/prisma/sql/firebridge_schema_v2.sql) décrit le schéma attendu. Les deux premières migrations créent `public.HealthCheck` et `firebridge.sources`. La migration `20261031000000_phase1_catalog_versions` ajoute PostGIS et les 15 tables nécessaires à ces lectures, avec leurs clés étrangères, contraintes et index. Les tables des phases suivantes ne sont pas créées. Le SQL de conception ne doit pas être appliqué par-dessus les migrations existantes.
+Le [SQL de conception](../packages/database/prisma/sql/firebridge_schema_v2.sql) décrit le schéma attendu. Les deux premières migrations créent `public.HealthCheck` et `firebridge.sources`. La migration `20261031000000_phase1_catalog_versions` ajoute PostGIS et les 15 tables nécessaires à ces lectures, avec leurs clés étrangères, contraintes et index. L’intégration de la phase 2 complète ensuite le schéma par une migration additive, décrite dans [PHASE_3.md](PHASE_3.md). Le SQL de conception ne doit pas être appliqué par-dessus les migrations existantes.
 
 ## Contrat à respecter côté ingestion
 
@@ -94,4 +94,4 @@ Avant l’intégration finale :
 4. Comparer les réponses à l’inventaire et aux versions publiés.
 5. Vérifier qu’une nouvelle publication change les aliases sans modifier les anciennes releases.
 
-Les autres ressources restent des squelettes `501`. Les guides personnels et la démo manuelle restent exclus des fichiers partagés.
+Les phases 2 et 3 sont désormais intégrées sur la branche de travail ; leurs dépendances et la reprise des migrations sont décrites dans [PHASE_3.md](PHASE_3.md). Les autres ressources restent des squelettes `501`. Les guides personnels et la démo manuelle restent exclus des fichiers partagés.

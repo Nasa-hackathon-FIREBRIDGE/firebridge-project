@@ -1,8 +1,8 @@
-# FIREBRIDGE API — Phase 1
+# FIREBRIDGE API — Catalogue et résultats natifs
 
 Base path: `/api/v1`. Fastify serves OpenAPI at `/api-docs/json` and Swagger UI at `/api-docs`.
 
-The implemented read-only Phase 1 routes are `/catalog`, `/releases/{release_id}` and `/updates`. `GET /sources` and `POST /sources` are also implemented; other resource groups remain planned (`501`). The French [phase guide](docs/PHASE_1.md) explains implementation and ingestion conventions.
+The implemented Phase 1 routes are `/catalog`, `/releases/{release_id}` and `/updates`. Sources and the Phase 2 area/analysis/job routes are integrated. Phase 3 adds `/analyses/{id}/detections`, `/summary`, `/calendar` and `/provenance`. Other resource groups remain planned (`501`). The [Phase 1 guide](docs/PHASE_1.md) and [Phase 3 guide](docs/PHASE_3.md) explain integration conventions and current limits.
 
 ## Common responses
 
@@ -138,3 +138,24 @@ Idempotency uses native Fastify route hooks. Atomic Redis ownership tokens, opti
 `CORS_ORIGINS` configures the browser-origin allowlist. Set a custom `PAGINATION_SECRET` in production. Readiness probes have 3-second bounds; the API supplies a per-application `Phase1ReadinessProvider` so a connected database is not mistaken for a servable catalog.
 
 The two migrations currently create HealthCheck and Sources only. Apply them explicitly using the deploy command in the README. The complete Phase 1 data schema remains to be migrated.
+
+## Phase 3: native analysis results
+
+Read the exact analysis selected by Phase 2. All paths below start with `/api/v1/analyses/{id}` and never resolve a current alias again.
+
+| GET path      | Query                                                                                            | Response data                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------- |
+| `/detections` | `limit` 1-5000 (default 500), `cursor`, subset `source_ids`, UTC `start`/`end_exclusive`, `bbox` | GeoJSON `features[]`, `returned`, `next_cursor`, `truncated`, explicit inventory scope                  |
+| `/summary`    | None                                                                                             | `native_detections_by_source[]`, null comparable response and unknown observation coverage, limitations |
+| `/calendar`   | `resolution=day                                                                                  | week                                                                                                    | month`, narrowed `start_date`/`end_date_exclusive` | Every selected period with `counts_by_source[]`; unknown values remain null |
+| `/provenance` | `limit` 1-100 (default 50), `cursor`, `asset_id`                                                 | Pinned release versions and paginated input hashes, source citations and roles                          |
+
+Each response includes the analysis/release IDs, unit, time basis and selection metadata. Counters and bigint IDs are strings. Detection ordering preserves PostgreSQL microseconds and `(acquired_at,id)` keyset ordering. Duplicate partition membership does not duplicate a canonical detection.
+
+A cursor is bound to the analysis, release, normalized filters, page size, endpoint and server identity context. Reuse under another selection returns `422`. `truncated=true` means that another page exists.
+
+`count="0"` requires verified complete point inventory for the exact source, area revision and closed interval. Otherwise an observed positive count is labelled `lower_bound`, or `count=null` if the inventory cannot establish a value. This never establishes observation coverage or a unique incident count. See the publication marker contract in [PHASE_3.md](docs/PHASE_3.md).
+
+`409 SERVING_NOT_READY` prevents the detections route from serving incomplete SQL slices. Summary/calendar can instead return explicit unavailable values. Unsupported metrics, time bases, mixed stream modes and unknown quality policies return `200` with `status=unsupported` and no invented numeric result. Unknown analyses return `404`; invalid filters return `422`; database failures remain sanitized `503` responses.
+
+Logical representations have weak ETags because request identifiers change independently. Conditional requests can return `304`; `X-Data-Release-Id` identifies the pinned satellite release. Provenance never exposes raw configuration, private storage paths or secret-bearing provider URLs. Unimplemented optional fact/cell provenance filters are rejected rather than silently ignored.

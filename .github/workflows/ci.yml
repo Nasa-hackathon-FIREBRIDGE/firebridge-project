@@ -57,3 +57,4 @@ jobs:
       - run: npm run build
       - run: npm run prisma:deploy --workspace @firebridge/database
       - run: npm run test:postgres --workspace @firebridge/api
+      - run: npm run test:postgres --workspace @firebridge/worker

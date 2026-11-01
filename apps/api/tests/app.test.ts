@@ -297,7 +297,7 @@ describe('Phase 1 routes with PostgreSQL queries', () => {
       expect(paths[path]?.get).toBeDefined();
   });
   it('keeps other resource scaffolds reachable', async () => {
-    expect((await get('/areas')).statusCode).toBe(501);
+    expect((await get('/tiles')).statusCode).toBe(501);
     expect((await app.inject('/health')).statusCode).toBe(404);
     expect((await get('/nonexistent')).statusCode).toBe(404);
   });
