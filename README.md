@@ -2,13 +2,15 @@
 
 FIREBRIDGE est le backend du projet NASA Space Apps Challenge « Harmonization of MODIS and VIIRS Hot Spots ». Il utilise TypeScript, Fastify et PostgreSQL/PostGIS, avec un worker séparé pour les traitements longs.
 
-La phase 1 implémente le catalogue et les versions. La phase 2 apporte les zones, les analyses et les jobs. La phase 3 lit les détections, le résumé, le calendrier natif et la provenance sous `/api/v1/analyses/{id}`. Les routes Sources et les opérations de phase 5 sont également implémentées ; les ressources des phases 4 et 6 restent à développer.
+La phase 1 implémente le catalogue et les versions. La phase 2 apporte les zones, les analyses et les jobs. La phase 3 lit les détections, le résumé, le calendrier natif et la provenance sous `/api/v1/analyses/{id}`. Les routes Sources et les opérations de phase 5 sont également implémentées. La phase 6 ajoute les lectures de contexte préparé et les explications factuelles. La phase 4 est disponible sur la branche du collègue et reste à intégrer ; voir la [revue de compatibilité](docs/PHASE_4_REVIEW.md).
 
-Les guides de [phase 1](docs/PHASE_1.md), de [phase 3](docs/PHASE_3.md) et de [phase 5](docs/PHASE_5.md) décrivent les contrats d’intégration, les limites et la compatibilité des migrations. Le [contrat HTTP](API.md) décrit les paramètres et les réponses. Les documents de conception fournis par l’équipe restent dans `documents/`.
+Les guides de [phase 1](docs/PHASE_1.md), de [phase 3](docs/PHASE_3.md), de [phase 5](docs/PHASE_5.md) et de [phase 6](docs/PHASE_6.md) décrivent les contrats d’intégration, les limites et la compatibilité des migrations. Le [contrat HTTP](API.md) décrit les paramètres et les réponses. Les documents de conception fournis par l’équipe restent dans `documents/`.
 
 La phase 5 ajoute les six endpoints d’opérations d’ingestion : abonnements, backfills, relances, tentatives, lacunes et disponibilité par source. Les demandes sont enregistrées atomiquement dans PostgreSQL et l’outbox ; le worker prépare des tentatives bornées. **Le téléchargement, la publication NASA et le scheduler périodique restent à implémenter.** Les jobs planifiés restent `queued`, au stade `awaiting_fetch_executor`, sans résultat de téléchargement inventé. L’administration exige un `INGESTION_ADMIN_TOKEN` ; voir le guide pour les capacités des feeds, les budgets et les fixtures isolées.
 
 ## Architecture overview
+
+La phase 6 sert la météo et les rapports attachés aux versions de l’analyse et les résultats scientifiques déjà préparés et attestés par le pipeline. Sans ces prérequis, les résultats restent explicitement manquants ou non supportés. Le worker génère un résumé déterministe des comptages natifs, vérifié et cité (`template_fallback`), sans fournisseur d’IA externe ni réponse aux questions libres. Le téléchargement des contextes, les calculs scientifiques et l’explication complète de ces contextes restent à développer.
 
 - `apps/api`: HTTP API layer, routing, request validation, controllers, middleware, and API documentation
 - `apps/worker`: asynchronous processing and queue workers using BullMQ and Redis
@@ -48,6 +50,8 @@ La quatrième migration, `20261101000000_phase2_native_serving`, réconcilie le 
 La cinquième migration, `20261101010000_analysis_request_keys`, ajoute le registre durable des clés de requêtes d’analyse. La clé de cache tient désormais compte des releases satellite/météo/rapports sélectionnées et des politiques de la demande. Une même demande avec de nouvelles versions peut créer une analyse distincte ; un rejeu avec le même `Idempotency-Key` conserve le résultat d’origine. Aucun ancien résultat n’est réécrit. Voir le [contrat de réutilisation](docs/PHASE_3.md#création-et-réutilisation-des-analyses).
 
 Le modèle Prisma conserve aussi la table historique `HealthCheck` et une correspondance ignorée par le client pour `spatial_ref_sys`, qui appartient à PostGIS. Les champs spatiaux sont `Unsupported("geometry")` ; les contraintes `CHECK`, les types spatiaux précis et les index partiels restent définis dans les migrations SQL. Toute nouvelle migration doit préserver ces éléments.
+
+La sixième migration, `20261101020000_explanation_request_keys`, ajoute les clés durables d’explication. Appliquer cette migration avant le démarrage de l’API et du worker de phase 6.
 
 Si le port Redis `6379` est occupé, choisir par exemple `REDIS_PORT=16379` et `REDIS_URL=redis://localhost:16379` dans `.env`, puis relancer les services. Les conteneurs continuent d’utiliser leur port interne `6379`.
 

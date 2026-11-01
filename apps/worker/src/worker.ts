@@ -10,6 +10,7 @@ import {
 } from './queues/firebridge-queue.js';
 import { OutboxDispatcher } from './services/outbox-dispatcher.js';
 import { shutdownManager } from './shutdown/shutdown-manager.js';
+import { processExplanation, type ExplanationPayload } from './processors/explanation.processor.js';
 import {
   processIngestionPlan,
   type IngestionPlanPayload
@@ -28,7 +29,7 @@ export const workerStatus: WorkerStatus = {
   status: 'running',
   service: 'firebridge-worker',
   startedAt: new Date().toISOString(),
-  processorsRegistered: ['analysis.requested', 'ingestion.plan.requested'],
+  processorsRegistered: ['analysis.requested', 'ingestion.plan.requested', 'explanation.requested'],
   jobsProcessed: 0,
   jobsFailed: 0
 };
@@ -45,7 +46,9 @@ export const outboxDispatcher = new OutboxDispatcher({
 });
 
 // 3. Initialize BullMQ Worker with real processors
-export const bullWorker = new Worker<AnalysisJobPayload | IngestionPlanPayload>(
+export const bullWorker = new Worker<
+  AnalysisJobPayload | IngestionPlanPayload | ExplanationPayload
+>(
   FIREBRIDGE_QUEUE,
   async (job) => {
     logger.info({ jobId: job.id, name: job.name }, 'Worker received job');
@@ -53,6 +56,8 @@ export const bullWorker = new Worker<AnalysisJobPayload | IngestionPlanPayload>(
       await processAnalysisJob(job as Job<AnalysisJobPayload>);
     } else if (job.name === 'ingestion.plan.requested') {
       await processIngestionPlan(job.data);
+    } else if (job.name === 'explanation.requested') {
+      await processExplanation(job.data);
     } else {
       throw new Error('No processor registered for this job type.');
     }

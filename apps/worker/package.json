@@ -5,15 +5,18 @@
   "type": "module",
   "main": "dist/worker.js",
   "scripts": {
-    "predev": "npm run build --workspace @firebridge/database",
+    "predev": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database",
     "dev": "tsx watch src/worker.ts",
-    "prebuild": "npm run build --workspace @firebridge/database",
+    "prebuild": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/worker.js",
+    "pretest": "npm run build --workspace @firebridge/contracts",
     "test": "vitest run",
+    "pretest:postgres": "npm run build --workspace @firebridge/contracts",
     "test:postgres": "vitest run --config vitest.postgres.config.ts"
   },
   "dependencies": {
+    "@firebridge/contracts": "^1.0.0",
     "@firebridge/database": "^1.0.0",
     "bullmq": "^6.4.2",
     "dotenv": "^16.4.7",

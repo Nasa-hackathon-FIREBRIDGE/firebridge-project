@@ -20,6 +20,9 @@ import { NativeResultsService } from './services/native-results.service.js';
 import { envelope } from './utils/response.js';
 import { IngestionRepository } from './repositories/ingestion.repository.js';
 import { IngestionService } from './services/ingestion.service.js';
+import { ContextRepository } from './repositories/context.repository.js';
+import { ContextService } from './services/context.service.js';
+import { ExplanationService } from './services/explanation.service.js';
 
 export function createApp(
   options: {
@@ -45,6 +48,13 @@ export function createApp(
     new NativeResultsService(new NativeResultsRepository(database), env)
   );
   app.decorate('readinessChecks', options.readinessChecks ?? {});
+  const contextService = new ContextService(
+    new ContextRepository(database),
+    app.nativeResultsService,
+    env
+  );
+  app.decorate('contextService', contextService);
+  app.decorate('explanationService', new ExplanationService(contextService));
   app.decorate('phase1ReadinessProvider', {
     async isCatalogueServable() {
       try {

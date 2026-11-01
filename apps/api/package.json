@@ -12,12 +12,14 @@
     "test:postgres": "vitest run --config vitest.postgres.config.ts",
     "fixtures:phase3": "tsx tests/helpers/seed-native-cli.ts",
     "fixtures:phase5": "tsx tests/helpers/seed-ingestion-cli.ts",
-    "pretest:postgres": "npm run build --workspace @firebridge/database",
-    "predev": "npm run build --workspace @firebridge/database",
-    "prebuild": "npm run build --workspace @firebridge/database",
-    "pretest": "npm run build --workspace @firebridge/database"
+    "fixtures:phase6": "tsx tests/helpers/seed-context-cli.ts",
+    "pretest:postgres": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database",
+    "predev": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database",
+    "prebuild": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database",
+    "pretest": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database"
   },
   "dependencies": {
+    "@firebridge/contracts": "^1.0.0",
     "@fastify/compress": "^9.3.0",
     "@fastify/cors": "^11.3.1",
     "@fastify/formbody": "^9.0.1",

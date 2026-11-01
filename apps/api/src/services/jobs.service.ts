@@ -37,7 +37,8 @@ export const jobsService = {
     // Jobs can only be retried if they failed and haven't exceeded maximum attempt threshold
     const isFailed = job.status === 'failed';
     const hasAttemptsRemaining = job.attempt < MAX_JOB_ATTEMPTS;
-    const retryable = isFailed && hasAttemptsRemaining;
+    const retryable =
+      isFailed && hasAttemptsRemaining && job.error_code !== 'EVIDENCE_VALIDATION_FAILED';
 
     // Determine current processing stage
     let currentStage = job.status;

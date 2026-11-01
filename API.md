@@ -192,3 +192,29 @@ The worker handles `ingestion.plan.requested` by creating/reusing bounded queued
 List limits are 1-100 (default 50); signed cursors bind route, filters, limit and admin identity. Run assets/quality issue lists are capped at 100 with total/truncation metadata. Source availability exposes at most 100 gaps with a total/truncation flag; freshness uses all relevant unresolved gaps. Availability separates successful empty transport from actual source observations, constrains acquisitions to the exact area/fetched window/stream, and never fabricates an Aqua acquisition from a Terra timestamp. The aggregate fetch checkpoint is conservative (minimum, or null if a subscription lacks one).
 
 Retired feed gaps are presented as `accepted_unavailable` without retries; reads do not rewrite the ledger. Observation coverage stays unknown and no gap-free result is presented as proof of complete ingestion. Raw credentials, provider URLs, headers and free-form sensitive evidence are not returned. See [PHASE_5.md](docs/PHASE_5.md) for environment setup, examples and the dedicated fixture workflow.
+
+## Phase 6 — prepared context and factual explanations
+
+These routes use the saved analysis and pinned releases. Context reads never download data or train models. All seven operations are tagged **Phase 6** in Swagger and return `Cache-Control: private, no-store`.
+
+| Method | Path                                    | Parameters/body                                                                                                                 |
+| ------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/analyses/{id}/coverage`        | Optional `start_date`, `end_date_exclusive`, `cell_id`                                                                          |
+| GET    | `/api/v1/analyses/{id}/cells/{cell_id}` | Optional dates, `limit`, `cursor`                                                                                               |
+| GET    | `/api/v1/analyses/{id}/comparison`      | `view=native_counts\|common_response\|withheld_reference`, `resolution=week\|month`                                             |
+| GET    | `/api/v1/analyses/{id}/weather`         | `context=historical\|recent\|both`, `resolution=hour\|day\|period`, comma-separated `variables`, pagination                     |
+| GET    | `/api/v1/analyses/{id}/reports`         | `relation=candidate\|consistent\|conflicting\|unresolved\|rejected`, `review_status=unreviewed\|reviewed\|rejected`, pagination |
+| POST   | `/api/v1/analyses/{id}/explanations`    | JSON `{"language":"fr","question":""}`; optional `Idempotency-Key`                                                              |
+| GET    | `/api/v1/explanations/{id}`             | No query parameters                                                                                                             |
+
+Pagination defaults to 50, maximum 100. Cursors bind the analysis, component versions, filters, limit and actor. Date filters only narrow the saved selection. Invalid requests return `422`, absent analyses/cells/explanations `404`, and inconsistent pinned versions `409`.
+
+Coverage returns its fraction/denominator and observed/estimated/missing cell-days only for consistent prepared scientific inputs. Point-only analyses return `status=unsupported`, `observation_coverage_status=unknown` and null numeric coverage. Unique cloud/invalid/unobserved land unions and cell-specific coverage aggregates are not prepared by this implementation. Cell reads expose approved release-local observations, QA, asset IDs/hashes, selected days and approved-model predictions. Scientific comparisons require an explicitly pinned, validated, precomputed experiment; native comparisons remain separate per-source counts, with no harmonization or unique incident claim.
+
+Weather returns `series[]`, exact `context_release_ids`, provenance and native spatial support. Hourly values retain native locations; day/period summaries must be precomputed and bound to the exact input manifest. Missing values remain null. Reports return exact release members linked to this analysis, with claim/document review, matching relation, independence and geographic precision preserved. Public article URLs are sanitized; private storage references are omitted.
+
+Missing context returns `200` with `status=missing`. Missing scientific prerequisites return `200` with `status=unsupported`; incoherent prepared membership returns `status=unavailable`, rather than invented numbers. A prepared result does not prove complete ingestion.
+
+Explanation creation returns cached `200` or queued `202` with `explanation_id`, `job_id`, status and links. PostgreSQL freezes native count facts, citations and limitations atomically with the job and outbox event. The worker validates the evidence and renders a deterministic `template_fallback`, without any external language-model call. Freeform questions are recorded but not answered; weather/report/scientific evidence is not yet included in this native factual template. Pending/failed/rejected outputs are null; GET verifies a completed output against the frozen evidence before returning it. Retries reuse the original idempotency key; a changed request under the same key returns `409`.
+
+Explanation ownership follows the existing identity resolver; anonymous requests share `unauthenticated` until a trusted identity provider is added. Full producer contracts, migration and isolated fixture instructions are in [PHASE_6.md](docs/PHASE_6.md).

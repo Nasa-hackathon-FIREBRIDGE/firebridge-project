@@ -129,7 +129,7 @@ export class OutboxDispatcher {
         // Enqueue to BullMQ with sanitized dedupe_key as BullMQ jobId for idempotency
         await this.queue.add(event.event_type, event.payload, {
           jobId: bullJobId,
-          ...(event.event_type === 'ingestion.plan.requested'
+          ...(['ingestion.plan.requested', 'explanation.requested'].includes(event.event_type)
             ? { attempts: 3, backoff: { type: 'exponential', delay: 1000 } }
             : {}),
           removeOnComplete: true,

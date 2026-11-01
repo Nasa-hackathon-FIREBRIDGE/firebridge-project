@@ -347,69 +347,70 @@ export class NativeResultsService {
     });
   }
   summary(id: string) {
-    return this.repository.read(async (db) => {
-      const s = await this.selection(db, id, {});
-      const rows = s.ready && !s.unsupported.length ? await db.counts(s.filter) : [];
-      const counts = new Map<string, bigint>();
-      for (const row of rows)
-        counts.set(row.source_id, (counts.get(row.source_id) ?? 0n) + BigInt(row.count));
-      const supported = s.ready && !s.unsupported.length;
-      return {
-        ...this.base(s.a, s.components),
-        status: s.unsupported.length
-          ? 'unsupported'
-          : s.inventory === 'complete'
-            ? 'ready'
-            : s.ready
-              ? 'partial'
-              : 'unavailable',
-        selected_window: { start: s.filter.start, end_exclusive: s.filter.end },
-        inventory_status: s.inventory,
-        native_detections_by_source: s.sources.map((source) => {
-          const observed = counts.get(source.source_id) ?? 0n,
-            complete = s.complete(source.source_id);
-          return {
-            ...source,
-            count: supported && (complete || observed > 0n) ? observed.toString() : null,
-            observed_count: supported ? observed.toString() : null,
-            unit: 'detections',
-            inventory_status: complete ? 'complete' : supported ? 'partial' : 'unavailable',
-            count_status: complete
-              ? 'complete'
-              : supported && observed > 0n
-                ? 'lower_bound'
-                : 'unknown'
-          };
-        }),
-        comparable_response: {
-          value: null,
-          unit: null,
-          status: 'unsupported',
-          reasons: ['NATIVE_COUNTS_ONLY']
-        },
-        coverage: {
-          fraction: null,
-          denominator: null,
-          status: 'unknown',
-          reasons: ['NOT_COMPUTED_FOR_NATIVE_COUNTS']
-        },
-        observed_vs_estimated_share: null,
-        weather_status:
-          s.components.find((c) => c.component === 'weather_historical')?.status ?? 'missing',
-        report_counts_by_review_status: null,
-        limitations: [
-          ...s.unsupported,
-          ...(!s.ready
-            ? ['SERVING_NOT_READY']
-            : s.inventory !== 'complete'
-              ? ['INVENTORY_NOT_VERIFIED_COMPLETE']
-              : []),
-          'DETECTIONS_ARE_NOT_UNIQUE_INCIDENTS',
-          'CONTEXT_COUNTS_NOT_PREPARED'
-        ],
-        fact_ids: s.sources.map((source) => `analysis:${id}:native-count:${source.source_id}`)
-      };
-    });
+    return this.repository.read((db) => this.summaryFromReader(db, id));
+  }
+  async summaryFromReader(db: NativeResultsReader, id: string) {
+    const s = await this.selection(db, id, {});
+    const rows = s.ready && !s.unsupported.length ? await db.counts(s.filter) : [];
+    const counts = new Map<string, bigint>();
+    for (const row of rows)
+      counts.set(row.source_id, (counts.get(row.source_id) ?? 0n) + BigInt(row.count));
+    const supported = s.ready && !s.unsupported.length;
+    return {
+      ...this.base(s.a, s.components),
+      status: s.unsupported.length
+        ? 'unsupported'
+        : s.inventory === 'complete'
+          ? 'ready'
+          : s.ready
+            ? 'partial'
+            : 'unavailable',
+      selected_window: { start: s.filter.start, end_exclusive: s.filter.end },
+      inventory_status: s.inventory,
+      native_detections_by_source: s.sources.map((source) => {
+        const observed = counts.get(source.source_id) ?? 0n,
+          complete = s.complete(source.source_id);
+        return {
+          ...source,
+          count: supported && (complete || observed > 0n) ? observed.toString() : null,
+          observed_count: supported ? observed.toString() : null,
+          unit: 'detections',
+          inventory_status: complete ? 'complete' : supported ? 'partial' : 'unavailable',
+          count_status: complete
+            ? 'complete'
+            : supported && observed > 0n
+              ? 'lower_bound'
+              : 'unknown'
+        };
+      }),
+      comparable_response: {
+        value: null,
+        unit: null,
+        status: 'unsupported',
+        reasons: ['NATIVE_COUNTS_ONLY']
+      },
+      coverage: {
+        fraction: null,
+        denominator: null,
+        status: 'unknown',
+        reasons: ['NOT_COMPUTED_FOR_NATIVE_COUNTS']
+      },
+      observed_vs_estimated_share: null,
+      weather_status:
+        s.components.find((c) => c.component === 'weather_historical')?.status ?? 'missing',
+      report_counts_by_review_status: null,
+      limitations: [
+        ...s.unsupported,
+        ...(!s.ready
+          ? ['SERVING_NOT_READY']
+          : s.inventory !== 'complete'
+            ? ['INVENTORY_NOT_VERIFIED_COMPLETE']
+            : []),
+        'DETECTIONS_ARE_NOT_UNIQUE_INCIDENTS',
+        'CONTEXT_COUNTS_NOT_PREPARED'
+      ],
+      fact_ids: s.sources.map((source) => `analysis:${id}:native-count:${source.source_id}`)
+    };
   }
   calendar(id: string, query: NativeQuery) {
     return this.repository.read(async (db) => {
