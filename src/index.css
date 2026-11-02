@@ -1,0 +1,38 @@
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+:root {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  color: #e4e9ef;
+  background: #060c19;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  --page: #060c19;
+  --sidebar: #08111f;
+  --panel: #0c1627;
+  --panel-soft: #101c31;
+  --line: #1b2a44;
+  --line-soft: #15223a;
+  --text: #e3ebf7;
+  --muted: #8a9bb5;
+  --dim: #64779a;
+  --teal: #38bdf8;
+  --teal-deep: #1d7fb8;
+  --accent: #38bdf8;
+  --orange: #f08a4b;
+  --blue: #5b9cf5;
+  --mono: Consolas, 'Courier New', monospace;
+}
+
+* { box-sizing: border-box; }
+html { min-width: 360px; min-height: 100%; background: var(--page); }
+body { margin: 0; min-width: 360px; min-height: 100vh; background: var(--page); }
+button, input { font: inherit; }
+button { color: inherit; }
+a { color: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
+::selection { color: #fff; background: #1d6fa5; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
