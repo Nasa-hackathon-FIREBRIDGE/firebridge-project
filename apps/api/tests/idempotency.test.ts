@@ -1,4 +1,4 @@
-import type { FastifyRequest } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 import { testServer } from './helpers/http.js';
 import request from './helpers/http.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -41,6 +41,40 @@ describe('Idempotency-Key Middleware', () => {
 
     return { app, handlerMock };
   }
+
+  it('persists replay after a normal real HTTP connection closes before an async root onResponse completes', async () => {
+    const app = testServer();
+    app.addHook('onResponse', async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
+    const handler = vi.fn(async (_req: FastifyRequest, reply: FastifyReply) =>
+      reply.code(202).send({ job_id: 'owned-test-job' })
+    );
+    app.post(
+      '/network-replay',
+      { ...idempotency({ required: true, store, getScope: () => 'network-test' }) },
+      handler
+    );
+    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const request = {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        connection: 'close',
+        'idempotency-key': 'normal-close'
+      },
+      body: JSON.stringify({ format: 'csv' })
+    };
+    const first = await fetch(`${address}/network-replay`, request);
+    expect(first.status).toBe(202);
+    const payload = await first.text();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const second = await fetch(`${address}/network-replay`, request);
+    expect(second.status).toBe(202);
+    expect(await second.text()).toBe(payload);
+    expect(second.headers.get('idempotent-replayed')).toBe('true');
+    expect(handler).toHaveBeenCalledOnce();
+  });
 
   describe('Key format validation', () => {
     it('accepts valid string keys within length bounds', () => {

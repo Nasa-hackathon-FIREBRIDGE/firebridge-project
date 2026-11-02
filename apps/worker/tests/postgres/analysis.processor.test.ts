@@ -170,7 +170,7 @@ describe('AnalysisJobProcessor', () => {
       SELECT status, progress, completed_at FROM firebridge.api_jobs WHERE id = ${jobId}::uuid;
     `;
     expect(jobRows[0]?.status).toBe('partial');
-    expect(jobRows[0]?.progress).toEqual({ stage: 'completed' });
+    expect(jobRows[0]?.progress).toMatchObject({ stage: 'completed',percent:100 });
     expect(jobRows[0]?.completed_at).not.toBeNull();
   });
 

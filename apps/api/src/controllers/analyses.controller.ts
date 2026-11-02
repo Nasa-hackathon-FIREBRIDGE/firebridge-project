@@ -8,6 +8,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { analysesService } from '../services/analyses.service.js';
 import { ErrorCodes } from '../types/api.js';
+import { parseResultInput, resultIdSchema } from '../validators/results.validator.js';
 import {
   analysisCreateSchema,
   analysisListQuerySchema
@@ -18,6 +19,7 @@ export const analysesController = {
    * GET /api/v1/analyses — List analyses with cursor pagination
    */
   async list(req: FastifyRequest, reply: FastifyReply) {
+    reply.header('Cache-Control', 'private, no-store');
     const parsed = analysisListQuerySchema.safeParse(req.query);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -57,6 +59,8 @@ export const analysesController = {
    * POST /api/v1/analyses — Endpoint 8
    */
   async create(req: FastifyRequest, reply: FastifyReply) {
+    const requestedBy = 'anonymous';
+    reply.header('Cache-Control', 'private, no-store');
     const parsed = analysisCreateSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -68,8 +72,6 @@ export const analysesController = {
     }
 
     const idempotencyHeader = req.headers['idempotency-key'] as string | undefined;
-    const requestedBy =
-      (req as unknown as { user?: { id?: string } }).user?.id ?? 'anonymous';
 
     const { detail, created } = await analysesService.createAnalysis(
       parsed.data,
@@ -103,19 +105,9 @@ export const analysesController = {
    * GET /api/v1/analyses/:id — Endpoint 9
    */
   async getById(req: FastifyRequest, reply: FastifyReply) {
-    const params = req.params as Record<string, string | undefined>;
-    const analysisId = params.id;
-
-    if (!analysisId) {
-      return reply.code(400).send({
-        status: 'error',
-        code: ErrorCodes.BAD_REQUEST,
-        message: 'Analysis ID is required.',
-        data: null
-      });
-    }
-
+    const { id: analysisId } = parseResultInput(resultIdSchema, req.params);
     const detail = await analysesService.getAnalysisById(analysisId);
+    reply.header('Cache-Control', 'private, no-store');
 
     return reply.code(200).send({
       status: 'ok',

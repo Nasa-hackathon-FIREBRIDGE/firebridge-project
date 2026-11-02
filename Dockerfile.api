@@ -15,4 +15,7 @@ RUN DATABASE_URL="postgresql://postgres:postgres@localhost:5432/firebridge?schem
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start", "--workspace", "@firebridge/api"]
+RUN mkdir -p /app/.data/exports && chown node:node /app/.data/exports
+USER node
+
+CMD ["node", "apps/api/dist/server.js"]

@@ -128,7 +128,7 @@ describe('Validated explanation worker on PostgreSQL and Redis', () => {
     const queue = new Queue('phase6-test-' + randomUUID(), {
       connection: parseRedisConnection(process.env.REDIS_URL)
     });
-    const dispatcher = new OutboxDispatcher({ queue });
+    const dispatcher = new OutboxDispatcher({ queue, aggregateIds: [created.data.explanation_id] });
     try {
       expect(await dispatcher.dispatchBatch()).toBe(1);
       const event = (

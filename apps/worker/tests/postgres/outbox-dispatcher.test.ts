@@ -7,8 +7,9 @@ import { OutboxDispatcher } from '../../src/services/outbox-dispatcher.js';
 describe('OutboxDispatcher', () => {
   const testQueueName = `test-queue-${randomUUID()}`;
   const testQueue = createFirebridgeQueue(testQueueName);
-  const dispatcher = new OutboxDispatcher({
+  let dispatcher = new OutboxDispatcher({
     queue: testQueue,
+    aggregateIds: [randomUUID()],
     batchSize: 5,
     leaseSeconds: 15
   });
@@ -21,8 +22,9 @@ describe('OutboxDispatcher', () => {
 
   it('claims pending outbox events using FOR UPDATE SKIP LOCKED and delivers them to queue', async () => {
     const eventId = randomUUID();
+    dispatcher = new OutboxDispatcher({ queue: testQueue, batchSize: 5, leaseSeconds: 15, aggregateIds: [eventId] });
     const dedupeKey = `test:outbox:${eventId}`;
-    const payload = { test: true, timestamp: Date.now() };
+    const payload = { job_id: eventId };
 
     // Insert pending outbox event
     await prisma.$executeRaw`
@@ -30,7 +32,7 @@ describe('OutboxDispatcher', () => {
         id, event_type, aggregate_id, dedupe_key, payload, status, attempts, available_at
       ) VALUES (
         ${eventId}::uuid,
-        'test.event',
+        'export.requested',
         ${eventId},
         ${dedupeKey},
         ${JSON.stringify(payload)}::jsonb,
@@ -63,7 +65,7 @@ describe('OutboxDispatcher', () => {
     const job = await testQueue.getJob(sanitizedJobId);
     expect(job).not.toBeNull();
     expect(job?.id).toBe(sanitizedJobId);
-    expect(job?.name).toBe('test.event');
+    expect(job?.name).toBe('export.requested');
   });
 
   it('reschedules with exponential backoff if queue delivery throws an error', async () => {
@@ -76,10 +78,10 @@ describe('OutboxDispatcher', () => {
         id, event_type, aggregate_id, dedupe_key, payload, status, attempts, available_at
       ) VALUES (
         ${eventId}::uuid,
-        'test.failing.event',
+        'export.requested',
         ${eventId},
         ${dedupeKey},
-        '{}'::jsonb,
+        ${JSON.stringify({ job_id: eventId })}::jsonb,
         'pending',
         0,
         now()
@@ -94,6 +96,7 @@ describe('OutboxDispatcher', () => {
     } as unknown as typeof testQueue;
 
     const failingDispatcher = new OutboxDispatcher({
+      aggregateIds: [eventId],
       queue: failingQueue,
       batchSize: 10,
       leaseSeconds: 15

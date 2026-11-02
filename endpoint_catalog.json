@@ -21,51 +21,86 @@
     "admin"
   ],
   "endpoints": {
-    "health": ["GET /health/live", "GET /health/ready"],
-    "catalog": ["GET /catalog"],
-    "sources": ["GET /sources", "POST /sources"],
-    "releases": ["GET /releases/:release_id"],
-    "updates": ["GET /updates"],
-    "areas": ["GET /areas", "POST /areas", "GET /areas/:area_id"],
+    "health": [
+      "GET /health/live",
+      "GET /health/ready"
+    ],
+    "catalog": [
+      "GET /catalog",
+      "GET /catalog/:id"
+    ],
+    "sources": [
+      "GET /sources",
+      "POST /sources"
+    ],
+    "releases": [
+      "GET /releases",
+      "GET /releases/:id",
+      "GET /releases/:release_id"
+    ],
+    "updates": [
+      "GET /updates",
+      "POST /updates"
+    ],
+    "areas": [
+      "GET /areas",
+      "POST /areas",
+      "GET /areas/:areaId",
+      "GET /areas/:area_id"
+    ],
     "analyses": [
       "GET /analyses",
       "POST /analyses",
       "GET /analyses/:id",
+      "GET /analyses/:id/tiles/:layer/:z/:x/:y.mvt",
+      "POST /analyses/:id/exports",
       "GET /analyses/:id/detections",
       "GET /analyses/:id/summary",
       "GET /analyses/:id/calendar",
       "GET /analyses/:id/provenance"
     ],
-    "detections": ["GET /detections", "POST /detections"],
-    "tiles": ["GET /tiles", "GET /tiles/:tileId"],
-    "cells": ["GET /cells", "GET /cells/:cellId"],
-    "weather": ["GET /weather", "GET /weather/:locationId"],
-    "reports": ["GET /reports", "POST /reports"],
-    "provenance": ["GET /provenance", "GET /provenance/:id"],
-    "explanations": ["GET /explanations", "POST /explanations"],
-    "exports": ["GET /exports", "POST /exports"],
-    "jobs": ["GET /jobs", "GET /jobs/:id"],
-    "admin": ["GET /admin/status", "POST /admin/refresh"]
+    "detections": [
+      "GET /detections",
+      "POST /detections"
+    ],
+    "tiles": [
+      "GET /tiles",
+      "GET /tiles/:tileId"
+    ],
+    "cells": [
+      "GET /cells",
+      "GET /cells/:cellId"
+    ],
+    "weather": [
+      "GET /weather",
+      "GET /weather/:locationId"
+    ],
+    "reports": [
+      "GET /reports",
+      "POST /reports"
+    ],
+    "provenance": [
+      "GET /provenance",
+      "GET /provenance/:id"
+    ],
+    "explanations": [
+      "GET /explanations",
+      "POST /explanations"
+    ],
+    "exports": [
+      "GET /exports",
+      "POST /exports"
+    ],
+    "jobs": [
+      "GET /jobs",
+      "GET /jobs/:jobId",
+      "GET /jobs/:id/download",
+      "GET /jobs/:id"
+    ],
+    "admin": [
+      "GET /admin/status",
+      "POST /admin/refresh"
+    ]
   },
-  "implementationStatus": "phase-1-2-3-implemented",
-  "implementedEndpoints": [
-    "GET /health/live",
-    "GET /health/ready",
-    "GET /catalog",
-    "GET /releases/:release_id",
-    "GET /updates",
-    "GET /sources",
-    "POST /sources",
-    "GET /areas",
-    "POST /areas",
-    "GET /areas/:area_id",
-    "GET /analyses",
-    "POST /analyses",
-    "GET /analyses/:id",
-    "GET /jobs/:id",
-    "GET /analyses/:id/detections",
-    "GET /analyses/:id/summary",
-    "GET /analyses/:id/calendar",
-    "GET /analyses/:id/provenance"
-  ]
+  "implementationStatus": "partially_implemented_see_docs_API_AUDIT"
 }

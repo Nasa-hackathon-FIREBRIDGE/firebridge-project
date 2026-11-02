@@ -5,6 +5,7 @@ export default defineConfig({
     exclude: ['tests/postgres/**', '**/*.js', 'dist/**', 'node_modules/**'],
     env: {
       NODE_ENV: 'test',
+      CORS_ORIGINS: 'http://localhost:5173',
       LOG_LEVEL: 'silent',
       REDIS_URL: 'redis://localhost:6379',
       PAGINATION_SECRET: 'test-pagination-secret-at-least-32-characters',

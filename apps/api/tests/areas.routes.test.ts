@@ -60,7 +60,7 @@ const VALID_BODY = {
 /** A representative AreaRecord as returned by the service. */
 const AREA_RECORD = {
   area: {
-    id: 'test-area-uuid-1',
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     name: 'Test AOI',
     version: 'v1',
     geometry_sha256: 'abc123',
@@ -93,7 +93,7 @@ describe('POST /api/v1/areas — valid inputs', () => {
       status: 'ok',
       message: 'Area created.',
       data: {
-        id: 'test-area-uuid-1',
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
         name: 'Test AOI',
         version: 'v1',
         geometry_sha256: 'abc123',
@@ -143,7 +143,7 @@ describe('POST /api/v1/areas — valid inputs', () => {
     expect(response.json()).toMatchObject({
       status: 'ok',
       message: 'Equivalent area already exists.',
-      data: { id: 'test-area-uuid-1' }
+      data: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }
     });
   });
 
@@ -462,7 +462,7 @@ describe('POST /api/v1/areas — persistence and reliability', () => {
     });
 
     expect(response.statusCode).toBe(201);
-    expect(response.json().data.id).toBe('test-area-uuid-1');
+    expect(response.json().data.id).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
     expect(response.json().data.created_at).toBeDefined();
   });
 
@@ -478,7 +478,7 @@ describe('POST /api/v1/areas — persistence and reliability', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().message).toBe('Equivalent area already exists.');
-    expect(response.json().data.id).toBe('test-area-uuid-1');
+    expect(response.json().data.id).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
   });
 
   it('returns HTTP 503 and a sanitized error when the database is unavailable', async () => {
@@ -547,7 +547,7 @@ describe('POST /api/v1/areas — persistence and reliability', () => {
 
 describe('GET /api/v1/areas/:area_id', () => {
   const detailWithoutGrid = {
-    id: 'test-area-uuid-1',
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     name: 'Test AOI',
     version: 'v1',
     geometry_sha256: 'abc123',
@@ -583,14 +583,14 @@ describe('GET /api/v1/areas/:area_id', () => {
     const app = await buildApp();
     const response = await app.inject({
       method: 'GET',
-      url: '/api/v1/areas/test-area-uuid-1'
+      url: '/api/v1/areas/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     });
 
     expect(response.statusCode).toBe(200);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.message).toBe('Area retrieved.');
-    expect(json.data.id).toBe('test-area-uuid-1');
+    expect(json.data.id).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
     expect(json.data.surface_km2).toBe(8985.39);
     expect(json.data.coverage.weights_status).toBe('not_prepared');
     expect(json.data.coverage.cells_count).toBe(0);
@@ -603,7 +603,7 @@ describe('GET /api/v1/areas/:area_id', () => {
     const app = await buildApp();
     const response = await app.inject({
       method: 'GET',
-      url: '/api/v1/areas/test-area-uuid-1'
+      url: '/api/v1/areas/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     });
 
     expect(response.statusCode).toBe(200);

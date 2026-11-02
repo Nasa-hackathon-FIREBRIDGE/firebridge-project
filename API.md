@@ -193,6 +193,16 @@ List limits are 1-100 (default 50); signed cursors bind route, filters, limit an
 
 Retired feed gaps are presented as `accepted_unavailable` without retries; reads do not rewrite the ledger. Observation coverage stays unknown and no gap-free result is presented as proof of complete ingestion. Raw credentials, provider URLs, headers and free-form sensitive evidence are not returned. See [PHASE_5.md](docs/PHASE_5.md) for environment setup, examples and the dedicated fixture workflow.
 
+## Phase 4 — map tiles and exports
+
+| Method | Path                                                     | Result                                                                                              |
+| ------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/analyses/{id}/tiles/detections/{z}/{x}/{y}.mvt` | Binary MVT with bounded point aggregation at all zoom levels                                        |
+| POST   | `/api/v1/analyses/{id}/exports`                          | `202` with job ID; JSON `{"format":"csv"}`, also `geojson` or `parquet`; `Idempotency-Key` required |
+| GET    | `/api/v1/jobs/{id}/download`                             | Stream the completed, unexpired export; `409` pending, `410` expired                                |
+
+Optional export filters are `source_id` and `day_night`; source filters must narrow the frozen selection. All paths honor the saved satellite release, sources, mode, UTC interval and exact AOI. Prepared partitions must all be valid, complete and consistent with SQL membership. A satellite component mismatch or incomplete serving slice returns `409`, including before a tile cache hit. Unsupported modes/quality policies are refused. Tile and export HTTP responses are private/no-store; Redis stores version-bound tiles internally for the configured TTL. Worker exports use a consistent database snapshot, bounded streaming and shared local storage. The current API has no identity provider; requester fields do not establish authenticated ownership. See [integration validation](docs/PHASE_4_REVIEW.md).
+
 ## Phase 6 — prepared context and factual explanations
 
 These routes use the saved analysis and pinned releases. Context reads never download data or train models. All seven operations are tagged **Phase 6** in Swagger and return `Cache-Control: private, no-store`.

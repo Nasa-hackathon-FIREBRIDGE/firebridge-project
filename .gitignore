@@ -14,3 +14,5 @@ npm-debug.log*
 # Personal learning guides (kept locally, not published).
 /docs/COMPRENDRE_FIREBRIDGE.md
 /docs/PHASE_1_PAS_A_PAS.md
+
+.data/

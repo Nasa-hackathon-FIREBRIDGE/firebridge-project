@@ -1,4 +1,9 @@
 import { createHash } from 'node:crypto';
+import {
+  nativeProcessingLevels,
+  relevantNativePartitions,
+  unsupportedNativePolicies
+} from '@firebridge/contracts';
 import { ApiError } from '../utils/response.js';
 import { CursorCodec } from '../utils/cursor.js';
 import {
@@ -205,32 +210,17 @@ export class NativeResultsService {
       )
         return invalid('bbox must be west,south,east,north in WGS84, with west < east.');
     }
-    const parts = all.filter((p) => {
-      const sources = sourceIds(p),
-        bounds = interval(p);
-      return (
-        (!sources.length || sources.some((s) => selected.includes(s))) &&
-        (!bounds || (bounds[0] < Date.parse(end) && bounds[1] > Date.parse(start)))
-      );
-    });
+    const parts = relevantNativePartitions(all, selected, Date.parse(start), Date.parse(end));
     const sources = await db.sources(selected);
     if (sources.length !== selected.length)
       throw new ApiError(503, 'INVALID_SNAPSHOT', 'A selected source is missing.');
     const mode = spec.data_mode;
-    const levels = mode === 'standard_only' ? ['standard'] : mode === 'nrt_only' ? ['nrt'] : [];
+    const levels = nativeProcessingLevels(spec);
     const unsupported = [];
     if (a.metric_key !== 'native_detections_v1') unsupported.push('NATIVE_METRIC_REQUIRED');
     if (a.time_basis.toUpperCase() !== 'UTC') unsupported.push('TIME_BASIS_NOT_SUPPORTED');
     if (!levels.length) unsupported.push('DATA_MODE_NOT_SUPPORTED');
-    if (
-      Object.entries(spec).some(
-        ([key, value]) =>
-          /confidence|quality|^qa_policy$|^filters$/.test(key) &&
-          value != null &&
-          (typeof value !== 'object' || Object.keys(value).length > 0)
-      )
-    )
-      unsupported.push('QUALITY_POLICY_NOT_SUPPORTED');
+    if (unsupportedNativePolicies(spec)) unsupported.push('QUALITY_POLICY_NOT_SUPPORTED');
     const serving = parts.every(
       (p) =>
         p.validation_status === 'validated' && p.serving_complete && p.row_count === p.stored_rows

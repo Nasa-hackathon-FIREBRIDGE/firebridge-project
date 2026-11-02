@@ -5,24 +5,26 @@
   "type": "module",
   "main": "dist/worker.js",
   "scripts": {
-    "predev": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database",
+    "predev": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
     "dev": "tsx watch src/worker.ts",
-    "prebuild": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database",
+    "prebuild": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/worker.js",
-    "pretest": "npm run build --workspace @firebridge/contracts",
     "test": "vitest run",
-    "pretest:postgres": "npm run build --workspace @firebridge/contracts",
-    "test:postgres": "vitest run --config vitest.postgres.config.ts"
+    "test:postgres": "vitest run --config vitest.postgres.config.ts",
+    "pretest": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
+    "pretest:postgres": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results"
   },
   "dependencies": {
-    "@firebridge/contracts": "^1.0.0",
     "@firebridge/database": "^1.0.0",
+    "@firebridge/results": "^1.0.0",
     "bullmq": "^6.4.2",
     "dotenv": "^16.4.7",
     "ioredis": "^5.6.0",
+    "parquetjs-lite": "0.8.7",
     "pino": "^10.4.0",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "@firebridge/contracts": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

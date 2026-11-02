@@ -1,4 +1,7 @@
 import { defineConfig } from 'vitest/config';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const databaseUrl = process.env.PHASE1_TEST_DATABASE_URL;
 const redisUrl = process.env.PHASE1_TEST_REDIS_URL;
@@ -19,6 +22,8 @@ export default defineConfig({
     testTimeout: 10000,
     env: {
       NODE_ENV: 'test',
+      CORS_ORIGINS: 'http://localhost:5173',
+      EXPORT_STORAGE_DIR: mkdtempSync(join(tmpdir(), 'firebridge-merged-results-test-')),
       LOG_LEVEL: 'silent',
       DATABASE_URL: databaseUrl,
       REDIS_URL: redisUrl,

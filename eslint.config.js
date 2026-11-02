@@ -15,6 +15,7 @@ module.exports = [
     ]
   },
   js.configs.recommended,
+  { languageOptions: { globals: globals.node } },
   {
     files: ['**/*.js'],
     languageOptions: { globals: globals.node }

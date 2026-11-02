@@ -1,4 +1,5 @@
 import type { SnapshotDatabase, SqlReader } from './database.js';
+import { nativeAreaSql } from '@firebridge/contracts';
 
 export type NativeAnalysis = {
   id: string;
@@ -119,10 +120,7 @@ export class NativeResultsReader {
           WHERE pd.detection_id=d.id AND pd.partition_id=ANY($1::uuid[]))
         AND d.source_id=ANY($2::text[]) AND d.processing_level=ANY($3::text[])
         AND d.acquired_at >= $5::timestamptz AND d.acquired_at < $6::timestamptz
-        AND ST_Covers(CASE WHEN ST_XMax(area.geom)-ST_XMin(area.geom)>180
-          THEN (SELECT ST_Collect(CASE WHEN ST_XMax(part.geom)-ST_XMin(part.geom)>180
-            THEN ST_WrapX(ST_ShiftLongitude(part.geom),180,-360) ELSE part.geom END)
-            FROM ST_Dump(area.geom) part) ELSE area.geom END,d.geom)
+        AND ST_Covers(${nativeAreaSql('area')},d.geom)
         AND ($7::double precision[] IS NULL OR ST_Covers(
           ST_MakeEnvelope(($7::double precision[])[1],($7::double precision[])[2],
             ($7::double precision[])[3],($7::double precision[])[4],4326),d.geom))`

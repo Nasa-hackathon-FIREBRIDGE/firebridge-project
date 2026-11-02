@@ -13,4 +13,7 @@ COPY . .
 
 RUN DATABASE_URL="postgresql://postgres:postgres@localhost:5432/firebridge?schema=firebridge" npm run build --workspace @firebridge/worker
 
-CMD ["npm", "run", "start", "--workspace", "@firebridge/worker"]
+RUN mkdir -p /app/.data/exports && chown node:node /app/.data/exports
+USER node
+
+CMD ["node", "apps/worker/dist/worker.js"]

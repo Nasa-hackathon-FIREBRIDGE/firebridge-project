@@ -1,25 +1,23 @@
-/**
- * Transactional Outbox Dispatcher
- *
- * Implements reliable, concurrency-safe dispatch of events from `firebridge.outbox_events`
- * to BullMQ queue (`firebridge-default`) using PostgreSQL `FOR UPDATE SKIP LOCKED`.
- */
-
 import { prisma } from '@firebridge/database';
+import { Prisma } from '@prisma/client';
 import type { Queue } from 'bullmq';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
+import {
+  bullJobId,
+  EXPORT_QUEUE,
+  FIREBRIDGE_QUEUE,
+  retryDelayMs
+} from '../queues/firebridge-queue.js';
+import { parseQueuePayload } from '../validators/queue-payload.js';
 
 export interface OutboxRecord {
   id: string;
   event_type: string;
   aggregate_id: string;
   dedupe_key: string;
-  payload: Record<string, unknown>;
-  status: 'pending' | 'dispatching' | 'delivered';
+  payload: unknown;
   attempts: number;
-  available_at: Date;
-  lease_expires_at: Date | null;
 }
 
 export interface OutboxDispatcherOptions {
@@ -27,173 +25,167 @@ export interface OutboxDispatcherOptions {
   pollIntervalMs?: number;
   leaseSeconds?: number;
   queue: Queue;
+  exportQueue?: Queue;
+  /** Limit integration tests to their own records. */
+  aggregateIds?: readonly string[];
 }
 
 export class OutboxDispatcher {
-  private queue: Queue;
-  private batchSize: number;
-  private pollIntervalMs: number;
-  private leaseSeconds: number;
-  private isRunning: boolean = false;
-  private pollTimeout: ReturnType<typeof setTimeout> | null = null;
-  private currentBatchPromise: Promise<number> | null = null;
+  private readonly exportQueue: Queue;
+  private readonly batchSize: number;
+  private readonly pollIntervalMs: number;
+  private readonly leaseSeconds: number;
+  private isRunning = false;
+  private pollTimeout?: ReturnType<typeof setTimeout>;
+  private currentBatchPromise?: Promise<number>;
+  readonly metrics = {
+    delivered: 0,
+    retries: 0,
+    exhausted: 0,
+    leaseLost: 0,
+    databaseAvailable: false
+  };
 
-  constructor(options: OutboxDispatcherOptions) {
-    this.queue = options.queue;
+  constructor(private readonly options: OutboxDispatcherOptions) {
+    if (
+      !options.aggregateIds &&
+      ((options.queue.name && options.queue.name !== FIREBRIDGE_QUEUE) ||
+        (options.exportQueue?.name && options.exportQueue.name !== EXPORT_QUEUE))
+    ) {
+      throw new Error('Nonstandard dispatch queues require an explicit aggregate scope.');
+    }
+    if (
+      options.aggregateIds &&
+      (!options.aggregateIds.length || options.aggregateIds.length > 100)
+    ) {
+      throw new Error('Invalid dispatcher aggregate scope.');
+    }
+    this.exportQueue = options.exportQueue ?? options.queue;
     this.batchSize = options.batchSize ?? env.OUTBOX_BATCH_SIZE;
     this.pollIntervalMs = options.pollIntervalMs ?? env.OUTBOX_POLL_INTERVAL_MS;
     this.leaseSeconds = options.leaseSeconds ?? env.OUTBOX_LEASE_SECONDS;
   }
 
-  /**
-   * Starts the polling background dispatcher loop.
-   */
   start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
-    logger.info(
-      { batchSize: this.batchSize, pollIntervalMs: this.pollIntervalMs },
-      'Outbox dispatcher started'
-    );
     this.scheduleNextPoll(0);
   }
 
-  /**
-   * Stops the dispatcher and waits for the current batch to conclude.
-   */
   async stop(): Promise<void> {
     this.isRunning = false;
-    if (this.pollTimeout) {
-      clearTimeout(this.pollTimeout);
-      this.pollTimeout = null;
-    }
-    if (this.currentBatchPromise) {
-      await this.currentBatchPromise;
-    }
-    logger.info('Outbox dispatcher stopped');
+    clearTimeout(this.pollTimeout);
+    await this.currentBatchPromise;
   }
 
-  /**
-   * Claims and dispatches a single batch of due outbox events.
-   * Concurrency-safe via PostgreSQL FOR UPDATE SKIP LOCKED.
-   * Returns the count of events dispatched in this batch.
-   */
-  async dispatchBatch(): Promise<number> {
-    // 1. Claim up to batchSize due events atomically
-    const claimedEvents = await prisma.$queryRaw<OutboxRecord[]>`
-      WITH due_events AS (
-        SELECT id
-        FROM firebridge.outbox_events
-        WHERE (
-          (status = 'pending' AND available_at <= now())
-          OR
-          (status = 'dispatching' AND lease_expires_at IS NOT NULL AND lease_expires_at <= now())
+  dispatchBatch(): Promise<number> {
+    if (this.currentBatchPromise) return this.currentBatchPromise;
+    this.currentBatchPromise = this.runBatch().finally(() => {
+      this.currentBatchPromise = undefined;
+    });
+    return this.currentBatchPromise;
+  }
+
+  private async runBatch(): Promise<number> {
+    let delivered = 0;
+    for (let i = 0; i < this.batchSize; i++) {
+      // Claim immediately before enqueue so a serial batch cannot consume later leases.
+      const scope = this.options.aggregateIds
+        ? Prisma.sql`AND aggregate_id IN (${Prisma.join(this.options.aggregateIds)})`
+        : Prisma.empty;
+      const [event] = await prisma.$queryRaw<OutboxRecord[]>`
+        WITH due AS (
+          SELECT id FROM firebridge.outbox_events
+          WHERE attempts < ${env.OUTBOX_MAX_ATTEMPTS} AND (
+            (status = 'pending' AND available_at <= now()) OR
+            (status = 'dispatching' AND lease_expires_at <= now())
+          ) ${scope}
+          ORDER BY available_at, id LIMIT 1 FOR UPDATE SKIP LOCKED
         )
-        ORDER BY available_at ASC
-        LIMIT ${this.batchSize}
-        FOR UPDATE SKIP LOCKED
-      )
-      UPDATE firebridge.outbox_events o
-      SET
-        status = 'dispatching',
-        attempts = o.attempts + 1,
-        lease_expires_at = now() + (${this.leaseSeconds} * interval '1 second')
-      FROM due_events
-      WHERE o.id = due_events.id
-      RETURNING
-        o.id::text AS id,
-        o.event_type,
-        o.aggregate_id,
-        o.dedupe_key,
-        o.payload,
-        o.status,
-        o.attempts,
-        o.available_at,
-        o.lease_expires_at;
-    `;
+        UPDATE firebridge.outbox_events o SET status = 'dispatching', attempts = o.attempts + 1,
+          lease_expires_at = now() + (${this.leaseSeconds} * interval '1 second')
+        FROM due WHERE o.id = due.id
+        RETURNING o.id::text, o.event_type, o.aggregate_id, o.dedupe_key, o.payload, o.attempts
+      `;
+      this.metrics.databaseAvailable = true;
+      if (!event) break;
 
-    if (!claimedEvents || claimedEvents.length === 0) {
-      return 0;
-    }
-
-    logger.debug({ count: claimedEvents.length }, 'Claimed outbox events for dispatch');
-
-    let dispatchedCount = 0;
-
-    for (const event of claimedEvents) {
+      let valid = false;
       try {
-        // BullMQ does not allow colons in custom jobId (it uses ':' as an internal Redis key separator).
-        // Transform colons safely to double-underscores for BullMQ deduplication.
-        const bullJobId = event.dedupe_key.replace(/:/g, '__');
-
-        // Enqueue to BullMQ with sanitized dedupe_key as BullMQ jobId for idempotency
-        await this.queue.add(event.event_type, event.payload, {
-          jobId: bullJobId,
-          ...(['ingestion.plan.requested', 'explanation.requested'].includes(event.event_type)
-            ? { attempts: 3, backoff: { type: 'exponential', delay: 1000 } }
-            : {}),
+        const payload = parseQueuePayload(event.event_type, event.payload);
+        const aggregate = 'analysis_id' in payload ? payload.analysis_id : payload.job_id;
+        // Explanation outboxes use the explanation identity, while their payload contains the job identity.
+        if (event.event_type === 'explanation.requested') {
+          const rows = await prisma.$queryRaw<
+            { explanation_id: string }[]
+          >`SELECT explanation_id::text FROM firebridge.api_jobs
+            WHERE id=${payload.job_id}::uuid AND kind='explanation'`;
+          if (rows[0]?.explanation_id !== event.aggregate_id.toLowerCase())
+            throw new Error('QUEUE_AGGREGATE_MISMATCH');
+        } else if (event.aggregate_id.toLowerCase() !== aggregate)
+          throw new Error('QUEUE_AGGREGATE_MISMATCH');
+        valid = true;
+        const queue =
+          event.event_type === 'export.requested' ? this.exportQueue : this.options.queue;
+        await queue.add(event.event_type, payload, {
+          jobId: bullJobId(event.dedupe_key),
           removeOnComplete: true,
-          removeOnFail: false
+          removeOnFail: { age: 604800, count: 10000 },
+          attempts: event.event_type === 'export.requested' ? 3 : env.ANALYSIS_MAX_ATTEMPTS,
+          backoff: { type: 'exponential', delay: 1000, jitter: 0.5 }
         });
-
-        // Mark as delivered
-        await prisma.$executeRaw`
-          UPDATE firebridge.outbox_events
-          SET
-            status = 'delivered',
-            delivered_at = now(),
-            lease_expires_at = NULL
-          WHERE id = ${event.id}::uuid;
+        // Redis may commit even if add rejects; SQL acknowledgement may also fail.
+        const updated = await prisma.$executeRaw`
+          UPDATE firebridge.outbox_events SET status = 'delivered', delivered_at = now(), lease_expires_at = NULL
+          WHERE id = ${event.id}::uuid AND status = 'dispatching' AND attempts = ${event.attempts}
+            AND lease_expires_at > now()
         `;
-
-        dispatchedCount++;
-        logger.info(
-          { eventId: event.id, eventType: event.event_type, dedupeKey: event.dedupe_key },
-          'Outbox event delivered to queue'
-        );
-      } catch (error) {
-        logger.error(
-          { err: error, eventId: event.id, dedupeKey: event.dedupe_key, attempts: event.attempts },
-          'Failed to deliver outbox event to queue; scheduling retry'
-        );
-
-        // Exponential backoff: 2^attempts seconds, capped at 1 hour
-        const backoffSeconds = Math.min(Math.pow(2, Math.max(1, event.attempts)), 3600);
-
+        if (updated === 1) {
+          delivered++;
+          this.metrics.delivered++;
+          logger.info({ eventId: event.id, eventType: event.event_type }, 'Outbox delivered');
+        } else {
+          this.metrics.leaseLost++;
+          logger.warn({ eventId: event.id }, 'Outbox acknowledgement lost its lease');
+        }
+      } catch {
+        const exhausted = !valid || event.attempts >= env.OUTBOX_MAX_ATTEMPTS;
         await prisma.$executeRaw`
-          UPDATE firebridge.outbox_events
-          SET
-            status = 'pending',
-            available_at = now() + (${backoffSeconds} * interval '1 second'),
-            lease_expires_at = NULL
-          WHERE id = ${event.id}::uuid;
+          UPDATE firebridge.outbox_events SET status = 'pending', lease_expires_at = NULL,
+            attempts = ${exhausted ? env.OUTBOX_MAX_ATTEMPTS : event.attempts},
+            available_at = now() + (${retryDelayMs(event.attempts)} * interval '1 millisecond')
+          WHERE id = ${event.id}::uuid AND status = 'dispatching' AND attempts = ${event.attempts}
+            AND lease_expires_at > now()
         `;
+        if (exhausted) this.metrics.exhausted++;
+        else this.metrics.retries++;
+        logger.warn(
+          {
+            eventId: event.id,
+            eventType: event.event_type,
+            attempt: event.attempts,
+            reason: !valid ? 'invalid_payload' : 'delivery_unacknowledged',
+            exhausted
+          },
+          'Outbox delivery failed'
+        );
       }
     }
-
-    return dispatchedCount;
+    return delivered;
   }
 
-  private scheduleNextPoll(delayMs: number): void {
+  private scheduleNextPoll(delay: number): void {
     if (!this.isRunning) return;
-
     this.pollTimeout = setTimeout(() => {
-      this.pollTimeout = null;
-      this.currentBatchPromise = this.dispatchBatch()
-        .then((dispatchedCount) => {
-          // If events were dispatched, poll immediately for more; otherwise wait standard interval
-          const nextDelay = dispatchedCount >= this.batchSize ? 50 : this.pollIntervalMs;
-          this.scheduleNextPoll(nextDelay);
-          return dispatchedCount;
+      void this.dispatchBatch()
+        .then((count) => {
+          this.scheduleNextPoll(count >= this.batchSize ? 50 : this.pollIntervalMs);
         })
-        .catch((error) => {
-          logger.error({ err: error }, 'Error during outbox dispatch cycle');
+        .catch(() => {
+          this.metrics.databaseAvailable = false;
+          logger.error('Outbox dispatch cycle failed');
           this.scheduleNextPoll(this.pollIntervalMs);
-          return 0;
-        })
-        .finally(() => {
-          this.currentBatchPromise = null;
         });
-    }, delayMs);
+    }, delay);
   }
 }

@@ -16,8 +16,8 @@ describe('FIREBRIDGE worker', () => {
     await shutdownManager.shutdown();
   });
 
-  it('reports running status and registered processors with a valid timestamp', () => {
-    expect(workerStatus.status).toBe('running');
+  it('reports starting status without autostart and registered processors with a valid timestamp', () => {
+    expect(workerStatus.status).toBe('starting');
     expect(workerStatus.service).toBe('firebridge-worker');
     expect(workerStatus.processorsRegistered).toContain('analysis.requested');
 

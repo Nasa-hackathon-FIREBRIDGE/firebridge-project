@@ -2,7 +2,7 @@
 
 FIREBRIDGE est le backend du projet NASA Space Apps Challenge « Harmonization of MODIS and VIIRS Hot Spots ». Il utilise TypeScript, Fastify et PostgreSQL/PostGIS, avec un worker séparé pour les traitements longs.
 
-La phase 1 implémente le catalogue et les versions. La phase 2 apporte les zones, les analyses et les jobs. La phase 3 lit les détections, le résumé, le calendrier natif et la provenance sous `/api/v1/analyses/{id}`. Les routes Sources et les opérations de phase 5 sont également implémentées. La phase 6 ajoute les lectures de contexte préparé et les explications factuelles. La phase 4 est disponible sur la branche du collègue et reste à intégrer ; voir la [revue de compatibilité](docs/PHASE_4_REVIEW.md).
+La phase 1 implémente le catalogue et les versions. La phase 2 apporte les zones, les analyses et les jobs. La phase 3 lit les détections, le résumé, le calendrier natif et la provenance sous `/api/v1/analyses/{id}`. Les routes Sources et les opérations de phase 5 sont également implémentées. La phase 6 ajoute les lectures de contexte préparé et les explications factuelles. La phase 4 est intégrée : tuiles MVT, exports CSV/GeoJSON/Parquet et téléchargement, avec les mêmes sources, versions et contrôles de complétude que les lectures natives. Voir le [compte rendu d’intégration](docs/PHASE_4_REVIEW.md).
 
 Les guides de [phase 1](docs/PHASE_1.md), de [phase 3](docs/PHASE_3.md), de [phase 5](docs/PHASE_5.md) et de [phase 6](docs/PHASE_6.md) décrivent les contrats d’intégration, les limites et la compatibilité des migrations. Le [contrat HTTP](API.md) décrit les paramètres et les réponses. Les documents de conception fournis par l’équipe restent dans `documents/`.
 
@@ -52,6 +52,8 @@ La cinquième migration, `20261101010000_analysis_request_keys`, ajoute le regis
 Le modèle Prisma conserve aussi la table historique `HealthCheck` et une correspondance ignorée par le client pour `spatial_ref_sys`, qui appartient à PostGIS. Les champs spatiaux sont `Unsupported("geometry")` ; les contraintes `CHECK`, les types spatiaux précis et les index partiels restent définis dans les migrations SQL. Toute nouvelle migration doit préserver ces éléments.
 
 La sixième migration, `20261101020000_explanation_request_keys`, ajoute les clés durables d’explication. Appliquer cette migration avant le démarrage de l’API et du worker de phase 6.
+
+La septième migration, `20261101030000_phase4_serving_indexes`, ajoute seulement les index des jobs de phase 4. Elle est placée après la création de `api_jobs`, sans remplacer les migrations déjà appliquées. Une base issue de l’ancien historique consolidé de la branche du collègue nécessite la réconciliation décrite dans le guide de phase 3 ; ne pas réécrire ses enregistrements Prisma manuellement.
 
 Si le port Redis `6379` est occupé, choisir par exemple `REDIS_PORT=16379` et `REDIS_URL=redis://localhost:16379` dans `.env`, puis relancer les services. Les conteneurs continuent d’utiliser leur port interne `6379`.
 

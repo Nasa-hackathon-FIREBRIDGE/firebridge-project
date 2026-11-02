@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const analysisCreateSchema = z
@@ -9,11 +8,11 @@ export const analysisCreateSchema = z
     start_date: z
       .string()
       .trim()
-      .regex(isoDateRegex, 'start_date must be formatted as YYYY-MM-DD.'),
+      .pipe(z.iso.date('start_date must be a valid YYYY-MM-DD date.')),
     end_date_exclusive: z
       .string()
       .trim()
-      .regex(isoDateRegex, 'end_date_exclusive must be formatted as YYYY-MM-DD.'),
+      .pipe(z.iso.date('end_date_exclusive must be a valid YYYY-MM-DD date.')),
     time_basis: z.enum(['utc', 'local_solar', 'observation_time']).default('utc'),
     selection_policy: z.string().trim().min(1).max(100).default('standard'),
     weighting_version: z.string().trim().min(1).max(50).default('v1'),
@@ -27,7 +26,7 @@ export const analysisCreateSchema = z
   })
   .strict()
   .refine(
-    (data) => new Date(data.end_date_exclusive).getTime() > new Date(data.start_date).getTime(),
+    (data) => data.end_date_exclusive > data.start_date,
     {
       message: 'end_date_exclusive must be strictly after start_date.',
       path: ['end_date_exclusive']

@@ -133,7 +133,7 @@ describe('Durable ingestion planner and outbox', () => {
     const queue = new Queue('phase5-test-' + randomUUID(), {
       connection: parseRedisConnection(process.env.REDIS_URL)
     });
-    const dispatcher = new OutboxDispatcher({ queue });
+    const dispatcher = new OutboxDispatcher({ queue, aggregateIds: [created.data.job_id] });
     try {
       expect(await dispatcher.dispatchBatch()).toBe(1);
       const events = await prisma.$queryRaw<{ status: string; dedupe_key: string }[]>`

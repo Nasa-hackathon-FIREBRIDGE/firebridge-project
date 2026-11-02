@@ -16,9 +16,22 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default('info'),
   REDIS_URL: redisUrlSchema,
   DATABASE_URL: z.string().optional(),
+  WORKER_AUTOSTART: z.enum(['true', 'false']).optional(),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(1000),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
-  OUTBOX_LEASE_SECONDS: z.coerce.number().int().min(5).max(300).default(30)
+  OUTBOX_LEASE_SECONDS: z.coerce.number().int().min(15).max(300).default(30),
+  OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(100).default(10),
+  ANALYSIS_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  ANALYSIS_LEASE_SECONDS: z.coerce.number().int().min(30).max(600).default(60),
+  ANALYSIS_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(5),
+  RECOVERY_ENABLED: z.enum(['true', 'false']).default('false'),
+  RECOVERY_CREATED_AFTER: z.preprocess((value) => value === '' ? undefined : value, z.iso.datetime({ offset: true }).optional()),
+  RECOVERY_INTERVAL_MS: z.coerce.number().int().min(5000).max(3600000).default(30000),
+  RECOVERY_STALE_SECONDS: z.coerce.number().int().min(30).max(86400).default(120),
+  RECOVERY_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(20),
+  RECOVERY_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5)
+}).refine((value) => value.RECOVERY_ENABLED === 'false' || !!value.RECOVERY_CREATED_AFTER, {
+  path: ['RECOVERY_CREATED_AFTER'], message: 'Recovery requires an explicit creation cutoff.'
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

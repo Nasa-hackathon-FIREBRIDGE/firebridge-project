@@ -1,0 +1,42 @@
+# Separate test containers; existing api/worker/postgres/redis are untouched.
+services:
+  api:
+    image: firebridge-api:latest
+    container_name: firebridge-audit-api
+    environment:
+      NODE_ENV: test
+      PORT: 3000
+      DATABASE_URL: ${FIREBRIDGE_TEST_DATABASE_URL:?Set the isolated container database URL}
+      REDIS_URL: redis://redis:6379/15
+    ports:
+      - '127.0.0.1:3104:3000'
+    volumes:
+      - audit_exports:/app/.data/exports
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+  worker:
+    image: firebridge-worker:latest
+    container_name: firebridge-audit-worker
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: ${FIREBRIDGE_TEST_DATABASE_URL:?Set the isolated container database URL}
+      REDIS_URL: redis://redis:6379/15
+      WORKER_AUTOSTART: 'true'
+      EXPORT_RETENTION_SECONDS: '180'
+      EXPORT_CLEANUP_INTERVAL_SECONDS: '10'
+    volumes:
+      - audit_exports:/app/.data/exports
+    healthcheck:
+      test: ['CMD', 'node', 'apps/worker/dist/health.js']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+volumes:
+  audit_exports:
+networks:
+  default:
+    external: true
+    name: ${FIREBRIDGE_DOCKER_NETWORK:?Set the existing local Docker network}

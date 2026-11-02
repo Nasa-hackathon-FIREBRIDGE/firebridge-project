@@ -88,7 +88,11 @@ export const analysesService = {
     const hasIncompleteOtherComponents = nonSatelliteComponents.some((c) => c.status !== 'ready');
 
     let effectiveStatus = detail.analysis.status;
-    if (satelliteReady && hasIncompleteOtherComponents) {
+    if (
+      ['ready', 'partial'].includes(detail.analysis.status) &&
+      satelliteReady &&
+      hasIncompleteOtherComponents
+    ) {
       // Per specification: if only satellite is ready, status is partial
       effectiveStatus = 'partial';
     }

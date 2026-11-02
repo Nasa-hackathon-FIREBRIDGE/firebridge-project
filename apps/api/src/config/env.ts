@@ -37,6 +37,7 @@ const schema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     APP_NAME: z.string().min(1).default('firebridge-api'),
+    ANALYSIS_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
     LOG_LEVEL: z
       .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'])
       .default('info'),

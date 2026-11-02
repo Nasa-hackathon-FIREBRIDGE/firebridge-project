@@ -89,7 +89,7 @@ export function createApp(
       callback(
         null,
         !origin ||
-          (env.NODE_ENV !== 'production' && env.CORS_ORIGINS.length === 0) ||
+          (env.NODE_ENV === 'development' && env.CORS_ORIGINS.length === 0) ||
           env.CORS_ORIGINS.includes(origin)
       )
   });

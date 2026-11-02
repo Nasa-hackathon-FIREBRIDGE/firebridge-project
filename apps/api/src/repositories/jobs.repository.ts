@@ -6,6 +6,10 @@ import { prisma } from '@firebridge/database';
 import { Prisma } from '@prisma/client';
 import { NotFoundError, ServiceUnavailableError } from '../errors/app-error.js';
 import type { ApiJobRecord } from './analyses.repository.js';
+import type { JobsListQuery } from '../validators/jobs.validator.js';
+
+export type JobViewRecord = Pick<ApiJobRecord, 'id' | 'kind' | 'analysis_id' | 'status' | 'attempt' | 'progress'
+  | 'error_code' | 'expires_at' | 'created_at' | 'completed_at'>;
 
 async function wrapDbCall<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -31,6 +35,17 @@ async function wrapDbCall<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export const jobsRepository = {
+  async list(query: JobsListQuery, after?: string): Promise<JobViewRecord[]> {
+    return wrapDbCall(() => prisma.$queryRaw<JobViewRecord[]>(Prisma.sql`
+      SELECT id::text,kind,analysis_id::text,status,attempt,progress,error_code,expires_at,created_at,completed_at
+      FROM firebridge.api_jobs WHERE TRUE
+        ${query.kind ? Prisma.sql`AND kind = ${query.kind}` : Prisma.empty}
+        ${query.status ? Prisma.sql`AND status = ${query.status}` : Prisma.empty}
+        ${query.analysis_id ? Prisma.sql`AND analysis_id = ${query.analysis_id}::uuid` : Prisma.empty}
+        ${after ? Prisma.sql`AND id > ${after}::uuid` : Prisma.empty}
+      ORDER BY id LIMIT ${query.limit + 1}
+    `));
+  },
   /**
    * Finds a job by its unique UUID id.
    */
