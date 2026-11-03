@@ -10,6 +10,8 @@ La phase 5 ajoute les six endpoints d’opérations d’ingestion : abonnements,
 
 ## Architecture overview
 
+Les endpoints implémentés suivent le parcours route → controller → service → repository. Le [guide d’architecture API](docs/API_ARCHITECTURE.md) décrit les responsabilités et les fichiers des phases 1, 3, 5 et 6.
+
 La phase 6 sert la météo et les rapports attachés aux versions de l’analyse et les résultats scientifiques déjà préparés et attestés par le pipeline. Sans ces prérequis, les résultats restent explicitement manquants ou non supportés. Le worker génère un résumé déterministe des comptages natifs, vérifié et cité (`template_fallback`), sans fournisseur d’IA externe ni réponse aux questions libres. Le téléchargement des contextes, les calculs scientifiques et l’explication complète de ces contextes restent à développer.
 
 - `apps/api`: HTTP API layer, routing, request validation, controllers, middleware, and API documentation

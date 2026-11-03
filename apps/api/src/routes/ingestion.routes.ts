@@ -1,15 +1,7 @@
-import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { ingestionAdmin } from '../middleware/ingestion-admin.js';
-import { envelope, ApiError } from '../utils/response.js';
+import { ingestionController } from '../controllers/ingestion.controller.js';
 import { querySchema, scopeProperty, uuidProperty, successSchema } from './phase-one.schemas.js';
-import {
-  parseInput,
-  backfillSchema,
-  refreshSchema,
-  subscriptionsQuery,
-  gapsQuery,
-  availabilityQuery
-} from '../validators/ingestion.validator.js';
 
 const time = { type: 'string', minLength: 20, maxLength: 24 };
 const identifier = scopeProperty;
@@ -40,12 +32,6 @@ const headers = {
     }
   }
 };
-function key(request: FastifyRequest) {
-  const value = request.headers['idempotency-key'];
-  if (typeof value !== 'string')
-    throw new ApiError(400, 'MISSING_IDEMPOTENCY_KEY', 'Idempotency-Key is required.');
-  return value;
-}
 
 export const ingestionRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('onRequest', async (_request, reply) => {
@@ -57,7 +43,6 @@ export const ingestionRoutes: FastifyPluginAsync = async (app) => {
       admin.addHook('onRequest', async (request) => {
         ingestionAdmin(request, app.ingestionAdminToken);
       });
-      const actor = (request: FastifyRequest) => ingestionAdmin(request, app.ingestionAdminToken);
       admin.get(
         '/subscriptions',
         {
@@ -74,14 +59,7 @@ export const ingestionRoutes: FastifyPluginAsync = async (app) => {
             })
           }
         },
-        async (request) =>
-          envelope(
-            request,
-            await app.ingestionService.subscriptions(
-              parseInput(subscriptionsQuery, request.query),
-              actor(request)
-            )
-          )
+        ingestionController.subscriptions
       );
       admin.get(
         '/gaps',
@@ -102,11 +80,7 @@ export const ingestionRoutes: FastifyPluginAsync = async (app) => {
             })
           }
         },
-        async (request) =>
-          envelope(
-            request,
-            await app.ingestionService.gaps(parseInput(gapsQuery, request.query), actor(request))
-          )
+        ingestionController.gaps
       );
       admin.get<{ Params: { id: string } }>(
         '/runs/:id',
@@ -118,8 +92,7 @@ export const ingestionRoutes: FastifyPluginAsync = async (app) => {
             querystring: querySchema({})
           }
         },
-        async (request) =>
-          envelope(request, await app.ingestionService.run(request.params.id.toLowerCase()))
+        ingestionController.run
       );
       admin.post(
         '/backfills',
@@ -158,15 +131,7 @@ export const ingestionRoutes: FastifyPluginAsync = async (app) => {
             )
           }
         },
-        async (request, reply) => {
-          const result = await app.ingestionService.backfill(
-            parseInput(backfillSchema, request.body),
-            actor(request),
-            key(request)
-          );
-          if (result.statusCode === 200) reply.header('Idempotent-Replayed', 'true');
-          return reply.code(result.statusCode).send(envelope(request, result.data));
-        }
+        ingestionController.backfill
       );
       admin.post<{ Params: { id: string } }>(
         '/subscriptions/:id/refresh',
@@ -189,16 +154,7 @@ export const ingestionRoutes: FastifyPluginAsync = async (app) => {
             )
           }
         },
-        async (request, reply) => {
-          const result = await app.ingestionService.refresh(
-            request.params.id.toLowerCase(),
-            parseInput(refreshSchema, request.body),
-            actor(request),
-            key(request)
-          );
-          if (result.statusCode === 200) reply.header('Idempotent-Replayed', 'true');
-          return reply.code(result.statusCode).send(envelope(request, result.data));
-        }
+        ingestionController.refresh
       );
     },
     { prefix: '/admin/ingestion' }
@@ -217,13 +173,6 @@ export const ingestionRoutes: FastifyPluginAsync = async (app) => {
         response: { 200: successSchema }
       }
     },
-    async (request) =>
-      envelope(
-        request,
-        await app.ingestionService.availability(
-          request.params.source_id,
-          parseInput(availabilityQuery, request.query)
-        )
-      )
+    ingestionController.availability
   );
 };

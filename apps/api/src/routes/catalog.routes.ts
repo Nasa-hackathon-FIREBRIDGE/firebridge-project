@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { envelope } from '../utils/response.js';
+import { catalogController } from '../controllers/catalog.controller.js';
 import { scopeProperty, querySchema, successSchema } from './phase-one.schemas.js';
 
 export const catalogRoutes: FastifyPluginAsync = async (app) => {
@@ -13,9 +13,6 @@ export const catalogRoutes: FastifyPluginAsync = async (app) => {
         response: { 200: successSchema }
       }
     },
-    async (request, reply) => {
-      reply.header('Cache-Control', 'no-store');
-      return envelope(request, await app.catalogService.catalog(request.query.scope_key));
-    }
+    catalogController.list
   );
 };

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { envelope } from '../utils/response.js';
+import { updatesController } from '../controllers/updates.controller.js';
 import type { UpdatesQuery } from '../services/catalog.service.js';
 import { scopeProperty, uuidProperty, querySchema, successSchema } from './phase-one.schemas.js';
 
@@ -22,12 +22,6 @@ export const updatesRoutes: FastifyPluginAsync = async (app) => {
         response: { 200: successSchema }
       }
     },
-    async (request, reply) => {
-      reply.header('Cache-Control', 'no-store');
-      if (request.query.after_release_id)
-        request.query.after_release_id = request.query.after_release_id.toLowerCase();
-      const data = await app.catalogService.updates(request.query);
-      return envelope(request, data, data.history_complete ? [] : ['BASELINE_NOT_ANCESTOR']);
-    }
+    updatesController.list
   );
 };

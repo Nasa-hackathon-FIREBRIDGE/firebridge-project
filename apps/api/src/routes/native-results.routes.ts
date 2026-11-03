@@ -1,9 +1,7 @@
-import { createHash } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import type { NativeQuery } from '../services/native-results.service.js';
 import { querySchema, successSchema, uuidProperty } from './phase-one.schemas.js';
-import { defaultScopeResolver } from '../middleware/idempotency.js';
-import { envelope } from '../utils/response.js';
+import { nativeResultsController } from '../controllers/native-results.controller.js';
 
 const time = { type: 'string', minLength: 20, maxLength: 24 };
 const date = { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' };
@@ -35,22 +33,30 @@ const calendarQuery = querySchema({
 const provenanceQuery = querySchema({ ...page, asset_id: uuidProperty });
 
 export const nativeResultsRoutes: FastifyPluginAsync = async (app) => {
-  for (const [resource, summary, query] of [
+  for (const [resource, summary, query, handler] of [
     [
       'detections',
       'Native detections clipped to the saved area and pinned release',
-      detectionQuery
+      detectionQuery,
+      nativeResultsController.detections
     ],
     [
       'summary',
       'Source detection counts with explicit unavailable comparable metrics',
-      querySchema({})
+      querySchema({}),
+      nativeResultsController.summary
     ],
-    ['calendar', 'UTC native counts; zero only for verified complete inventory', calendarQuery],
+    [
+      'calendar',
+      'UTC native counts; zero only for verified complete inventory',
+      calendarQuery,
+      nativeResultsController.calendar
+    ],
     [
       'provenance',
       'Paginated pinned inputs, hashes and citations without private paths',
-      provenanceQuery
+      provenanceQuery,
+      nativeResultsController.provenance
     ]
   ] as const) {
     app.get<{ Params: { id: string }; Querystring: NativeQuery }>(
@@ -64,30 +70,7 @@ export const nativeResultsRoutes: FastifyPluginAsync = async (app) => {
           response: { 200: successSchema }
         }
       },
-      async (request, reply) => {
-        const id = request.params.id.toLowerCase(),
-          scope = defaultScopeResolver(request);
-        const service = app.nativeResultsService;
-        const data =
-          resource === 'detections'
-            ? await service.detections(id, request.query, scope)
-            : resource === 'summary'
-              ? await service.summary(id)
-              : resource === 'calendar'
-                ? await service.calendar(id, request.query)
-                : await service.provenance(id, request.query, scope);
-        const digest = '"' + createHash('sha256').update(JSON.stringify(data)).digest('hex') + '"';
-        // request_id changes between requests; only the logical result is cache-equivalent.
-        const etag = 'W/' + digest;
-        reply
-          .header('ETag', etag)
-          .header('Cache-Control', 'private, max-age=0, must-revalidate')
-          .header('X-Data-Release-Id', data.data_release_id);
-        const matches = request.headers['if-none-match']?.split(',').map((v) => v.trim());
-        if (matches?.some((v) => v.replace(/^W\//, '') === digest || v === '*'))
-          return reply.code(304).send();
-        return envelope(request, data);
-      }
+      handler
     );
   }
 };

@@ -1,16 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { querySchema, uuidProperty, successSchema } from './phase-one.schemas.js';
-import {
-  coverageQuery,
-  cellQuery,
-  comparisonQuery,
-  weatherQuery,
-  reportsQuery,
-  explanationBody,
-  parseContext
-} from '../validators/context.validator.js';
-import { defaultScopeResolver } from '../middleware/idempotency.js';
-import { envelope } from '../utils/response.js';
+import { contextController } from '../controllers/context.controller.js';
+import { explanationController } from '../controllers/explanation.controller.js';
 
 const date = { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' };
 const dates = { start_date: date, end_date_exclusive: date };
@@ -23,11 +14,12 @@ export const contextRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('onRequest', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
   });
-  for (const [path, summary, query] of [
+  for (const [path, summary, query, handler] of [
     [
       'coverage',
       'Prepared observation coverage; unknown for native point-only data',
-      querySchema({ ...dates, cell_id: cell })
+      querySchema({ ...dates, cell_id: cell }),
+      contextController.coverage
     ],
     [
       'comparison',
@@ -35,7 +27,8 @@ export const contextRoutes: FastifyPluginAsync = async (app) => {
       querySchema({
         view: { type: 'string', enum: ['native_counts', 'common_response', 'withheld_reference'] },
         resolution: { type: 'string', enum: ['week', 'month'] }
-      })
+      }),
+      contextController.comparison
     ],
     [
       'weather',
@@ -45,7 +38,8 @@ export const contextRoutes: FastifyPluginAsync = async (app) => {
         variables: { type: 'string', maxLength: 1024 },
         resolution: { type: 'string', enum: ['hour', 'day', 'period'] },
         context: { type: 'string', enum: ['historical', 'recent', 'both'] }
-      })
+      }),
+      contextController.weather
     ],
     [
       'reports',
@@ -57,7 +51,8 @@ export const contextRoutes: FastifyPluginAsync = async (app) => {
           enum: ['candidate', 'consistent', 'conflicting', 'unresolved', 'rejected']
         },
         review_status: { type: 'string', enum: ['unreviewed', 'reviewed', 'rejected'] }
-      })
+      }),
+      contextController.reports
     ]
   ] as const) {
     app.get<{ Params: { id: string } }>(
@@ -71,20 +66,7 @@ export const contextRoutes: FastifyPluginAsync = async (app) => {
           response: { 200: successSchema }
         }
       },
-      async (request) => {
-        const id = request.params.id.toLowerCase(),
-          scope = defaultScopeResolver(request),
-          service = app.contextService;
-        const data =
-          path === 'coverage'
-            ? await service.coverage(id, parseContext(coverageQuery, request.query))
-            : path === 'comparison'
-              ? await service.comparison(id, parseContext(comparisonQuery, request.query))
-              : path === 'weather'
-                ? await service.weather(id, parseContext(weatherQuery, request.query), scope)
-                : await service.reports(id, parseContext(reportsQuery, request.query), scope);
-        return envelope(request, data);
-      }
+      handler
     );
   }
   app.get<{ Params: { id: string; cell_id: string } }>(
@@ -98,16 +80,7 @@ export const contextRoutes: FastifyPluginAsync = async (app) => {
         response: { 200: successSchema }
       }
     },
-    async (request) =>
-      envelope(
-        request,
-        await app.contextService.cell(
-          request.params.id.toLowerCase(),
-          request.params.cell_id,
-          parseContext(cellQuery, request.query),
-          defaultScopeResolver(request)
-        )
-      )
+    contextController.cell
   );
   app.post<{ Params: { id: string } }>(
     '/analyses/:id/explanations',
@@ -129,15 +102,7 @@ export const contextRoutes: FastifyPluginAsync = async (app) => {
         response: { 200: successSchema, 202: successSchema }
       }
     },
-    async (request, reply) => {
-      const result = await app.explanationService.create(
-        request.params.id.toLowerCase(),
-        parseContext(explanationBody, request.body),
-        defaultScopeResolver(request),
-        request.headers['idempotency-key'] as string | undefined
-      );
-      return reply.code(result.statusCode).send(envelope(request, result.data));
-    }
+    explanationController.create
   );
   app.get<{ Params: { id: string } }>(
     '/explanations/:id',
@@ -150,13 +115,6 @@ export const contextRoutes: FastifyPluginAsync = async (app) => {
         response: { 200: successSchema }
       }
     },
-    async (request) =>
-      envelope(
-        request,
-        await app.explanationService.get(
-          request.params.id.toLowerCase(),
-          defaultScopeResolver(request)
-        )
-      )
+    explanationController.getById
   );
 };
