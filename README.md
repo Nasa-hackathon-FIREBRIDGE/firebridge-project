@@ -1,6 +1,6 @@
 # ASTRA MIND frontend
 
-ASTRA MIND is a frontend-only demonstration for the FIREBRIDGE project. It uses deterministic, explicitly synthetic fixtures to demonstrate a fire-observation exploration workflow. It does not connect to NASA, Earthdata, weather or news APIs, or represent its points as real satellite observations. Map tiles are requested only if you configure `VITE_MAP_STYLE_URL` (see below).
+ASTRA MIND's existing interface uses deterministic, explicitly synthetic fixtures to demonstrate a fire-observation exploration workflow. The public FIREBRIDGE API client, services and hooks are implemented separately and have real HTTP integration tests; they are not connected to the visual pages yet. The displayed points remain synthetic. Map tiles are requested only if you configure `VITE_MAP_STYLE_URL` (see below).
 
 ## Run locally
 
@@ -68,3 +68,15 @@ npm run test
 npm run lint
 npm run build
 ```
+
+## FIREBRIDGE API integration
+
+The technical integration is documented in [the backend delivery report](../backend_FIREBRIDGE/docs/INTEGRATION_REPORT.md). All ten API routes use the existing /api/v1 prefix.
+
+Install the backend workspace dependencies first (npm ci in ../backend_FIREBRIDGE), then npm ci here. The predev/prebuild scripts compile the existing shared contracts package. VITE_API_URL defaults to http://localhost:3000/api/v1; copy .env.example to .env.local to override public build-time settings. Invalid URLs fail early.
+
+A single Axios instance lives in src/lib/axios.ts. It uses no authentication, tokens, identity headers or authentication cookies. One QueryClient lives in src/lib/queryClient.ts and is used by the existing App provider. Services are in src/services; the ten hooks are in src/hooks/useFirebridge.ts. Read hooks share in-flight queries and cancellation signals. Analysis/export mutations require a UUID idempotency key created with createIdempotencyKey(); retain the same key when retrying the same intent. Mutation retries are explicit.
+
+Downloads first read the public job endpoint to obtain its short-lived signed link. These links expire within five minutes and do not represent a user permission. The API and all resources in scope are public to anyone who can reach the server.
+
+Run npm run build, npm test and npm run lint here. The optional HTTP suite is skipped in ordinary unit tests; run node scripts/integration/run.mjs from the backend to provision an isolated test database and exercise real Axios/PostGIS/Redis/Worker processing. Synthetic TEST ONLY observations stay exclusively in that test database.

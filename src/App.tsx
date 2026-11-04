@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
-import { useQuery, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useQuery, QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './lib/queryClient'
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import {
   Activity, AlertTriangle, ArrowRight, BookOpen, CalendarDays,   Check,  CircleHelp, CloudSun, Compass, Database, Download, Flame, Gauge, Info, Layers2,
@@ -11,7 +12,6 @@ import { useAppState } from './useAppState'
 import type { ActivitySummary, AnalysisSelection, Detection, ReportEvidence, SensorComparison, TemporalSummary } from './types'
 import './App.css'
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: false } } })
 const ActivityChart = lazy(() => import('./components/Charts').then((module) => ({ default: module.ActivityChart })))
 const CalendarChart = lazy(() => import('./components/Charts').then((module) => ({ default: module.CalendarChart })))
 const SensorBars = lazy(() => import('./components/Charts').then((module) => ({ default: module.SensorBars })))
