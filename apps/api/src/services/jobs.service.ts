@@ -9,6 +9,7 @@ import { decodeCursor, encodeCursor } from '../utils/sources-cursor.js';
 import { parseResultInput } from '../validators/results.validator.js';
 import { uuidSchema } from '@firebridge/results';
 import { env } from '../config/env.js';
+import { createDownloadLink } from '../utils/download-link.js';
 
 export interface JobDetailResponse {
   id: string;
@@ -24,11 +25,12 @@ export interface JobDetailResponse {
   created_at: Date;
   completed_at: Date | null;
   analysis_id: string | null;
+  download_url: string | null;
 }
 
 export const MAX_JOB_ATTEMPTS = 3;
 
-function jobView(job: JobViewRecord): JobDetailResponse {
+function jobView(job: JobViewRecord): Omit<JobDetailResponse, 'download_url'> {
   const progress =
     job.progress && typeof job.progress === 'object' && !Array.isArray(job.progress)
       ? { ...job.progress }
@@ -81,6 +83,6 @@ export const jobsService = {
       throw new NotFoundError(`Job with id '${jobId}' was not found.`);
     }
 
-    return jobView(job);
+    return { ...jobView(job), download_url: job.kind === 'export' && job.status === 'succeeded' && job.expires_at ? createDownloadLink(job.id, job.expires_at) : null };
   }
 };

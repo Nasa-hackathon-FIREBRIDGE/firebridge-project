@@ -1,4 +1,5 @@
-import { InvalidIdempotencyKeyError, NotFoundError } from '../errors/app-error.js';
+import { NotFoundError } from '../errors/app-error.js';
+import { validateIdempotencyKeyFormat } from '../middleware/idempotency.js';
 import {
   analysesRepository,
   type AnalysisDetail,
@@ -24,16 +25,13 @@ export const analysesService = {
    */
   async createAnalysis(
     input: AnalysisCreateInput,
-    requestedBy = 'anonymous',
     idempotencyKeyHeader?: string
   ): Promise<CreateAnalysisResult> {
     const FIXED_METRIC_KEY = 'native_detections_v1';
     const FIXED_GRID_ID = null;
     const FIXED_DATA_MODE = 'standard_only';
 
-    const idempotencyKey = idempotencyKeyHeader?.trim() || undefined;
-    if (idempotencyKey && !/^[\x21-\x7e]{1,256}$/.test(idempotencyKey))
-      throw new InvalidIdempotencyKeyError();
+    const idempotencyKey = idempotencyKeyHeader === undefined ? undefined : validateIdempotencyKeyFormat(idempotencyKeyHeader);
 
     const requestSpec: Record<string, unknown> = {
       area_id: input.area_id.toLowerCase(),
@@ -63,8 +61,7 @@ export const analysesService = {
       weather_policy: input.weather_policy,
       news_policy: input.news_policy,
       request_spec: requestSpec,
-      idempotency_key: idempotencyKey,
-      requested_by: requestedBy
+      idempotency_key: idempotencyKey
     });
   },
 

@@ -16,7 +16,16 @@
 
 import { prisma } from '@firebridge/database';
 import { Prisma } from '@prisma/client';
+import { nativeAreaSql } from '@firebridge/contracts';
 import { ServiceUnavailableError } from '../errors/app-error.js';
+
+// ST_WrapX splits at the dateline before translating pieces, including holes.
+export function normalizedAreaGeometry(wkt: string): Prisma.Sql {
+  return Prisma.sql`ST_Multi(ST_CollectionExtract(ST_WrapX(ST_WrapX(ST_GeomFromText(${wkt},4326),180,-360),-180,360),3))`;
+}
+
+// Normalize historical unsplit dateline areas in responses without rewriting stored data.
+const areaReadGeometry = Prisma.sql`ST_Multi(ST_CollectionExtract(${Prisma.raw(nativeAreaSql('areas'))},3))`;
 
 export interface AreaRecord {
   id: string;
@@ -91,7 +100,7 @@ export const areasRepository = {
           display_timezone,
           provenance,
           created_at,
-          ST_AsGeoJSON(geom)::text AS geom_geojson,
+          ST_AsGeoJSON(${areaReadGeometry})::text AS geom_geojson,
           ROUND((ST_Area(geom::geography) / 1e6)::numeric, 4)::float8 AS surface_km2
         FROM firebridge.areas
         WHERE geometry_sha256 = ${geometry_sha256}
@@ -116,7 +125,7 @@ export const areasRepository = {
           ${input.id}::uuid,
           ${input.name},
           ${input.version},
-          ST_Multi(ST_GeomFromText(${input.geomWkt}, 4326)),
+          ${normalizedAreaGeometry(input.geomWkt)},
           ${input.geometry_sha256},
           ${input.display_timezone},
           ${input.provenance}
@@ -130,7 +139,7 @@ export const areasRepository = {
           display_timezone,
           provenance,
           created_at,
-          ST_AsGeoJSON(geom)::text AS geom_geojson,
+          ST_AsGeoJSON(${areaReadGeometry})::text AS geom_geojson,
           ROUND((ST_Area(geom::geography) / 1e6)::numeric, 4)::float8 AS surface_km2
       `;
 
@@ -172,7 +181,7 @@ export const areasRepository = {
           display_timezone,
           provenance,
           created_at,
-          ST_AsGeoJSON(geom)::text AS geom_geojson,
+          ST_AsGeoJSON(${areaReadGeometry})::text AS geom_geojson,
           ROUND((ST_Area(geom::geography) / 1e6)::numeric, 4)::float8 AS surface_km2
         FROM firebridge.areas
         WHERE id = ${areaId}::uuid
@@ -248,14 +257,12 @@ export const areasRepository = {
       };
 
       const rows = await prisma.$queryRaw<ValidationRow[]>`
-        SELECT
-          ST_IsValid(ST_Multi(ST_GeomFromText(${geomWkt}, 4326))) AS is_valid,
-          ST_IsEmpty(ST_Multi(ST_GeomFromText(${geomWkt}, 4326))) AS is_empty,
-          ST_IsValidReason(ST_Multi(ST_GeomFromText(${geomWkt}, 4326))) AS validity_reason,
-          ROUND(
-            (ST_Area(ST_Multi(ST_GeomFromText(${geomWkt}, 4326))::geography) / 1e6)::numeric,
-            4
-          )::float8 AS area_km2
+        WITH raw AS (SELECT ST_GeomFromText(${geomWkt},4326) AS geom)
+        SELECT ST_IsValid(geom) AS is_valid, ST_IsEmpty(geom) AS is_empty,
+          ST_IsValidReason(geom) AS validity_reason,
+          CASE WHEN ST_IsValid(geom) AND NOT ST_IsEmpty(geom)
+            THEN ST_Area((${normalizedAreaGeometry(geomWkt)})::geography) / 1e6
+            ELSE 0 END AS area_km2 FROM raw
       `;
 
       const row = rows[0];

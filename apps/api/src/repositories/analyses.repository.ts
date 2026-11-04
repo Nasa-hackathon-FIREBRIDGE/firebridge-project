@@ -18,6 +18,7 @@ import {
   ServiceUnavailableError
 } from '../errors/app-error.js';
 import { computeAnalysisCacheKey, computeAnalysisRequestHash } from '../utils/analysis-cache.js';
+import { env } from '../config/env.js';
 
 export interface DataReleaseRecord {
   id: string;
@@ -63,7 +64,6 @@ export interface ApiJobRecord {
   kind: string;
   analysis_id: string | null;
   explanation_id: string | null;
-  requested_by: string;
   request_hash: string;
   idempotency_key: string;
   request_spec: unknown;
@@ -96,7 +96,6 @@ export interface CreateAnalysisTransactionInput {
   news_policy: unknown;
   request_spec: Record<string, unknown>;
   idempotency_key?: string;
-  requested_by: string;
 }
 
 async function wrapDbCall<T>(fn: () => Promise<T>): Promise<T> {
@@ -124,14 +123,13 @@ async function wrapDbCall<T>(fn: () => Promise<T>): Promise<T> {
 
 async function bindRequestKey(
   tx: Prisma.TransactionClient,
-  input: CreateAnalysisTransactionInput,
   key: string,
   hash: string,
   jobId: string
 ) {
   await tx.$executeRaw`INSERT INTO firebridge.analysis_request_keys
-    (requested_by,idempotency_key,request_hash,job_id)
-    VALUES (${input.requested_by},${key},${hash},${jobId}::uuid)`;
+    (idempotency_key,request_hash,job_id)
+    VALUES (${key},${hash},${jobId}::uuid)`;
 }
 
 async function replayRequest(
@@ -150,14 +148,13 @@ async function replayRequest(
   const bindings = await tx.$queryRaw<Replay[]>`SELECT j.id::text AS job_id,j.analysis_id::text,
     j.kind,k.request_hash,j.request_spec FROM firebridge.analysis_request_keys k
     JOIN firebridge.api_jobs j ON j.id=k.job_id
-    WHERE k.requested_by=${input.requested_by} AND k.idempotency_key=${input.idempotency_key}`;
+    WHERE k.idempotency_key=${input.idempotency_key}`;
   // Preserve retry behavior for requests created before the additive migration.
   const legacy = bindings.length
     ? []
     : await tx.$queryRaw<Replay[]>`
     SELECT id::text AS job_id,analysis_id::text,kind,request_hash,request_spec
-    FROM firebridge.api_jobs WHERE requested_by=${input.requested_by}
-    AND idempotency_key=${input.idempotency_key}`;
+    FROM firebridge.api_jobs WHERE idempotency_key=${input.idempotency_key}`;
   const row = bindings[0] ?? legacy[0];
   if (!row) return null;
   const legacyIntent = {
@@ -176,14 +173,14 @@ async function replayRequest(
     throw new IdempotencyConflictError('This key already identifies a different request.');
   const detail = await analysesRepository.findById(row.analysis_id, tx, row.job_id);
   if (!detail) throw new ServiceUnavailableError('The original analysis request is unavailable.');
-  if (!bindings.length) await bindRequestKey(tx, input, input.idempotency_key, hash, row.job_id);
+  if (!bindings.length) await bindRequestKey(tx, input.idempotency_key, hash, row.job_id);
   return detail;
 }
 
 function isConcurrentCreation(error: unknown) {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
   return (
-    ['P2034', 'P2002'].includes(error.code) ||
+    ['P2034', 'P2002', 'P2028', 'P2024'].includes(error.code) ||
     (error.code === 'P2010' && ['40001', '40P01', '23505'].includes(String(error.meta?.code)))
   );
 }
@@ -258,7 +255,6 @@ export const analysesRepository = {
           kind,
           analysis_id::text,
           explanation_id::text,
-          requested_by,
           request_hash,
           idempotency_key,
           request_spec,
@@ -345,7 +341,6 @@ export const analysesRepository = {
           kind,
           analysis_id::text,
           explanation_id::text,
-          requested_by,
           request_hash,
           idempotency_key,
           request_spec,
@@ -415,6 +410,7 @@ export const analysesRepository = {
               observation_cutoff
             FROM firebridge.data_releases
             WHERE dataset_kind = 'satellite'
+              AND scope_key = ${env.DEFAULT_SCOPE_KEY} AND stream = 'retrospective' AND published_at IS NOT NULL
               AND status = 'published'
               AND observation_cutoff >= ${input.end_date_exclusive}::timestamptz
             ORDER BY observation_cutoff DESC, created_at DESC
@@ -434,6 +430,7 @@ export const analysesRepository = {
             SELECT id::text, name, status, stream, dataset_kind, observation_cutoff
             FROM firebridge.data_releases
             WHERE dataset_kind = 'weather'
+              AND scope_key = ${env.DEFAULT_SCOPE_KEY} AND stream = 'retrospective' AND published_at IS NOT NULL
               AND status = 'published'
               AND observation_cutoff >= ${input.end_date_exclusive}::timestamptz
             ORDER BY observation_cutoff DESC, created_at DESC
@@ -445,6 +442,7 @@ export const analysesRepository = {
             SELECT id::text, name, status, stream, dataset_kind, observation_cutoff
             FROM firebridge.data_releases
             WHERE dataset_kind = 'reports'
+              AND scope_key = ${env.DEFAULT_SCOPE_KEY} AND stream = 'retrospective' AND published_at IS NOT NULL
               AND status = 'published'
               AND observation_cutoff >= ${input.end_date_exclusive}::timestamptz
             ORDER BY observation_cutoff DESC, created_at DESC
@@ -455,7 +453,6 @@ export const analysesRepository = {
               // Freeze the complete version selection before looking for reusable results.
               const cacheKey = computeAnalysisCacheKey({
                 request_spec: input.request_spec,
-                requested_by: input.requested_by,
                 satellite_release_id: satelliteRelease.id,
                 weather_release_id: weatherRelease?.id ?? null,
                 reports_release_id: reportRelease?.id ?? null
@@ -466,7 +463,7 @@ export const analysesRepository = {
                 if (input.idempotency_key) {
                   if (!existing.job)
                     throw new ServiceUnavailableError('The cached analysis job is unavailable.');
-                  await bindRequestKey(tx, input, idempotencyKey, requestHash, existing.job.id);
+                  await bindRequestKey(tx, idempotencyKey, requestHash, existing.job.id);
                 }
                 return { detail: existing, created: false };
               }
@@ -589,7 +586,6 @@ export const analysesRepository = {
               kind,
               analysis_id,
               explanation_id,
-              requested_by,
               request_hash,
               idempotency_key,
               request_spec,
@@ -601,7 +597,6 @@ export const analysesRepository = {
               'analysis',
               ${analysisId}::uuid,
               NULL,
-              ${input.requested_by},
               ${requestHash},
               ${idempotencyKey},
               ${JSON.stringify(input.request_spec)}::jsonb,
@@ -611,7 +606,7 @@ export const analysesRepository = {
             );
           `;
 
-              await bindRequestKey(tx, input, idempotencyKey, requestHash, jobId);
+              await bindRequestKey(tx, idempotencyKey, requestHash, jobId);
 
               // 7. Insert transactional outbox event
               await tx.$executeRaw`
@@ -686,7 +681,6 @@ export const analysesRepository = {
               kind,
               analysis_id::text,
               explanation_id::text,
-              requested_by,
               request_hash,
               idempotency_key,
               request_spec,

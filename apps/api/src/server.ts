@@ -36,7 +36,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const)
 try {
   await app.listen({
     port: env.PORT,
-    host: '0.0.0.0',
+    host: env.API_HOST,
     listenTextResolver: (address) => `FIREBRIDGE API listening on ${address}`
   });
 } catch (error) {

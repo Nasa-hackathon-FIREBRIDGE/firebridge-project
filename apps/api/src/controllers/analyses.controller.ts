@@ -59,7 +59,6 @@ export const analysesController = {
    * POST /api/v1/analyses — Endpoint 8
    */
   async create(req: FastifyRequest, reply: FastifyReply) {
-    const requestedBy = 'anonymous';
     reply.header('Cache-Control', 'private, no-store');
     const parsed = analysisCreateSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -75,7 +74,6 @@ export const analysesController = {
 
     const { detail, created } = await analysesService.createAnalysis(
       parsed.data,
-      requestedBy,
       idempotencyHeader
     );
 

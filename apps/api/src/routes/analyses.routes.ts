@@ -28,7 +28,7 @@ export const analysesRoutes: FastifyPluginAsync = async (fastify) => {
     },
     resultsController.tile
   );
-  const hooks = idempotency({ required: true });
+  const hooks = idempotency({ required: true, getScope: () => 'public' });
   fastify.post(
     '/:id/exports',
     {

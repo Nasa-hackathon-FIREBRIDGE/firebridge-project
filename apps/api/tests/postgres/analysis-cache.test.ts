@@ -133,13 +133,13 @@ describe('Analysis cache identity and durable request retries', () => {
       expect((await post({ ...body, ...change })).statusCode).toBe(202);
   });
 
-  it("does not reuse another requester's cached analysis", async () => {
+  it("reuses a public cached analysis across different idempotency keys", async () => {
     const input = analysisCreateSchema.parse(body);
-    const first = await analysesService.createAnalysis(input, 'cache-test-user-1');
-    const second = await analysesService.createAnalysis(input, 'cache-test-user-2');
+    const first = await analysesService.createAnalysis(input, 'cache-request-one');
+    const second = await analysesService.createAnalysis(input, 'cache-request-two');
     expect(first.created).toBe(true);
-    expect(second.created).toBe(true);
-    expect(second.detail.analysis.id).not.toBe(first.detail.analysis.id);
+    expect(second.created).toBe(false);
+    expect(second.detail.analysis.id).toBe(first.detail.analysis.id);
   });
 
   it('replays an explicit request key across publication changes and rejects different intent', async () => {

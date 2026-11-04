@@ -10,7 +10,7 @@ const parsed = z.object({
   TILE_REQUESTS_PER_MINUTE: z.coerce.number().int().min(1).max(10000).default(120),
   EXPORT_REQUESTS_PER_MINUTE: z.coerce.number().int().min(1).max(100).default(5),
   DOWNLOAD_REQUESTS_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(30),
-  EXPORT_MAX_ACTIVE_PER_USER: z.coerce.number().int().min(1).max(20).default(2),
+  EXPORT_MAX_ACTIVE: z.coerce.number().int().min(1).max(20).default(2),
   EXPORT_MAX_PER_HOUR: z.coerce.number().int().min(1).max(100).default(10),
   EXPORT_MAX_ROWS: z.coerce.number().int().min(1).max(10000000).default(1000000),
   EXPORT_MAX_BYTES: z.coerce.number().int().min(1024).max(2147483648).default(268435456),

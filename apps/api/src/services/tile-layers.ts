@@ -9,7 +9,7 @@ export const tileLayers = Object.freeze({
     columns: ['count', 'frp_mw'] as const,
     spatial: 'AOI intersection; XYZ envelope; Web Mercator; point quantization',
     aggregation: 'All zooms: count and maximum FRP per 1/64 tile world-grid cell',
-    access: 'Authenticated analysis requester; published satellite component; ready/partial UTC native analysis',
+    access: 'Public endpoint; published satellite component; ready/partial UTC native analysis',
     generate: (params: TileParams) => tilesRepository.detections(params)
   })
 });

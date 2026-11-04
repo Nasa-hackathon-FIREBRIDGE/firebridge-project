@@ -25,6 +25,7 @@ vi.mock('../src/middleware/idempotency.js', async (original) => {
   };
 });
 
+import { createDownloadLink } from '../src/utils/download-link.js';
 import { createApp } from '../src/app.js';
 import { tilesRepository } from '../src/repositories/tiles.repository.js';
 import { exportsRepository, type ExportJob } from '../src/repositories/exports.repository.js';
@@ -49,7 +50,6 @@ const context = {
 const job: ExportJob = {
   id: jobId,
   analysis_id: id,
-  requested_by: 'alice',
   kind: 'export',
   status: 'succeeded',
   request_hash: 'hash',
@@ -256,7 +256,7 @@ describe('Phase 4 export creation', () => {
 });
 
 describe('Phase 4 download', () => {
-  const path = `/api/v1/jobs/${jobId}/download`;
+  const path = createDownloadLink(jobId, new Date(Date.now() + 60000))!;
   it('streams an existing file with validated headers and length', async () => {
     const response = await (await app()).inject({ url: path });
     expect(response.statusCode).toBe(200);

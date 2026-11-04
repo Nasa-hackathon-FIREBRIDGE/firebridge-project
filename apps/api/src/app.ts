@@ -84,12 +84,11 @@ export function createApp(
   });
   app.register(cors, {
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
-    exposedHeaders: ['ETag', 'X-Request-Id', 'X-Data-Release-Id', 'Idempotent-Replayed'],
+    exposedHeaders: ['ETag', 'X-Request-Id', 'X-Data-Release-Id', 'Idempotent-Replayed', 'Content-Disposition', 'Retry-After', 'Location'],
     origin: (origin, callback) =>
       callback(
         null,
         !origin ||
-          (env.NODE_ENV === 'development' && env.CORS_ORIGINS.length === 0) ||
           env.CORS_ORIGINS.includes(origin)
       )
   });

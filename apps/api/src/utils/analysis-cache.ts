@@ -20,13 +20,12 @@ export function computeAnalysisRequestHash(request: Record<string, unknown>): st
 }
 export function computeAnalysisCacheKey(input: {
   request_spec: Record<string, unknown>;
-  requested_by: string;
   satellite_release_id: string;
   weather_release_id: string | null;
   reports_release_id: string | null;
 }): string {
   return computeAnalysisRequestHash({
-    cache_schema: 2,
+    cache_schema: 3,
     ...input,
     satellite_release_id: input.satellite_release_id.toLowerCase(),
     weather_release_id: input.weather_release_id?.toLowerCase() ?? null,

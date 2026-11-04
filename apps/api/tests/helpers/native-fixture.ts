@@ -10,10 +10,10 @@ export const nativeIds = {
 };
 
 // Synthetic geometry, dates and counts. This fixture must never seed the main database.
-export async function seedNativeResults(pool: pg.Pool) {
+export async function seedNativeResults(pool: pg.Pool, expectedDatabase = 'firebridge_phase1_test') {
   const current = await pool.query('SELECT current_database() AS name');
-  if (current.rows[0].name !== 'firebridge_phase1_test')
-    throw new Error('Native fixtures require firebridge_phase1_test.');
+  if ((expectedDatabase !== 'firebridge_phase1_test' && !/^firebridge_http_\d+_test$/.test(expectedDatabase)) || current.rows[0].name !== expectedDatabase)
+    throw new Error('Native fixtures require an explicitly isolated test database.');
   await seed({ exec: (sql) => pool.query(sql) }, true);
   const points = [
     ['terra', '2024-01-17T00:00:00.000001Z', -7.5, 30.5, 'standard', null],

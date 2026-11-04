@@ -1,0 +1,2 @@
+# Preserve the bytes of the historical migration whose checksum is stored in PostgreSQL.
+packages/database/prisma/sql/legacy_baseline_20261030000000.sql -text

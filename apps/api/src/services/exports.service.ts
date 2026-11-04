@@ -6,6 +6,7 @@ import { requireAvailableResult } from '../middleware/results-access.js';
 import { exportsRepository } from '../repositories/exports.repository.js';
 import { logger } from '../config/logger.js';
 import { ApiError } from '../utils/response.js';
+import { validateDownloadLink } from '../utils/download-link.js';
 
 export const exportsService = {
   async create(analysisId: string, input: ExportInput, key: string) {
@@ -30,7 +31,7 @@ export const exportsService = {
     };
   },
 
-  async download(id: string) {
+  async download(id: string, query: unknown) {
     const job = await exportsRepository.findById(id);
     if (!job || job.kind !== 'export' || !job.analysis_id) {
       throw new NotFoundError('Export job was not found.');
@@ -41,6 +42,7 @@ export const exportsService = {
     const gone = () => new AppError(410, 'EXPORT_GONE', 'Export file is no longer available.');
     if (!job.expires_at || job.expires_at.getTime() <= Date.now() || !job.result_manifest_uri)
       throw gone();
+    validateDownloadLink(id, query);
     const input = exportInputSchema.safeParse(job.request_spec);
     if (!input.success)
       throw new AppError(500, 'INVALID_EXPORT_METADATA', 'Invalid export metadata.');

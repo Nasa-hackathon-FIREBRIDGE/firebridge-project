@@ -1,3 +1,24 @@
+name: firebridge
+
+x-results-environment: &results-environment
+  TILE_MAX_ZOOM: ${TILE_MAX_ZOOM:-18}
+  TILE_QUERY_TIMEOUT_MS: ${TILE_QUERY_TIMEOUT_MS:-5000}
+  TILE_CACHE_SECONDS: ${TILE_CACHE_SECONDS:-60}
+  TILE_MAX_BYTES: ${TILE_MAX_BYTES:-2097152}
+  TILE_REQUESTS_PER_MINUTE: ${TILE_REQUESTS_PER_MINUTE:-120}
+  EXPORT_REQUESTS_PER_MINUTE: ${EXPORT_REQUESTS_PER_MINUTE:-5}
+  DOWNLOAD_REQUESTS_PER_MINUTE: ${DOWNLOAD_REQUESTS_PER_MINUTE:-30}
+  EXPORT_MAX_ACTIVE: ${EXPORT_MAX_ACTIVE:-2}
+  EXPORT_MAX_PER_HOUR: ${EXPORT_MAX_PER_HOUR:-10}
+  EXPORT_MAX_ROWS: ${EXPORT_MAX_ROWS:-1000000}
+  EXPORT_MAX_BYTES: ${EXPORT_MAX_BYTES:-268435456}
+  EXPORT_MAX_DURATION_SECONDS: ${EXPORT_MAX_DURATION_SECONDS:-300}
+  EXPORT_RETENTION_SECONDS: ${EXPORT_RETENTION_SECONDS:-86400}
+  EXPORT_BATCH_SIZE: ${EXPORT_BATCH_SIZE:-1000}
+  EXPORT_WORKER_CONCURRENCY: ${EXPORT_WORKER_CONCURRENCY:-2}
+  EXPORT_CLEANUP_INTERVAL_SECONDS: ${EXPORT_CLEANUP_INTERVAL_SECONDS:-60}
+  EXPORT_STORAGE_DIR: /app/.data/exports
+
 services:
   postgres:
     image: postgis/postgis:16-3.4
@@ -20,7 +41,7 @@ services:
     image: redis:7-alpine
     container_name: firebridge-redis
     ports:
-      - '${REDIS_PORT:-6379}:6379'
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
     command: ['redis-server', '--appendonly', 'yes']
     volumes:
       - redis_data:/data
@@ -36,8 +57,14 @@ services:
       dockerfile: Dockerfile.api
     container_name: firebridge-api
     environment:
+      <<: *results-environment
       NODE_ENV: development
       PORT: 3000
+      API_HOST: 0.0.0.0
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      PAGINATION_SECRET: ${PAGINATION_SECRET:-firebridge-dev-secret-key-32-chars-long}
+      MAX_AOI_VERTICES: ${MAX_AOI_VERTICES:-5000}
+      MAX_AOI_AREA_KM2: ${MAX_AOI_AREA_KM2:-250000}
       DEFAULT_SCOPE_KEY: ${DEFAULT_SCOPE_KEY:-morocco}
       CURSOR_SECRET: ${CURSOR_SECRET:?Set CURSOR_SECRET in .env to at least 32 characters}
       INGESTION_ADMIN_TOKEN: ${INGESTION_ADMIN_TOKEN:-}
@@ -50,7 +77,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     volumes:
       - exports_data:/app/.data/exports
     healthcheck:
@@ -73,6 +100,7 @@ services:
     init: true
     stop_grace_period: 35s
     environment:
+      <<: *results-environment
       NODE_ENV: development
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://firebridge:firebridge@postgres:5432/firebridge

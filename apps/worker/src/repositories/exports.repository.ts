@@ -5,7 +5,7 @@ import type { StoredFile } from '@firebridge/results/storage';
 export interface ClaimedExport {
   id: string;
   analysis_id: string;
-  requested_by: string;
+
   request_spec: ExportInput;
   attempt: number;
 }
@@ -18,7 +18,7 @@ export const workerExportsRepository = {
         error_code = NULL, progress = '{"stage":"exporting","percent":0}'::jsonb
       WHERE id = ${id}::uuid AND kind = 'export' AND attempt < 3
         AND (status = 'queued' OR (status = 'running' AND lease_expires_at <= now()))
-      RETURNING id::text, analysis_id::text, requested_by, request_spec, attempt
+      RETURNING id::text, analysis_id::text, request_spec, attempt
     `;
     return job ?? null;
   },

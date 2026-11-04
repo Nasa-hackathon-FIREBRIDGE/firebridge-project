@@ -12,7 +12,11 @@ const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({
+  // Concurrent API requests and worker startup can exceed Prisma's 2s default
+  // acquisition window on Docker Desktop. Keep the wait explicit and bounded.
+  transactionOptions: { maxWait: 5000, timeout: 10000 }
+});
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;

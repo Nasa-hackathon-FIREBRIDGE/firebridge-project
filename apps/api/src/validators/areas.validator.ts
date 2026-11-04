@@ -1,50 +1,16 @@
-/**
- * Zod validator for POST /api/v1/areas
- *
- * Request geometry convention (project specification):
- * ─────────────────────────────────────────────────────
- * The API accepts a GeoJSON-style Polygon geometry (type "Polygon") and internally
- * converts it to a PostGIS MultiPolygon(4326), consistent with the areas schema:
- *   geom geometry(MultiPolygon,4326)
- *
- * Coordinate order: [longitude, latitude] (GeoJSON standard / RFC 7946).
- *
- * Polygon constraints (verified against schema and specification):
- *   - Minimum vertices (exterior ring positions): 4  (3 distinct + closing repeat)
- *   - Maximum vertices (exterior ring positions): 10 000
- *   - Longitude range: [-180, 180]
- *   - Latitude range:  [-90, 90]
- *   - No NaN / Infinity / non-finite values
- *   - First and last coordinate must be identical (closed ring)
- *   - Self-intersections are rejected (enforced by PostGIS ST_IsValid)
- *   - Zero-area / degenerate geometries are rejected (enforced by PostGIS ST_IsValid)
- *
- * Area (surface) limits:
- *   - Maximum area: 50 000 000 km²  (approx. half the Earth's land surface)
- *   - Measured via PostGIS ST_Area(ST_Transform(geom, 3857)) on the server side
- *     to avoid client-side spherical approximation errors.
- *
- * Antimeridian handling:
- *   Polygons that cross the antimeridian (longitude 180 / -180) are accepted.
- *   The raw GeoJSON coordinates are stored as-is; PostGIS with SRID 4326 treats
- *   the geometry correctly when using geography cast or explicit wrap handling.
- *   Clients should supply coordinates that cross −180/180 naturally (e.g. using
- *   longitudes > 180 or < -180 if needed), following RFC 7946 §3.1.9.
- *
- * Additional request fields:
- *   - name            (required) human-readable label, 1–500 chars
- *   - version         (required) client-specified version string, 1–100 chars
- *   - display_timezone (required) IANA timezone string, 1–100 chars
- *   - provenance      (required) source description, 1–500 chars
+/** GeoJSON Polygon input in WGS84. The total vertex/surface limits come from env.
+ * Short edges are unwrapped, validated, and split at the dateline before storage.
+ * Self-intersections and empty geometry are rejected by PostGIS; surface uses geography.
  */
 
 import { z } from 'zod';
+import { env } from '../config/env.js';
 
 // ─── Limits ──────────────────────────────────────────────────────────────────
 
 export const AREA_MIN_RING_POSITIONS = 4; // 3 distinct + 1 closing (GeoJSON Polygon)
-export const AREA_MAX_RING_POSITIONS = 10_000;
-export const AREA_MAX_SURFACE_KM2 = 50_000_000; // 50 million km²
+export const AREA_MAX_RING_POSITIONS = env.MAX_AOI_VERTICES;
+export const AREA_MAX_SURFACE_KM2 = env.MAX_AOI_AREA_KM2;
 
 // ─── Coordinate primitive ─────────────────────────────────────────────────────
 
@@ -90,7 +56,7 @@ const linearRingSchema = z
 /**
  * GeoJSON Polygon geometry.
  * coordinates[0] is the exterior ring; subsequent entries are interior rings (holes).
- * Only exterior ring vertex/area limits are enforced at the API boundary.
+ * The vertex limit applies to all rings combined.
  * PostGIS ST_IsValid enforces structural validity (self-intersection, etc.).
  */
 const polygonGeometrySchema = z
@@ -100,7 +66,8 @@ const polygonGeometrySchema = z
       .array(linearRingSchema)
       .min(1, 'Polygon must have at least one ring (exterior).')
   })
-  .strict();
+  .strict()
+  .refine((geometry) => geometry.coordinates.reduce((sum, ring) => sum + ring.length, 0) <= env.MAX_AOI_VERTICES, 'Polygon exceeds the total vertex limit.');
 
 // ─── Area create schema ───────────────────────────────────────────────────────
 
@@ -109,7 +76,9 @@ export const areaCreateSchema = z
     geometry: polygonGeometrySchema,
     name: z.string().trim().min(1).max(500),
     version: z.string().trim().min(1).max(100),
-    display_timezone: z.string().trim().min(1).max(100),
+    display_timezone: z.string().trim().min(1).max(100).refine((value) => {
+      try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; }
+    }, 'Use an IANA timezone.'),
     provenance: z.string().trim().min(1).max(500)
   })
   .strict();

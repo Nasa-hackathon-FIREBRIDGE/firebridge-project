@@ -118,7 +118,8 @@ describe('Phase 4 real integration and performance', () => {
     keys.push(job.result_manifest_uri);
     expect(job.attempt).toBe(1);
     expect(job.status).toBe('succeeded');
-    const file = await app.inject({ url: `/api/v1/jobs/${id}/download` });
+    const detail = await app.inject({ url: `/api/v1/jobs/${id}` });
+    const file = await app.inject({ url: detail.json().data.download_url });
     expect(file.statusCode).toBe(200);
     if (format === 'csv') {
       expect(file.body.split('\r\n')).toHaveLength(rowCount + 2);

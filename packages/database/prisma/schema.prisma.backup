@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public", "firebridge"]
+}
+
+// HealthCheck table intentionally omitted:
+// Liveness and readiness checks are stateless; no persistent health records are stored.
+
+model Source {
+  id                String  @id
+  name              String
+  provider          String
+  kind              String
+  platform          String?
+  instrument        String?
+  product           String
+  collection        String
+  processingStream  String  @map("processing_stream")
+  documentationUrl  String  @map("documentation_url")
+  citation          String
+  licenseInfo       String  @map("license_info")
+  nativeResolutionM Float?  @map("native_resolution_m")
+  schemaVersion     String  @map("schema_version")
+  metadata          Json    @default("{}")
+
+  @@index([kind])
+  @@index([provider])
+  @@map("sources")
+  @@schema("firebridge")
+}

@@ -1,5 +1,9 @@
 # FIREBRIDGE
 
+L’[intégration backend/frontend publique livrée](docs/INTEGRATION_REPORT.md) conserve `/api/v1`, documente les dix endpoints sans authentification, la reprise non destructive appliquée, les services/hooks Axios et les tests HTTP avec worker réel. La base active possède désormais un [catalogue de test explicitement synthétique](docs/TEST_DATA.md) : sa readiness répond 200, sans que ces fixtures soient présentées comme des observations NASA réelles.
+
+L’[audit initial de l’intégration backend/frontend du 4 novembre 2026](docs/INTEGRATION_AUDIT.md) relève l’état réel des conteneurs, l’historique de migration incompatible de la base active, les contrôles d’accès manquants et les résultats des vérifications ciblées. Consulter ses prérequis avant toute reprise des migrations ou reconstruction de l’environnement existant.
+
 FIREBRIDGE est le backend du projet NASA Space Apps Challenge « Harmonization of MODIS and VIIRS Hot Spots ». Il utilise TypeScript, Fastify et PostgreSQL/PostGIS, avec un worker séparé pour les traitements longs.
 
 La phase 1 implémente le catalogue et les versions. La phase 2 apporte les zones, les analyses et les jobs. La phase 3 lit les détections, le résumé, le calendrier natif et la provenance sous `/api/v1/analyses/{id}`. Les routes Sources et les opérations de phase 5 sont également implémentées. La phase 6 ajoute les lectures de contexte préparé et les explications factuelles. La phase 4 est intégrée : tuiles MVT, exports CSV/GeoJSON/Parquet et téléchargement, avec les mêmes sources, versions et contrôles de complétude que les lectures natives. Voir le [compte rendu d’intégration](docs/PHASE_4_REVIEW.md).

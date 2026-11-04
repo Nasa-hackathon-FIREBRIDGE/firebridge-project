@@ -658,6 +658,6 @@ describe('Existing endpoints are unaffected', () => {
     const response = await app.inject({ method: 'GET', url: '/api/v1/health/live' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().status).toBe('ok');
+    expect(response.json().data.status).toBe('ok');
   });
 });

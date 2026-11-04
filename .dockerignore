@@ -13,3 +13,15 @@ docs/COMPRENDRE_FIREBRIDGE.md
 docs/PHASE_1_PAS_A_PAS.md
 
 .data
+**/*.dump
+**/*.backup
+**/migrations_backup*/
+/firebridge_backup*.sql
+/backend-inspection.txt
+/$secret
+/$envFile
+/$line
+/Add-Content
+/docker
+/if
+/q

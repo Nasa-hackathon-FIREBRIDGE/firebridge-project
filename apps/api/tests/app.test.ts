@@ -24,7 +24,7 @@ describe('Phase 1 routes with PostgreSQL queries', () => {
   const get = (path: string) => app.inject({ method: 'GET', url: '/api/v1' + path });
 
   it('checks liveness and real catalog readiness', async () => {
-    expect((await get('/health/live')).json().status).toBe('ok');
+    expect((await get('/health/live')).json().data.status).toBe('ok');
     expect((await get('/health/ready')).statusCode).toBe(200);
     await fixture.db.exec('DELETE FROM firebridge.release_aliases');
     expect((await get('/health/ready')).statusCode).toBe(503);
@@ -44,7 +44,7 @@ describe('Phase 1 routes with PostgreSQL queries', () => {
     try {
       const response = await degraded.inject('/api/v1/health/ready');
       expect(response.statusCode).toBe(503);
-      expect(response.json().checks).toMatchObject({
+      expect(response.json().data.checks).toMatchObject({
         database: 'ready',
         redis: 'unavailable',
         catalogue: 'ready'
@@ -282,8 +282,8 @@ describe('Phase 1 routes with PostgreSQL queries', () => {
       }
       const readiness = await unavailable.inject('/api/v1/health/ready');
       expect(readiness.statusCode).toBe(503);
-      expect(readiness.json().checks.database).toBe('unavailable');
-      expect(readiness.json().checks.catalogue).toBe('unavailable');
+      expect(readiness.json().data.checks.database).toBe('unavailable');
+      expect(readiness.json().data.checks.catalogue).toBe('unavailable');
       expect((await unavailable.inject('/api/v1/health/live')).statusCode).toBe(200);
     } finally {
       await unavailable.close();

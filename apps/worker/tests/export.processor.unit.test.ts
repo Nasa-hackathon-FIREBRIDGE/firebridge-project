@@ -31,7 +31,6 @@ const id = '44444444-4444-4444-8444-444444444444';
 const claim = {
   id,
   analysis_id: id,
-  requested_by: 'alice',
   attempt: 1,
   request_spec: { format: 'csv' as const, filters: {}, options: {} }
 };

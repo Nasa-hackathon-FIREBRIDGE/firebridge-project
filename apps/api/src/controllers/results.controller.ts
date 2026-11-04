@@ -27,7 +27,7 @@ export const resultsController = {
     reply.header('Cache-Control', 'private, no-store');
     const { id } = parseResultInput(resultIdSchema, req.params);
     await limitResultRequest(req, reply, 'download');
-    const file = await exportsService.download(id);
+    const file = await exportsService.download(id, req.query);
     return reply.type(file.mime).header('Content-Disposition', `attachment; filename="${file.filename}"`)
       .header('Content-Length', String(file.bytes)).send(file.stream);
   }

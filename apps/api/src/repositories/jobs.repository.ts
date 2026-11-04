@@ -62,7 +62,6 @@ export const jobsRepository = {
           kind,
           analysis_id::text,
           explanation_id::text,
-          requested_by,
           request_hash,
           idempotency_key,
           request_spec,

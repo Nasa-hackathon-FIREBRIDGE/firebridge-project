@@ -1,6 +1,7 @@
 export type ResourceStatus = 'planned' | 'active' | 'disabled';
 export * from './evidence.js';
 export * from './native-selection.js';
+export * from './http.js';
 
 export interface ApiContract {
   status: ResourceStatus;

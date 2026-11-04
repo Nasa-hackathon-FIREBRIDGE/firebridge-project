@@ -24,7 +24,7 @@ describe('Fastify health controllers', () => {
     mocks.getLiveStatus.mockReturnValue(payload);
     const response = await request(app()).get('/live');
     expect(response.status).toBe(200);
-    expect(response.body).toEqual(payload);
+    expect(response.body).toMatchObject({ schema_version: '1', data: payload, warnings: [] });
     expect(mocks.getReadiness).not.toHaveBeenCalled();
   });
   for (const status of ['ok', 'error'] as const) {
@@ -38,7 +38,7 @@ describe('Fastify health controllers', () => {
       mocks.getReadiness.mockResolvedValue(payload);
       const response = await request(app()).get('/ready');
       expect(response.status).toBe(status === 'ok' ? 200 : 503);
-      expect(response.body).toEqual(payload);
+      expect(response.body).toMatchObject({ schema_version: '1', data: payload, warnings: [] });
       expect(mocks.getReadiness).toHaveBeenCalledWith(
         expect.objectContaining({ isCatalogueServable: expect.any(Function) }),
         {}

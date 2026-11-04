@@ -20,9 +20,9 @@ export const analysisCreateSchema = z
     weather_policy: z.record(z.string(), z.unknown()).default({}),
     news_policy: z.record(z.string(), z.unknown()).default({}),
     // The client may optionally supply these, but server enforces fixed values
-    metric_key: z.string().optional(),
-    grid_id: z.string().nullable().optional(),
-    data_mode: z.string().optional()
+    metric_key: z.literal('native_detections_v1').optional(),
+    grid_id: z.null().optional(),
+    data_mode: z.literal('standard_only').optional()
   })
   .strict()
   .refine(
