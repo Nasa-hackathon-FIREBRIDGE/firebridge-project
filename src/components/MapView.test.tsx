@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
     handlers: Record<string, Handler[]> = {}
     layerHandlers: Record<string, Handler[]> = {}
     sources = new Map<string, { setData: ReturnType<typeof vi.fn> }>()
+    sourceDefinitions = new Map<string, unknown>()
     layers = new Set<string>()
     remove = vi.fn()
     resize = vi.fn()
@@ -27,6 +28,9 @@ const mocks = vi.hoisted(() => {
     addControl = vi.fn()
     zoomTo = vi.fn()
     flyTo = vi.fn()
+    fitBounds = vi.fn()
+    isSourceLoaded = () => true
+    querySourceFeatures = vi.fn((): unknown[] => [])
     getZoom = () => 7
     getCanvas = () => this.canvas
     canvas = Object.assign(new EventTarget(), { style: {} as Record<string, string> })
@@ -40,7 +44,10 @@ const mocks = vi.hoisted(() => {
     }
     emit(event: string, payload?: unknown) { this.handlers[event]?.forEach((handler) => handler(payload)) }
     emitLayer(event: string, layer: string, payload?: unknown) { this.layerHandlers[`${event}:${layer}`]?.forEach((handler) => handler(payload)) }
-    addSource(id: string) { this.sources.set(id, { setData: vi.fn() }) }
+    off(event: string, handler: Handler) { this.handlers[event] = this.handlers[event]?.filter((item) => item !== handler) ?? [] }
+    addSource(id: string, definition?: unknown) { this.sources.set(id, { setData: vi.fn() }); this.sourceDefinitions.set(id, definition) }
+    removeSource(id: string) { this.sources.delete(id) }
+    removeLayer(id: string) { this.layers.delete(id) }
     getSource(id: string) { return this.sources.get(id) }
     addLayer(layer: { id: string }) { this.layers.add(layer.id) }
     getLayer(id: string) { return this.layers.has(id) ? { id } : undefined }
@@ -72,6 +79,8 @@ vi.mock('maplibre-gl', () => ({
   NavigationControl: class {},
   AttributionControl: class {},
   setWorkerUrl: vi.fn(),
+  addProtocol: vi.fn(),
+  LngLatBounds: class { points: unknown[] = []; extend(point: unknown) { this.points.push(point); return this } },
 }))
 vi.mock('terra-draw', () => ({
   TerraDraw: mocks.FakeDraw,
@@ -233,6 +242,46 @@ describe('MapView with mocked MapLibre', () => {
     expect(lastMap().resize).toHaveBeenCalled()
     unmount()
     expect(disconnect).toHaveBeenCalled()
+  })
+})
+
+describe('MapView real-API layer integration (mocked renderer)', () => {
+  const id = '22222222-2222-4222-8222-222222222222'
+  it('requests only the whitelisted MVT source and renders no demo point source', () => {
+    renderMap({ apiMode: true, apiAnalysisId: id, area: null })
+    act(() => lastMap().emit('style.load'))
+    expect(lastMap().sources.has('astra-demo-points')).toBe(false)
+    expect(lastMap().sourceDefinitions.get('firebridge-detections')).toMatchObject({ type: 'vector', tiles: [`firebridge://tiles/${id}/detections/{z}/{x}/{y}.mvt`] })
+    expect(screen.queryByText(/No demo records/)).toBeNull()
+    expect(screen.getByText('Loading analysis tiles…')).toBeTruthy()
+    act(() => lastMap().emit('idle'))
+    expect(screen.getByText('No detections in the visible tiles')).toBeTruthy()
+  })
+  it('makes no tile source before results are available or while the layer is off', () => {
+    const { rerender, props } = renderMap({ apiMode: true, area: null })
+    act(() => lastMap().emit('style.load'))
+    expect(lastMap().sources.has('firebridge-detections')).toBe(false)
+    rerender(<MapView {...props} apiAnalysisId={id} showDetections={false} />)
+    expect(lastMap().sources.has('firebridge-detections')).toBe(false)
+    rerender(<MapView {...props} apiAnalysisId={id} showDetections />)
+    expect(lastMap().sources.has('firebridge-detections')).toBe(true)
+    rerender(<MapView {...props} apiAnalysisId={id} showDetections={false} />)
+    expect(lastMap().sources.has('firebridge-detections')).toBe(false)
+  })
+  it('shows source failures separately from basemap availability and keeps errors visible on idle', () => {
+    renderMap({ apiMode: true, apiAnalysisId: id, area: null, styleUrl: STYLE })
+    act(() => lastMap().emit('style.load'))
+    act(() => lastMap().emit('error', { sourceId: 'firebridge-detections', error: new Error('503') }))
+    act(() => lastMap().emit('idle'))
+    expect(screen.getByText('Analysis tiles could not be loaded')).toBeTruthy()
+    expect(lastMap().setStyle).not.toHaveBeenCalled()
+  })
+  it('fits a saved area and restores its extent with the dedicated control', () => {
+    renderMap({ apiMode: true })
+    act(() => lastMap().emit('style.load'))
+    expect(lastMap().fitBounds).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Fit study area' }))
+    expect(lastMap().fitBounds).toHaveBeenCalledTimes(2)
   })
 })
 

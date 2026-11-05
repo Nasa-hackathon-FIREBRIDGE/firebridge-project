@@ -19,16 +19,20 @@ import type { BasemapMode } from './components/MapView'
 import { ChatWidget } from './components/ChatWidget'
 import { SensorSelector } from './components/SensorSelector'
 import { SidebarMenu } from './components/SidebarMenu'
+import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar'
 import { NO_RECORDS_LABEL, selectedWithoutRecords } from './platforms'
 const MapView = lazy(() => import('./components/MapView').then((module) => ({ default: module.MapView })))
+const AnalysisWorkspace = lazy(() => import('./features/analyses/AnalysisWorkspace'))
 
 const navGroups = [
+  { title: 'FIREBRIDGE API', items: [{ to: '/analyses', label: 'Analysis workspace', icon: Activity }] },
   { title: 'Workspace', items: [{ to: '/', label: 'Overview', icon: Compass }, { to: '/explore', label: 'Explore map', icon: Map }, { to: '/compare', label: 'Compare sensors', icon: Layers2 }, { to: '/calendar', label: 'Activity calendar', icon: CalendarDays }] },
   { title: 'Insights', items: [{ to: '/weather', label: 'Weather context', icon: CloudSun }, { to: '/reports', label: 'Reports & events', icon: BookOpen }, { to: '/explain', label: 'Analysis notes', icon: Sparkles }, { to: '/alerts', label: 'Watchlist', icon: AlertTriangle }] },
   { title: 'Project', items: [{ to: '/evidence', label: 'Data & methods', icon: Database }, { to: '/settings', label: 'Preferences', icon: Settings2 }] },
 ]
 
 const pageTitles: Record<string, string> = {
+  '/analyses': 'Analysis workspace',
   '/': 'Overview', '/explore': 'Explore map', '/compare': 'Compare sensors', '/calendar': 'Activity calendar',
   '/weather': 'Weather context', '/reports': 'Reports & events', '/explain': 'Analysis notes', '/alerts': 'Watchlist',
   '/evidence': 'Data & methods', '/settings': 'Preferences',
@@ -51,14 +55,21 @@ function AppLayout() {
   const [openMenu, setOpenMenu] = useState<'workspace' | 'session' | null>(null)
   const location = useLocation()
   const pageTitle = pageTitles[location.pathname] ?? 'Overview'
+  const apiWorkspace = location.pathname === '/analyses'
+  const closeSidebar = () => {
+    setSidebarOpen(false)
+    if (apiWorkspace && window.matchMedia('(max-width: 760px)').matches)
+      document.querySelector<HTMLButtonElement>('.mobile-menu')?.focus()
+  }
   return (
-    <div className="app-shell">
-      {sidebarOpen && <button className="mobile-backdrop" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />}
-      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
+    <div className={`app-shell ${apiWorkspace ? 'fb-shell' : ''}`}>
+      {sidebarOpen && <button className="mobile-backdrop" aria-label="Close navigation" onClick={closeSidebar} />}
+      <aside id={apiWorkspace ? 'workspace-navigation' : undefined} className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
+        {apiWorkspace ? <WorkspaceSidebar close={closeSidebar} /> : <>
         <Link to="/" className="brand" onClick={() => setSidebarOpen(false)} aria-label="Astra Mind home">
           <span className="brand-mark"><Flame size={19} fill="currentColor" /></span>
           <span className="brand-text">ASTRA<span>MIND</span></span>
-          <span className="brand-beta">DEMO</span>
+          <span className="brand-beta">{apiWorkspace ? 'API' : 'DEMO'}</span>
         </Link>
         <SidebarMenu
           id="workspace-menu" className="workspace-switcher" placement="below" label="Workspace menu"
@@ -85,7 +96,7 @@ function AppLayout() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="demo-card"><span className="demo-pulse" /><div><strong>Illustrative mode</strong><small>Local synthetic records only</small></div></div>
+          <div className="demo-card"><div><strong>{apiWorkspace ? 'Public analysis workspace' : 'Illustrative mode'}</strong><small>{apiWorkspace ? 'Status shown from API probes' : 'Local synthetic records only'}</small></div></div>
           <SidebarMenu
             id="session-menu" className="sidebar-user" placement="above" label="Session menu"
             open={openMenu === 'session'} onOpenChange={(open) => setOpenMenu(open ? 'session' : null)}
@@ -98,16 +109,17 @@ function AppLayout() {
                         <Link to="/evidence" role="menuitem" className="sidebar-menu-item" onClick={() => setSidebarOpen(false)}><Database size={14} aria-hidden="true" /><span>Data & methods</span></Link>
           </SidebarMenu>
         </div>
+        </>}
       </aside>
       <main className="main-panel">
         <header className="topbar">
-          <div className="topbar-title"><button className="mobile-menu" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Menu size={19} /></button><div className="breadcrumbs"><span>FIREBRIDGE</span><span className="breadcrumb-slash">/</span><strong>{pageTitle}</strong></div></div>
-          <GlobalControls />
+          <div className="topbar-title"><button className="mobile-menu" aria-label="Open navigation" aria-expanded={sidebarOpen} aria-controls={apiWorkspace ? 'workspace-navigation' : undefined} onClick={() => { setSidebarOpen(true); if (apiWorkspace) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.fb-sidebar-close')?.focus()) }}><Menu size={19} /></button><div className="breadcrumbs"><span>FIREBRIDGE</span><span className="breadcrumb-slash">/</span><strong>{pageTitle}</strong></div></div>
+          {apiWorkspace ? <span className="fb-topbar-note">Public research workspace <span>WGS 84 / UTC</span></span> : <GlobalControls />}
         </header>
-        <div className="global-demo-banner"><Info size={14} /><span><strong>Demo workspace.</strong> All mapped detections and figures are synthetic; no live NASA data, observation coverage, or validated harmonization is connected.</span><Link to="/evidence">Data & methods <ArrowRight size={13} /></Link></div>
-        <Suspense fallback={<div className="loading-view">Loading local demo view…</div>}><AppPages /></Suspense>
+        {apiWorkspace ? <div className="global-demo-banner fb-api-banner"><Info size={14} /><span><strong>API workspace.</strong> Results come from the backend’s published releases. Data provenance depends on that release; test catalogues may contain synthetic fixtures.</span><Link to="/">Demo views <ArrowRight size={13} /></Link></div> : <div className="global-demo-banner"><Info size={14} /><span><strong>Demo workspace.</strong> All mapped detections and figures are synthetic; no live NASA data, observation coverage, or validated harmonization is connected.</span><Link to="/analyses">Open API workspace <ArrowRight size={13} /></Link></div>}
+        <Suspense fallback={<div className="loading-view">Loading workspace…</div>}><AppPages /></Suspense>
       </main>
-              <ChatWidget />
+              {!apiWorkspace && <ChatWidget />}
     </div>
   )
 }
@@ -135,6 +147,7 @@ function GlobalControls() {
 function AppPages() {
   return (
     <Routes>
+      <Route path="/analyses" element={<AnalysisWorkspace />} />
       <Route path="/" element={<WorkspacePage page="overview" />} />
       <Route path="/explore" element={<WorkspacePage page="explore" />} />
       <Route path="/compare" element={<WorkspacePage page="compare" />} />

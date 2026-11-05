@@ -1,6 +1,10 @@
-# ASTRA MIND frontend
+# FIREBRIDGE frontend
 
-ASTRA MIND's existing interface uses deterministic, explicitly synthetic fixtures to demonstrate a fire-observation exploration workflow. The public FIREBRIDGE API client, services and hooks are implemented separately and have real HTTP integration tests; they are not connected to the visual pages yet. The displayed points remain synthetic. Map tiles are requested only if you configure `VITE_MAP_STYLE_URL` (see below).
+The FIREBRIDGE **Analysis workspace** at `/analyses` connects the public API to area creation, analysis/component monitoring, native MVT tiles and asynchronous exports. It also reads the published catalogue, release provenance, signed pages of native detections, daily inventory counts and analysis context. A factual note is prepared by the existing deterministic worker; no external AI service is called. API liveness and data readiness are independent, and failed requests never substitute demonstration data.
+
+The workspace uses a scoped Tailwind 4 design with a forest sidebar, paper surfaces, compact forms and a map-first mobile layout. Source filters and pagination use the backend's saved analysis. Null FRP remains “Not measured”; unknown coverage and missing weather/reports remain explicit. Published synthetic releases retain their exact identifying names beside the results. See [the original integration report](INTEGRATION_REPORT.md) and [the latest UI and phase verification report](../FIREBRIDGE_UI_PHASE_VALIDATION.md) for evidence and unresolved acceptance failures.
+
+The existing ASTRA MIND demonstration routes remain available. They use deterministic, explicitly synthetic fixtures and are labelled separately from the API workspace. Basemap providers are optional; the API's MVT detection layer is requested only for an available satellite component.
 
 ## Run locally
 
@@ -14,13 +18,14 @@ The app is built with React, TypeScript, Vite, MapLibre GL, Terra Draw, TanStack
 ## Pages
 
 - **Overview:** selection summary, activity charts, map, synthetic record table, and illustrative field notes.
+- **Analysis workspace:** real API records, study areas, jobs, map tiles, observation tables, provenance, context, factual notes and CSV/GeoJSON/Parquet downloads.
 - **Explore map:** selectable synthetic point features, a user-drawn local polygon, shared filters, and CSV export.
 - **Compare sensors:** raw fixture counts, with harmonized response explicitly unavailable.
 - **Activity calendar:** daily synthetic record counts and date selection.
 - **Weather context, Reports & events, Analysis notes, and Watchlist:** honest unavailable states or clearly labeled illustrative content.
 - **Data & methods and Preferences:** fixture provenance, scientific limitations, and local display/filter controls.
 
-All pages share inclusive date filters, platform selection, search, a minimum-FRP filter, and the selected area. CSV export includes provenance and a synthetic-data indicator.
+Demonstration pages share inclusive date filters, platform selection, search, a minimum-FRP filter, and the selected area. Their local CSV export includes provenance and a synthetic-data indicator. The API workspace has independent forms and source filters, uses an exclusive UTC end date, and delegates export generation to the worker. Its area/analysis selection can be reopened from the page URL.
 
 ## Map configuration
 
@@ -31,7 +36,7 @@ The map is a MapLibre GL JS map showing the same filtered synthetic records as t
 - **Precedence:** `VITE_MAP_STYLE_URL` > `VITE_BASEMAP_PROVIDER` > schematic. With neither set, **no external map or tile request is made**.
 - **No style URL or provider, or the style fails/times out (10 s):** the app switches to a clearly labelled **schematic view** (dark background with a 1° longitude/latitude grid). A banner states that it is not satellite imagery and that the real basemap is unavailable. No other map provider is contacted as a substitute, and loading never spins indefinitely. Errors after a style has loaded (for example one tile) do not trigger the fallback.
 - **Esri tile failures:** if three tile requests fail before any tile loads, the app falls back to the schematic and says why. If tiles fail after some loaded, imagery stays and a small notice appears.
-- The app itself makes no NASA or other API calls. With a style URL or provider configured, the browser requests that style and its tiles from that provider.
+- Demo routes make no FIREBRIDGE API calls. `/analyses` uses `VITE_API_URL` (default `http://localhost:3000/api/v1`). With a style URL or provider configured, the browser also requests that provider's background tiles.
 
 ### Esri World Imagery: terms reviewed and limits
 
@@ -71,7 +76,7 @@ npm run build
 
 ## FIREBRIDGE API integration
 
-The technical integration is documented in [the backend delivery report](../backend_FIREBRIDGE/docs/INTEGRATION_REPORT.md). All ten API routes use the existing /api/v1 prefix.
+The frontend integration is documented in [the current frontend report](INTEGRATION_REPORT.md); [the earlier backend delivery report](../backend_FIREBRIDGE/docs/INTEGRATION_REPORT.md) describes backend contracts and its prior environment verification. All ten API routes use the existing /api/v1 prefix.
 
 Install the backend workspace dependencies first (npm ci in ../backend_FIREBRIDGE), then npm ci here. The predev/prebuild scripts compile the existing shared contracts package. VITE_API_URL defaults to http://localhost:3000/api/v1; copy .env.example to .env.local to override public build-time settings. Invalid URLs fail early.
 

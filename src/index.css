@@ -1,4 +1,18 @@
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
 @import 'maplibre-gl/dist/maplibre-gl.css';
+
+@theme static {
+  --color-firebridge-page: #060c19;
+  --color-firebridge-sidebar: #08111f;
+  --color-firebridge-panel: #0c1627;
+  --color-firebridge-surface: #101c31;
+  --color-firebridge-line: #1b2a44;
+  --color-firebridge-text: #e3ebf7;
+  --color-firebridge-cyan: #38bdf8;
+  --color-firebridge-blue: #5b9cf5;
+}
 
 :root {
   font-family: 'Segoe UI', Arial, sans-serif;
