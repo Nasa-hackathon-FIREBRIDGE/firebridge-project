@@ -7,4 +7,6 @@ export const apiKeys = {
   job: (id: string) => ['firebridge', 'job', id] as const,
   tiles: (id: string) => ['firebridge', 'tiles', id] as const,
   tile: (params: DetectionTileRequest) => [...apiKeys.tiles(params.id), params.layer, params.z, params.x, params.y] as const,
+  catalog: (scopeKey?: string) =>
+    ['firebridge', 'catalog', scopeKey ?? null] as const,
 }
