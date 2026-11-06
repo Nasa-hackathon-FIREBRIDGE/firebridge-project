@@ -4,16 +4,16 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "predev": "npm --prefix ../backend_FIREBRIDGE run build --workspace @firebridge/contracts",
+    "predev": "npm --prefix ../firebridge-backend run build --workspace @firebridge/contracts",
     "dev": "vite",
-    "prebuild": "npm --prefix ../backend_FIREBRIDGE run build --workspace @firebridge/contracts",
+    "prebuild": "npm --prefix ../firebridge-backend run build --workspace @firebridge/contracts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@firebridge/contracts": "file:../backend_FIREBRIDGE/packages/contracts",
+    "@firebridge/contracts": "file:../firebridge-backend/packages/contracts",
     "@tanstack/react-query": "^5.105.0",
     "axios": "^1.21.0",
     "echarts": "^6.1.0",

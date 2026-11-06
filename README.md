@@ -71,9 +71,9 @@ npm run build
 
 ## FIREBRIDGE API integration
 
-The technical integration is documented in [the backend delivery report](../backend_FIREBRIDGE/docs/INTEGRATION_REPORT.md). All ten API routes use the existing /api/v1 prefix.
+The technical integration is documented in [the backend delivery report](../firebridge-backend/docs/INTEGRATION_REPORT.md). All ten API routes use the existing /api/v1 prefix.
 
-Install the backend workspace dependencies first (npm ci in ../backend_FIREBRIDGE), then npm ci here. The predev/prebuild scripts compile the existing shared contracts package. VITE_API_URL defaults to http://localhost:3000/api/v1; copy .env.example to .env.local to override public build-time settings. Invalid URLs fail early.
+Install the backend workspace dependencies first (npm ci in ../firebridge-backend), then npm ci here. The predev/prebuild scripts compile the existing shared contracts package. VITE_API_URL defaults to http://localhost:3000/api/v1; copy .env.example to .env.local to override public build-time settings. Invalid URLs fail early.
 
 A single Axios instance lives in src/lib/axios.ts. It uses no authentication, tokens, identity headers or authentication cookies. One QueryClient lives in src/lib/queryClient.ts and is used by the existing App provider. Services are in src/services; the ten hooks are in src/hooks/useFirebridge.ts. Read hooks share in-flight queries and cancellation signals. Analysis/export mutations require a UUID idempotency key created with createIdempotencyKey(); retain the same key when retrying the same intent. Mutation retries are explicit.
 
