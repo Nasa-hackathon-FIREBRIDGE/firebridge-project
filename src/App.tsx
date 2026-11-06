@@ -11,6 +11,10 @@ import { AppStateProvider } from './state'
 import { useAppState } from './useAppState'
 import type { ActivitySummary, AnalysisSelection, Detection, ReportEvidence, SensorComparison, TemporalSummary } from './types'
 import './App.css'
+import './components/api/api-workspace.css'
+
+const ApiAnalysisPage = lazy(() => import('./pages/ApiAnalysisPage'))
+const IngestionPage = lazy(() => import('./pages/IngestionPage'))
 
 const ActivityChart = lazy(() => import('./components/Charts').then((module) => ({ default: module.ActivityChart })))
 const CalendarChart = lazy(() => import('./components/Charts').then((module) => ({ default: module.CalendarChart })))
@@ -24,12 +28,14 @@ import { CatalogPanel } from './components/CatalogPanel'
 const MapView = lazy(() => import('./components/MapView').then((module) => ({ default: module.MapView })))
 
 const navGroups = [
+  { title: 'FIREBRIDGE API', items: [{ to: '/api-analysis', label: 'Analyses API', icon: Activity }, { to: '/ingestion', label: 'Administration ingestion', icon: ShieldCheck }] },
   { title: 'Workspace', items: [{ to: '/', label: 'Overview', icon: Compass }, { to: '/explore', label: 'Explore map', icon: Map }, { to: '/compare', label: 'Compare sensors', icon: Layers2 }, { to: '/calendar', label: 'Activity calendar', icon: CalendarDays }] },
   { title: 'Insights', items: [{ to: '/weather', label: 'Weather context', icon: CloudSun }, { to: '/reports', label: 'Reports & events', icon: BookOpen }, { to: '/explain', label: 'Analysis notes', icon: Sparkles }, { to: '/alerts', label: 'Watchlist', icon: AlertTriangle }] },
   { title: 'Project', items: [{ to: '/evidence', label: 'Data & methods', icon: Database }, { to: '/settings', label: 'Preferences', icon: Settings2 }] },
 ]
 
 const pageTitles: Record<string, string> = {
+  '/api-analysis': 'Analyses API', '/ingestion': 'Administration ingestion',
   '/': 'Overview', '/explore': 'Explore map', '/compare': 'Compare sensors', '/calendar': 'Activity calendar',
   '/weather': 'Weather context', '/reports': 'Reports & events', '/explain': 'Analysis notes', '/alerts': 'Watchlist',
   '/evidence': 'Data & methods', '/settings': 'Preferences',
@@ -51,6 +57,7 @@ function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [openMenu, setOpenMenu] = useState<'workspace' | 'session' | null>(null)
   const location = useLocation()
+  const apiPage = ['/api-analysis', '/ingestion'].includes(location.pathname)
   const pageTitle = pageTitles[location.pathname] ?? 'Overview'
   return (
     <div className="app-shell">
@@ -103,12 +110,12 @@ function AppLayout() {
       <main className="main-panel">
         <header className="topbar">
           <div className="topbar-title"><button className="mobile-menu" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Menu size={19} /></button><div className="breadcrumbs"><span>FIREBRIDGE</span><span className="breadcrumb-slash">/</span><strong>{pageTitle}</strong></div></div>
-          <GlobalControls />
+          {apiPage ? <span className="topbar-status">FIREBRIDGE API</span> : <GlobalControls />}
         </header>
-        <div className="global-demo-banner"><Info size={14} /><span><strong>Demo workspace.</strong> All mapped detections and figures are synthetic; no live NASA data, observation coverage, or validated harmonization is connected.</span><Link to="/evidence">Data & methods <ArrowRight size={13} /></Link></div>
+        <div className="global-demo-banner"><Info size={14} /><span>{apiPage ? <><strong>Données du backend.</strong> La configuration du serveur détermine la base consultée. Les jeux de test restent synthétiques.</> : <><strong>Demo workspace.</strong> All mapped detections and figures are synthetic; no live NASA data, observation coverage, or validated harmonization is connected.</>}</span><Link to="/evidence">Data & methods <ArrowRight size={13} /></Link></div>
         <Suspense fallback={<div className="loading-view">Loading local demo view…</div>}><AppPages /></Suspense>
       </main>
-              <ChatWidget />
+              {!apiPage && <ChatWidget />}
     </div>
   )
 }
@@ -136,6 +143,8 @@ function GlobalControls() {
 function AppPages() {
   return (
     <Routes>
+      <Route path="/api-analysis" element={<Suspense fallback={<p role="status">Chargement…</p>}><ApiAnalysisPage /></Suspense>} />
+      <Route path="/ingestion" element={<Suspense fallback={<p role="status">Chargement…</p>}><IngestionPage /></Suspense>} />
       <Route path="/" element={<WorkspacePage page="overview" />} />
       <Route path="/explore" element={<WorkspacePage page="explore" />} />
       <Route path="/compare" element={<WorkspacePage page="compare" />} />

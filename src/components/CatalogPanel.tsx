@@ -1,4 +1,5 @@
 import { useCatalog } from '../hooks/useCatalog'
+import { CatalogTools } from './api/CatalogTools'
 
 export function CatalogPanel() {
   const { data, isPending, isError, error } = useCatalog()
@@ -16,7 +17,7 @@ export function CatalogPanel() {
   }
 
   return (
-    <section className="panel">
+    <div className="api-stack"><section className="panel">
       <h2>Sources du catalogue</h2>
       <p>Périmètre : {data.scope_key}</p>
 
@@ -35,6 +36,6 @@ export function CatalogPanel() {
           ))}
         </ul>
       )}
-    </section>
+    </section><CatalogTools key={data.scope_key} scopeKey={data.scope_key} releases={data.releases} sources={data.sources} /></div>
   )
 }
