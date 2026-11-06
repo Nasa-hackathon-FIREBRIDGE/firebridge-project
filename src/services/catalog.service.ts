@@ -1,5 +1,6 @@
 import type { ApiEnvelope } from '@firebridge/contracts'
 import api, { unwrap } from '../lib/axios'
+import type { ReleaseSummary } from './data.types'
 
 export interface CatalogSource {
   source_id: string
@@ -14,6 +15,7 @@ export interface CatalogSource {
 export interface CatalogView {
   scope_key: string
   sources: CatalogSource[]
+  releases: ReleaseSummary[]
 }
 
 export const catalog = {
