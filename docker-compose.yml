@@ -1,4 +1,4 @@
-name: firebridge
+name: firebridge-project
 
 x-results-environment: &results-environment
   TILE_MAX_ZOOM: ${TILE_MAX_ZOOM:-18}
@@ -69,8 +69,8 @@ services:
       CURSOR_SECRET: ${CURSOR_SECRET:?Set CURSOR_SECRET in .env to at least 32 characters}
       INGESTION_ADMIN_TOKEN: ${INGESTION_ADMIN_TOKEN:-}
       ANALYSIS_MAX_ATTEMPTS: ${ANALYSIS_MAX_ATTEMPTS:-3}
-      DATABASE_URL: postgresql://firebridge:firebridge@postgres:5432/firebridge
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://firebridge:firebridge@postgres:5432/firebridge}"
+      REDIS_URL: "${DOCKER_REDIS_URL:-redis://redis:6379}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,8 +102,8 @@ services:
     environment:
       <<: *results-environment
       NODE_ENV: development
-      REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgresql://firebridge:firebridge@postgres:5432/firebridge
+      REDIS_URL: "${DOCKER_REDIS_URL:-redis://redis:6379}"
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://firebridge:firebridge@postgres:5432/firebridge}"
       OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-10}
       ANALYSIS_MAX_ATTEMPTS: ${ANALYSIS_MAX_ATTEMPTS:-3}
       ANALYSIS_LEASE_SECONDS: ${ANALYSIS_LEASE_SECONDS:-60}
