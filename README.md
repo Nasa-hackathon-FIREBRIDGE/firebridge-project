@@ -126,3 +126,36 @@ npm.cmd run dev:api
 Ouvrir `http://localhost:3002/api-docs/`. Ces réponses utilisent une vraie base PostgreSQL, mais leurs données restent fictives. Fermer ce terminal après les essais pour retrouver les paramètres habituels de `.env` dans une nouvelle session.
 
 Le workflow GitHub Actions exécute lint, build et tests rapides, ainsi qu’un job PostgreSQL/PostGIS et Redis dédié, sur les Pull Requests et les branches `main`, `staging` et `feat/**`.
+
+## Démarrage du backend avec Docker Compose
+
+L’API, le worker, PostgreSQL/PostGIS et Redis peuvent être démarrés ensemble.
+Docker Desktop doit être lancé et le fichier `.env` configuré.
+
+La base sélectionnée doit avoir reçu les migrations. Les données et les versions
+publiées sont préparées séparément ; Docker ne télécharge pas de données NASA.
+
+Depuis le dossier backend :
+
+```powershell
+docker compose up -d --build
+docker compose ps
+```
+
+Le projet Compose se nomme `firebridge-project`.
+L’API est accessible sur http://localhost:3000 et Swagger sur
+http://localhost:3000/api-docs.
+
+L’API et le worker utilisent `DOCKER_DATABASE_URL` et `DOCKER_REDIS_URL`.
+Les variables `DATABASE_URL` et `REDIS_URL` servent aux programmes lancés
+directement sur l’ordinateur.
+
+Pour suivre les logs :
+
+```powershell
+docker compose logs -f --tail=50 api worker
+```
+
+Le frontend Vite reste lancé séparément.
+Si aucune version n’est publiée pour le périmètre configuré,
+le catalogue et la readiness peuvent répondre 503.

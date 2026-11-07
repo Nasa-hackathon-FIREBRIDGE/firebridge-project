@@ -81,14 +81,22 @@ Le `.env` partagé existant du backend/worker est conservé et complété avec `
 | `EXPORT_MAX_ACTIVE` | Nombre global d’exports simultanés ; remplace le nom trompeur `EXPORT_MAX_ACTIVE_PER_USER`. Les autres limites/délais sont dans `.env.example`. |
 | `VITE_API_URL` | URL HTTP exposée incluant `/api/v1`, configurée au démarrage/build Vite. |
 
-Compose utilise explicitement le nom `firebridge`, les services et volumes existants. PostgreSQL, Redis et l’API restent aux ports 5432, 6379 et 3000, liés à `127.0.0.1`. Le worker n’expose aucun port HTTP. API/worker partagent `firebridge_exports_data` et leurs limites de résultat sont transmises par la configuration Compose commune. PostgreSQL et Redis conservent leurs volumes. Les dumps, sauvegardes et artefacts personnels sont exclus du contexte d’image.
+Compose utilise le nom `firebridge-project` pour retrouver les services et
+volumes existants. PostgreSQL et l’API sont exposés sur `127.0.0.1`, aux ports
+5432 et 3000. Le port Redis côté ordinateur est configurable avec `REDIS_PORT`.
+Le worker n’expose aucun port HTTP.
+
+L’API et le worker utilisent les connexions `DOCKER_DATABASE_URL` et
+`DOCKER_REDIS_URL`, définies dans `.env`. Ils partagent le volume
+`firebridge-project_exports_data`. PostgreSQL et Redis conservent leurs volumes.
+Les sauvegardes et artefacts personnels sont exclus du contexte d’image.
 
 Depuis le backend, sous PowerShell :
 
 ```powershell
 npm.cmd ci
 npm.cmd run build
-docker compose -p firebridge up -d postgres redis
+docker compose -p firebridge-project up -d postgres redis
 # La base locale est déjà réconciliée. Pour les ajouts futurs, avec l’historique approprié :
 npm.cmd run prisma:deploy --workspace @firebridge/database
 npm.cmd run dev:api
@@ -99,9 +107,9 @@ npm.cmd run dev:worker
 Pour utiliser les applications dans Docker, après vérification des migrations :
 
 ```powershell
-docker compose -p firebridge build api worker
-docker compose -p firebridge up -d api worker
-docker compose -p firebridge ps
+docker compose -p firebridge-project build api worker
+docker compose -p firebridge-project up -d api worker
+docker compose -p firebridge-project ps
 ```
 
 Depuis le frontend, après installation des dépendances backend :
