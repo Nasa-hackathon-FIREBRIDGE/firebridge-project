@@ -59,7 +59,7 @@ export function HealthStatus() {
       )}
       {ready.data?.status === 'error' && (
         <p className="fb-muted">
-          HTTP 503: the API responded, but its data dependencies are not ready. A missing published
+          The service responded, but its data dependencies are not ready. A missing published
           catalogue is a readiness condition.
         </p>
       )}

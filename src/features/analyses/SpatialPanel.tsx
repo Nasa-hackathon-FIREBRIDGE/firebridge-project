@@ -3,6 +3,7 @@ import { Layers2, Maximize2 } from 'lucide-react'
 import type { AreaOfInterest } from '../../types'
 import { SectionHeading } from '../../components/workspace/SectionHeading'
 import { ApiError } from './Feedback'
+import { logDiagnostic } from '../../lib/userFeedback'
 
 const MapView = lazy(() =>
   import('../../components/MapView').then((module) => ({ default: module.MapView })),
@@ -106,12 +107,13 @@ class MapBoundary extends Component<{ children: ReactNode }, { failed: boolean }
   static getDerivedStateFromError() {
     return { failed: true }
   }
+  componentDidCatch(error: Error) { logDiagnostic(error, 'map-render') }
   render() {
     return this.state.failed ? (
-      <p className="fb-feedback" role="alert">
-        The map could not start. Check WebGL support. You can still submit GeoJSON and monitor
-        analyses.
-      </p>
+      <div className="fb-feedback" role="alert">
+        <strong>The map could not start.</strong><p>Check that WebGL is available in your browser. You can still submit GeoJSON and monitor analyses.</p>
+        <button className="button button-secondary" type="button" onClick={() => this.setState({ failed: false })}>Try loading the map again</button>
+      </div>
     ) : (
       this.props.children
     )

@@ -26,8 +26,8 @@ export interface Catalogue {
   limits: { max_aoi_vertices: number; max_aoi_area_km2: number; max_points_per_page: number }
 }
 export interface SourceCount extends SourceDescriptor {
-  count: string
-  observed_count: string
+  count: string | null
+  observed_count: string | null
   inventory_status: string
   count_status: string
   citation?: string
@@ -72,7 +72,7 @@ export interface NativeCalendar {
   periods: {
     start: string
     end_exclusive: string
-    counts_by_source: { source_id: string; count: string; count_status: string }[]
+    counts_by_source: { source_id: string; count: string | null; count_status: string }[]
   }[]
 }
 export interface ProvenancePage {

@@ -5,6 +5,7 @@ import { health } from '../services/health.service'
 import { areas } from '../services/areas.service'
 import { analyses, type AnalysisMutation, type ExportMutation } from '../services/analyses.service'
 import { jobs } from '../services/jobs.service'
+import { workspaceKeys } from './useWorkspace'
 export function useHealthLive() {
   return useQuery({
     queryKey: apiKeys.health('live'),
@@ -30,7 +31,10 @@ export function useCreateArea() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (input: CreateAreaRequest) => areas.create(input),
-    onSuccess: (area) => client.invalidateQueries({ queryKey: apiKeys.area(area.id), exact: true }),
+    onSuccess: async (area) => {
+      await client.invalidateQueries({ queryKey: apiKeys.area(area.id), exact: true })
+      await client.invalidateQueries({ queryKey: workspaceKeys.areas })
+    },
   })
 }
 export function useAnalysis(id: string | undefined) {
@@ -57,6 +61,8 @@ export function useCreateAnalysis() {
       await client.invalidateQueries({ queryKey: apiKeys.analysis(analysis.id), exact: true })
       if (analysis.job_id)
         await client.invalidateQueries({ queryKey: apiKeys.job(analysis.job_id), exact: true })
+      await client.invalidateQueries({ queryKey: workspaceKeys.analyses })
+      await client.invalidateQueries({ queryKey: workspaceKeys.jobs })
     },
   })
 }
@@ -109,8 +115,10 @@ export function useCreateExport() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (request: ExportMutation) => analyses.createExport(request),
-    onSuccess: (job) =>
-      client.invalidateQueries({ queryKey: apiKeys.job(job.job_id), exact: true }),
+    onSuccess: async (job) => {
+      await client.invalidateQueries({ queryKey: apiKeys.job(job.job_id), exact: true })
+      await client.invalidateQueries({ queryKey: workspaceKeys.jobs })
+    },
   })
 }
 // Download is an explicit action; its bytes never accumulate in the query cache.

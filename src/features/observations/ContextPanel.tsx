@@ -7,8 +7,8 @@ import { ApiError, Empty, Status } from '../analyses/Feedback'
 import { JobPanel } from '../analyses/JobPanel'
 import { useContextRead, useCreateExplanation, useExplanation } from './useResults'
 
-export function ContextPanel({ analysisId }: { analysisId?: string }) {
-  const [expanded, setExpanded] = useState(false)
+export function ContextPanel({ analysisId, initiallyExpanded = false }: { analysisId?: string; initiallyExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(initiallyExpanded)
   const coverage = useContextRead(analysisId, 'coverage', expanded)
   const comparison = useContextRead(analysisId, 'comparison', expanded)
   const weather = useContextRead(analysisId, 'weather', expanded)

@@ -1,4 +1,7 @@
 import type { PolygonGeometry } from '@firebridge/contracts'
+import { UserInputError } from '../../lib/userFeedback'
+
+const geometryError = (message: string) => new UserInputError(message, 'geometry')
 
 /** Preserve holes/elevation and antimeridian edges; PostGIS owns topology and budgets. */
 export function parseAreaGeometry(input: string): PolygonGeometry {
@@ -6,7 +9,7 @@ export function parseAreaGeometry(input: string): PolygonGeometry {
   try {
     value = JSON.parse(input)
   } catch {
-    throw new Error('Enter valid GeoJSON geometry JSON.')
+    throw geometryError('Enter valid GeoJSON geometry JSON.')
   }
   if (
     !value ||
@@ -17,10 +20,10 @@ export function parseAreaGeometry(input: string): PolygonGeometry {
     !Array.isArray(value.coordinates) ||
     !value.coordinates.length
   )
-    throw new Error('Provide a GeoJSON Polygon geometry with at least one ring.')
+    throw geometryError('Provide a GeoJSON Polygon geometry with at least one ring.')
   for (const ring of value.coordinates) {
     if (!Array.isArray(ring) || ring.length < 4)
-      throw new Error('Each ring needs at least three vertices and a closing position.')
+      throw geometryError('Each ring needs at least three vertices and a closing position.')
     for (const p of ring) {
       if (
         !Array.isArray(p) ||
@@ -32,16 +35,16 @@ export function parseAreaGeometry(input: string): PolygonGeometry {
         p[1] < -90 ||
         p[1] > 90
       )
-        throw new Error(
+        throw geometryError(
           'Positions must contain finite WGS 84 longitude [-180, 180] and latitude [-90, 90], with optional elevation.',
         )
     }
     if (ring[0][0] !== ring.at(-1)[0] || ring[0][1] !== ring.at(-1)[1])
-      throw new Error(
+      throw geometryError(
         'Every ring must be closed: repeat its first longitude and latitude at the end.',
       )
     if (new Set(ring.slice(0, -1).map((p: number[]) => `${p[0]},${p[1]}`)).size < 3)
-      throw new Error('Each ring needs three distinct vertices.')
+      throw geometryError('Each ring needs three distinct vertices.')
   }
   return value as PolygonGeometry
 }

@@ -81,8 +81,8 @@ export const results = {
           (s) =>
             isRecord(s) &&
             source(s) &&
-            count(s.count) &&
-            count(s.observed_count) &&
+            (count(s.count) || (s.count === null && s.count_status === 'unknown')) &&
+            (s.observed_count === null || count(s.observed_count)) &&
             text(s.count_status),
         ) &&
         isRecord(v.coverage) &&
@@ -143,7 +143,7 @@ export const results = {
             date(p.start) &&
             date(p.end_exclusive) &&
             Array.isArray(p.counts_by_source) &&
-            p.counts_by_source.every((s) => isRecord(s) && count(s.count) && text(s.source_id)),
+            p.counts_by_source.every((s) => isRecord(s) && (count(s.count) || (s.count === null && s.count_status === 'unknown')) && text(s.source_id)),
         ),
       signal,
     ),

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useDownloadExport, useJob } from '../../hooks/useFirebridge'
 import { isRecord } from '../../lib/api.validation'
 import { ApiError, Status } from './Feedback'
+import { ApiClientError } from '../../lib/axios'
 
 export function JobPanel({ id, allowDownload = false }: { id: string; allowDownload?: boolean }) {
   const query = useJob(id)
@@ -62,12 +63,18 @@ export function JobPanel({ id, allowDownload = false }: { id: string; allowDownl
       </div>
       <code>{id}</code>
       {query.isPending && <p role="status">Loading job…</p>}
-      <ApiError error={query.error} />
+      <ApiError
+        context="job"
+        error={query.error}
+        retry={() => {
+          void query.refetch()
+        }}
+      />
       {job && (
         <>
           <div className="fb-job-state" aria-live="polite">
             <Status value={job.status} />
-            <span>{job.current_stage.replaceAll('_', ' ')}</span>
+            <span>{stageLabel(job.current_stage, job.status)}</span>
           </div>
           <label className="fb-progress">
             Reported progress {percent === undefined ? 'not supplied' : `${percent}%`}
@@ -80,12 +87,19 @@ export function JobPanel({ id, allowDownload = false }: { id: string; allowDownl
               : ' · Automatic polling stopped.'}
           </p>
           {job.status === 'failed' && (
-            <p role="alert">
-              Job failed{job.error_code ? `: ${job.error_code}` : '.'}{' '}
-              {job.retryable
-                ? 'The backend reports this failure as retryable. No public retry endpoint is provided in this workflow.'
-                : 'The backend reports this failure as non-retryable.'}
-            </p>
+            <div className="fb-job-failure">
+              <ApiError
+                context={allowDownload ? 'export' : 'job'}
+                operation="write"
+                error={new ApiClientError('', 'EXECUTION_FAILED')}
+              />
+              <p className="fb-muted">
+                Job failed.{' '}
+                {job.retryable
+                  ? 'The server allows recovery, but this workspace has no job retry action. Ask an operator to inspect it.'
+                  : 'Automatic retries have stopped. Review the inputs before starting a new request.'}
+              </p>
+            </div>
           )}
           {job.status === 'partial' && (
             <p>Processing ended with partial results. Check component availability.</p>
@@ -126,8 +140,25 @@ export function JobPanel({ id, allowDownload = false }: { id: string; allowDownl
           )}
         </>
       )}
-      <ApiError error={download.error} />
+      <ApiError context="export" error={download.error} />
       {downloaded && <p role="status">File handed to your browser for download.</p>}
     </div>
   )
+}
+
+function stageLabel(stage: string, status: string) {
+  const labels: Record<string, string> = {
+    queued: 'Waiting for a worker',
+    running: 'Processing',
+    completed: 'Processing complete',
+    succeeded: 'Processing complete',
+    failed: 'Processing stopped',
+    partial: 'Partial results available',
+    cancelled: 'Cancelled',
+    loading: 'Loading inputs',
+    exporting: 'Preparing the file',
+    validating: 'Validating inputs',
+    writing: 'Writing results',
+  }
+  return labels[stage] ?? labels[status] ?? 'Processing status received'
 }

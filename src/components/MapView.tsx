@@ -209,8 +209,7 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
         return
       }
       if (!loaded && basemapRef.current === 'real') {
-        const message = event.error?.message
-        switchToFallback(`The configured basemap style could not be loaded${message ? ` (${message})` : ''}.`)
+        switchToFallback('The configured basemap style could not be loaded. Check your connection or use the schematic view.')
       }
     })
     if (current.kind === 'style-url') {

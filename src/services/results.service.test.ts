@@ -62,6 +62,13 @@ describe('public results service with isolated responses', () => {
     respond(data)
     await expect(results.summary('analysis')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
   })
+  it('accepts the backend’s explicit unknown counts without converting them to zeros', async () => {
+    const data = { ...fixtures.summary, native_detections_by_source: [{ ...fixtures.summary.native_detections_by_source[0], count: null, observed_count: '0', count_status: 'unknown' }] }
+    respond(data)
+    expect((await results.summary('analysis')).native_detections_by_source[0].count).toBeNull()
+    respond({ ...data, native_detections_by_source: [{ ...data.native_detections_by_source[0], count_status: 'complete' }] })
+    await expect(results.summary('analysis')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  })
   it('rejects malformed source descriptors and context reasons', async () => {
     respond({ ...fixtures.catalogue, sources: [{ platform: { unsafe: 'value' } }] })
     await expect(results.catalogue()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })

@@ -5,7 +5,7 @@ export const ESRI_SOURCE_ID = 'astra-esri-world-imagery'
 export const ESRI_ATTRIBUTION = 'Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community'
 const ESRI_TILE_URL = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 
-export const NO_BASEMAP_REASON = 'No basemap style is configured (VITE_MAP_STYLE_URL is not set).'
+export const NO_BASEMAP_REASON = 'No background map has been configured. Showing a coordinate grid.'
 
 export type BasemapSelection =
   | { kind: 'schematic'; key: string; reason: string }
@@ -32,7 +32,7 @@ export function resolveBasemap(styleUrl: string | undefined, provider: string | 
   if (url) return { kind: 'style-url', key: `style:${url}`, url }
   const id = (provider ?? '').trim().toLowerCase()
   if (id === ESRI_PROVIDER_ID) return { kind: 'esri', key: `provider:${id}`, style: esriStyle() }
-  if (id) return { kind: 'schematic', key: `invalid:${id}`, reason: `VITE_BASEMAP_PROVIDER "${id}" is not supported (supported: ${ESRI_PROVIDER_ID}), and VITE_MAP_STYLE_URL is not set.` }
+  if (id) return { kind: 'schematic', key: `invalid:${id}`, reason: 'The configured map provider is not supported. Showing a coordinate grid.' }
   return { kind: 'schematic', key: 'none', reason: NO_BASEMAP_REASON }
 }
 

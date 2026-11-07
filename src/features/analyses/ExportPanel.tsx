@@ -74,7 +74,7 @@ export function ExportPanel({ analysisId, available }: { analysisId: string; ava
           {create.isPending ? 'Requesting export…' : 'Prepare export'}
         </button>
       </form>
-      <ApiError error={create.error} />
+      <ApiError context="export" operation="write" error={create.error} />
       {jobId && (
         <>
           <JobPanel key={jobId} id={jobId} allowDownload />

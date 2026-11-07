@@ -1,15 +1,12 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { results } from '../../services/results.service'
+import { useCatalog } from '../../hooks/useCatalog'
+import { workspaceKeys } from '../../hooks/useWorkspace'
 
 const key = (id: string | undefined, resource: string) =>
   ['firebridge', 'results', id ?? '', resource] as const
 export function useCatalogue(enabled = true) {
-  return useQuery({
-    queryKey: ['firebridge', 'catalogue'],
-    queryFn: ({ signal }) => results.catalogue(signal),
-    staleTime: 60_000,
-    enabled,
-  })
+  return useCatalog(undefined, { enabled, staleTime: 60_000 })
 }
 export function useRelease(id?: string) {
   return useQuery({
@@ -66,8 +63,10 @@ export function useCreateExplanation() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ id, key }: { id: string; key: string }) => results.createExplanation(id, key),
-    onSuccess: (value) =>
-      client.setQueryData(['firebridge', 'explanation', value.explanation_id], value),
+    onSuccess: async (value) => {
+      client.setQueryData(['firebridge', 'explanation', value.explanation_id], value)
+      await client.invalidateQueries({ queryKey: workspaceKeys.jobs })
+    },
   })
 }
 export function useExplanation(id?: string) {

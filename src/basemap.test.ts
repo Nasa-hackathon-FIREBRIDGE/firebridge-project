@@ -5,7 +5,7 @@ describe('resolveBasemap', () => {
   it('makes no provider selection by default (schematic, no external requests)', () => {
     const selection = resolveBasemap('', '')
     expect(selection.kind).toBe('schematic')
-    expect(selection.kind === 'schematic' && selection.reason).toMatch(/VITE_MAP_STYLE_URL is not set/)
+    expect(selection.kind === 'schematic' && selection.reason).toMatch(/No background map has been configured/)
   })
 
   it('selects Esri World Imagery only when explicitly requested, with attribution', () => {
@@ -26,6 +26,6 @@ describe('resolveBasemap', () => {
   it('does not silently substitute an unsupported provider', () => {
     const selection = resolveBasemap('', 'osm')
     expect(selection.kind).toBe('schematic')
-    expect(selection.kind === 'schematic' && selection.reason).toMatch(/"osm" is not supported/)
+    expect(selection.kind === 'schematic' && selection.reason).toMatch(/map provider is not supported/)
   })
 })

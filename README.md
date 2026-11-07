@@ -2,11 +2,15 @@
 
 The FIREBRIDGE **Analysis workspace** at `/analyses` connects the public API to area creation, analysis/component monitoring, native MVT tiles and asynchronous exports. It also reads the published catalogue, release provenance, signed pages of native detections, daily inventory counts and analysis context. A factual note is prepared by the existing deterministic worker; no external AI service is called. API liveness and data readiness are independent, and failed requests never substitute demonstration data.
 
-The workspace uses a scoped Tailwind 4 design with a forest sidebar, paper surfaces, compact forms and a map-first mobile layout. Source filters and pagination use the backend's saved analysis. Null FRP remains “Not measured”; unknown coverage and missing weather/reports remain explicit. Published synthetic releases retain their exact identifying names beside the results. See [the original integration report](INTEGRATION_REPORT.md) and [the latest UI and phase verification report](../FIREBRIDGE_UI_PHASE_VALIDATION.md) for evidence and unresolved acceptance failures.
+The application uses one responsive FIREBRIDGE shell across research and demonstration views. Its original dark blue identity comes directly from the unchanged `src/index.css`, `src/App.css` and `src/features/analyses/workspace.css`: backgrounds, cyan accents, secondary colors, gradients, borders, buttons and component states retain their original values. The earlier graphite/lime Astra theme has been removed. Source filters and pagination use the backend's saved analysis. Null FRP remains “Not measured”; unknown coverage and missing weather/reports remain explicit. Published synthetic releases retain their exact identifying names beside the results. See [the original integration report](INTEGRATION_REPORT.md), [the latest UI and phase verification report](../FIREBRIDGE_UI_PHASE_VALIDATION.md), and [the current UI/UX and original identity report](FIREBRIDGE_UI_UX_POLISH.md) for evidence and limitations.
 
 The existing ASTRA MIND demonstration routes remain available. They use deterministic, explicitly synthetic fixtures and are labelled separately from the API workspace. Basemap providers are optional; the API's MVT detection layer is requested only for an available satellite component.
 
 ## Run locally
+
+The research dashboard is at `/dashboard`, the guided workflow is at `/analyses`, and the published data catalogue is at `/catalog`. `/api-analysis` retains the advanced results tools. Existing demonstration URLs, including `/`, retain their synthetic fixtures and are grouped separately in navigation. Dashboard counts describe loaded public server records, not account-specific or server-wide totals. Pagination follows the backend's identifier order; the analysis register prioritizes the newest timestamps among loaded records and initially shows eight rows.
+
+Use an origin allowed by the backend's CORS policy. The existing local configuration permits `http://localhost:5173`, which is the default Vite origin; alternate preview ports are not automatically authorized.
 
 ```powershell
 npm install
@@ -36,7 +40,7 @@ The map is a MapLibre GL JS map showing the same filtered synthetic records as t
 - **Precedence:** `VITE_MAP_STYLE_URL` > `VITE_BASEMAP_PROVIDER` > schematic. With neither set, **no external map or tile request is made**.
 - **No style URL or provider, or the style fails/times out (10 s):** the app switches to a clearly labelled **schematic view** (dark background with a 1° longitude/latitude grid). A banner states that it is not satellite imagery and that the real basemap is unavailable. No other map provider is contacted as a substitute, and loading never spins indefinitely. Errors after a style has loaded (for example one tile) do not trigger the fallback.
 - **Esri tile failures:** if three tile requests fail before any tile loads, the app falls back to the schematic and says why. If tiles fail after some loaded, imagery stays and a small notice appears.
-- Demo routes make no FIREBRIDGE API calls. `/analyses` uses `VITE_API_URL` (default `http://localhost:3000/api/v1`). With a style URL or provider configured, the browser also requests that provider's background tiles.
+- Demo maps and charts use local synthetic fixtures; `/evidence` also reads the FIREBRIDGE catalogue. `/analyses`, `/api-analysis`, `/ingestion`, and the catalogue use `VITE_API_URL` (default `http://localhost:3000/api/v1`). With a style URL or provider configured, the browser also requests that provider's background tiles.
 
 ### Esri World Imagery: terms reviewed and limits
 
@@ -76,12 +80,14 @@ npm run build
 
 ## FIREBRIDGE API integration
 
-The frontend integration is documented in [the current frontend report](INTEGRATION_REPORT.md); [the earlier backend delivery report](../backend_FIREBRIDGE/docs/INTEGRATION_REPORT.md) describes backend contracts and its prior environment verification. All ten API routes use the existing /api/v1 prefix.
+The original ten-operation integration is documented in [the backend delivery report](../backend_FIREBRIDGE/docs/INTEGRATION_REPORT.md). The frontend integration is documented in [the current frontend report](INTEGRATION_REPORT.md), while the catalogue and additional phase 1/3/5/6 services are documented in [the frontend integration guide](INTEGRATION_PHASES_1_3_5_6.md). All services use the existing /api/v1 prefix.
 
 Install the backend workspace dependencies first (npm ci in ../backend_FIREBRIDGE), then npm ci here. The predev/prebuild scripts compile the existing shared contracts package. VITE_API_URL defaults to http://localhost:3000/api/v1; copy .env.example to .env.local to override public build-time settings. Invalid URLs fail early.
 
-A single Axios instance lives in src/lib/axios.ts. It uses no authentication, tokens, identity headers or authentication cookies. One QueryClient lives in src/lib/queryClient.ts and is used by the existing App provider. Services are in src/services; the ten hooks are in src/hooks/useFirebridge.ts. Read hooks share in-flight queries and cancellation signals. Analysis/export mutations require a UUID idempotency key created with createIdempotencyKey(); retain the same key when retrying the same intent. Mutation retries are explicit.
+A single Axios instance lives in src/lib/axios.ts. Public services send no authentication, tokens, identity headers or authentication cookies. Only the five ingestion administration operations attach a temporary, manually entered bearer token; it is never stored in Vite configuration or Axios defaults. One QueryClient lives in src/lib/queryClient.ts and is used by the existing App provider. Services are in src/services; the original ten hooks are in src/hooks/useFirebridge.ts and the additional hooks are in useDataApi.ts and useIngestion.ts. Read hooks share in-flight queries and cancellation signals. Analysis/export mutations require a UUID idempotency key created with createIdempotencyKey(). Write mutations retain their idempotency key when explicitly retrying the same intent. Mutation retries are explicit.
 
-Downloads first read the public job endpoint to obtain its short-lived signed link. These links expire within five minutes and do not represent a user permission. The API and all resources in scope are public to anyone who can reach the server.
+Downloads first read the public job endpoint to obtain its short-lived signed link. These links expire within five minutes and do not represent a user permission. Consultation resources remain public; ingestion administration requires its technical bearer token.
+
+Open /api-analysis for backend analysis results, /evidence for catalogue/version/source inspection, and /ingestion for administration. Existing maps and charts still use synthetic local fixtures. The UI creates an explanation request, reads its state through GET /explanations/{id}, and displays the result when it is validated or available as a deterministic template fallback.
 
 Run npm run build, npm test and npm run lint here. The optional HTTP suite is skipped in ordinary unit tests; run node scripts/integration/run.mjs from the backend to provision an isolated test database and exercise real Axios/PostGIS/Redis/Worker processing. Synthetic TEST ONLY observations stay exclusively in that test database.

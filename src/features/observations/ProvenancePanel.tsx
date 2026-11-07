@@ -5,8 +5,8 @@ import { ApiClientError } from '../../lib/axios'
 import { ApiError, Empty, Status } from '../analyses/Feedback'
 import { useCatalogue, useProvenance, useSourceAvailability } from './useResults'
 
-export function ProvenancePanel({ analysisId }: { analysisId?: string }) {
-  const [expanded, setExpanded] = useState(false)
+export function ProvenancePanel({ analysisId, initiallyExpanded = false }: { analysisId?: string; initiallyExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(initiallyExpanded)
   const [sourceId, setSourceId] = useState<string>()
   const provenance = useProvenance(expanded ? analysisId : undefined)
   const catalogue = useCatalogue(expanded)

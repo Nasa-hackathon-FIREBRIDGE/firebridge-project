@@ -1,3 +1,4 @@
+import { UserInputError } from '../../lib/userFeedback'
 import { useRef, useState, type FormEvent } from 'react'
 import type { AreaView } from '@firebridge/contracts'
 import { useArea, useCreateArea } from '../../hooks/useFirebridge'
@@ -22,7 +23,8 @@ export function AreaPanel({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (lock.current) return
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     setError(null)
     try {
       const geometry = parseAreaGeometry(geometryText)
@@ -34,17 +36,24 @@ export function AreaPanel({
         geometry,
       }
       if (!input.name || !input.version || !input.provenance)
-        throw new Error('Name, version and provenance are required.')
+        throw new UserInputError('Name, version and provenance are required.')
       try {
         new Intl.DateTimeFormat('en', { timeZone: input.display_timezone })
       } catch {
-        throw new Error('Use a valid IANA timezone, such as Africa/Casablanca.')
+        throw new UserInputError(
+          'Use a valid IANA timezone, such as Africa/Casablanca.',
+          'timezone',
+        )
       }
       lock.current = true
       const result = await create.mutateAsync(input)
       onSelect(result.id)
     } catch (reason) {
       setError(reason)
+      if (reason instanceof UserInputError && reason.field) {
+        const field = formElement.elements.namedItem(reason.field)
+        if (field instanceof HTMLElement) field.focus()
+      }
     } finally {
       lock.current = false
     }
@@ -83,7 +92,25 @@ export function AreaPanel({
             <div className="fb-field-pair">
               <label>
                 Display timezone
-                <input name="timezone" defaultValue="Africa/Casablanca" required maxLength={100} />
+                <input
+                  name="timezone"
+                  aria-label="Display timezone"
+                  defaultValue="Africa/Casablanca"
+                  required
+                  maxLength={100}
+                  aria-invalid={error instanceof UserInputError && error.field === 'timezone'}
+                  aria-describedby={
+                    error instanceof UserInputError && error.field === 'timezone'
+                      ? 'area-timezone-error'
+                      : undefined
+                  }
+                  onChange={() => setError(null)}
+                />
+                {error instanceof UserInputError && error.field === 'timezone' && (
+                  <span className="fb-field-error" id="area-timezone-error">
+                    Use a city timezone such as Africa/Casablanca or UTC.
+                  </span>
+                )}
               </label>
               <label>
                 Provenance
@@ -98,7 +125,14 @@ export function AreaPanel({
             <label>
               GeoJSON Polygon
               <textarea
-                aria-describedby="geometry-help"
+                name="geometry"
+                aria-label="GeoJSON Polygon"
+                aria-describedby={
+                  error instanceof UserInputError && error.field === 'geometry'
+                    ? 'geometry-help geometry-error'
+                    : 'geometry-help'
+                }
+                aria-invalid={error instanceof UserInputError && error.field === 'geometry'}
                 rows={5}
                 value={geometryText}
                 onChange={(event) => {
@@ -110,6 +144,11 @@ export function AreaPanel({
                 required
                 spellCheck={false}
               />
+              {error instanceof UserInputError && error.field === 'geometry' && (
+                <span id="geometry-error" className="fb-field-error">
+                  {error.message}
+                </span>
+              )}
             </label>
             <p id="geometry-help" className="fb-muted">
               WGS 84 [longitude, latitude]. Holes and antimeridian crossings are preserved. The
@@ -121,10 +160,12 @@ export function AreaPanel({
           </fieldset>
         </form>
       </details>
-      <ApiError error={error} />
+      <ApiError context="area" operation="write" error={error} />
       {create.isSuccess && id === create.data.id && (
         <p role="status">
-          {create.data.created ? 'Area created (201).' : 'Existing area reused (200).'}
+          {create.data.created
+            ? 'Area saved. Ready for analysis.'
+            : 'Existing area opened. Ready for analysis.'}
         </p>
       )}
       <details className="fb-resource-loader">
@@ -135,7 +176,7 @@ export function AreaPanel({
             event.preventDefault()
             const value = String(new FormData(event.currentTarget).get('area-id')).trim()
             if (!validId(value)) {
-              setError(new Error('Enter a valid area UUID.'))
+              setError(new UserInputError('Enter a valid area UUID.'))
               return
             }
             setError(null)

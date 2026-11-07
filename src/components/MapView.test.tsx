@@ -128,7 +128,7 @@ describe('MapView with mocked MapLibre', () => {
     const { container } = renderMap({ styleUrl: '' })
     expect(typeof lastMap().options.style).toBe('object')
     expect(screen.getByText(/SCHEMATIC VIEW — not satellite imagery/)).toBeTruthy()
-    expect(screen.getByText(/VITE_MAP_STYLE_URL is not set/)).toBeTruthy()
+    expect(screen.getByText(/No background map has been configured/)).toBeTruthy()
     expect(screen.queryByText('Loading basemap…')).toBeNull()
     expect(container.querySelector('[data-basemap="schematic"]')).toBeTruthy()
   })
@@ -136,7 +136,8 @@ describe('MapView with mocked MapLibre', () => {
   it('falls back to the schematic when the style fails to load', () => {
     renderMap({ styleUrl: STYLE })
     act(() => lastMap().emit('error', { error: new Error('HTTP 403') }))
-    expect(screen.getByText(/could not be loaded \(HTTP 403\)/)).toBeTruthy()
+    expect(screen.getByText(/could not be loaded. Check your connection/)).toBeTruthy()
+    expect(screen.queryByText(/HTTP 403/)).toBeNull()
     expect(lastMap().setStyle).toHaveBeenCalledTimes(1)
     expect(lastMap().sources.has('astra-graticule')).toBe(true)
     expect(screen.queryByText('Loading basemap…')).toBeNull()
@@ -359,7 +360,7 @@ describe('Optional Esri World Imagery provider (mocked MapLibre; no real tiles)'
   it('rejects unknown providers and stays on the schematic', () => {
     renderMap({ basemapProvider: 'someone-else' })
     expect(typeof lastMap().options.style).toBe('object')
-    expect(screen.getByText(/"someone-else" is not supported/)).toBeTruthy()
+    expect(screen.getByText(/map provider is not supported/)).toBeTruthy()
     expect(screen.getByText(/SCHEMATIC VIEW/)).toBeTruthy()
   })
 

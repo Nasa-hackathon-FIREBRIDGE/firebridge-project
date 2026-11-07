@@ -3,6 +3,7 @@ import { ArrowDown, Filter, Table2 } from 'lucide-react'
 import { SectionHeading } from '../../components/workspace/SectionHeading'
 import { ApiError, Empty, Status } from '../analyses/Feedback'
 import { useDetections, useNativeCalendar, useNativeSummary } from './useResults'
+import { summarizeCounts } from '../../lib/nativeCounts'
 
 export function ObservationsPanel({ analysisId }: { analysisId?: string }) {
   const [sourceId, setSourceId] = useState('')
@@ -147,11 +148,14 @@ function NativeActivity({ analysisId }: { analysisId?: string }) {
     () =>
       calendar.data?.periods.map((period) => ({
         start: period.start,
-        count: period.counts_by_source.reduce((total, source) => total + BigInt(source.count), 0n),
+        ...summarizeCounts(period.counts_by_source),
       })) ?? [],
     [calendar.data],
   )
-  const max = rows.reduce((value, row) => (row.count > value ? row.count : value), 1n)
+  const max = rows.reduce(
+    (value, row) => (row.value !== null && row.value > value ? row.value : value),
+    1n,
+  )
   return (
     <div className="fb-native-activity">
       <div>
@@ -170,16 +174,25 @@ function NativeActivity({ analysisId }: { analysisId?: string }) {
           className="fb-activity-bars"
           role="img"
           aria-label={rows
-            .map((row) => `${row.start.slice(0, 10)}: ${row.count.toString()} records`)
+            .map(
+              (row) =>
+                `${row.start.slice(0, 10)}: ${row.value === null ? 'unknown' : `${row.lowerBound ? 'at least ' : ''}${row.value}`} records`,
+            )
             .join('; ')}
         >
           {rows.map((row) => (
             <div key={row.start}>
-              <span>{row.count.toLocaleString()}</span>
-              <div className="fb-activity-track">
+              <span>
+                {row.value === null
+                  ? '—'
+                  : `${row.lowerBound ? '≥ ' : ''}${row.value.toLocaleString()}`}
+              </span>
+              <div
+                className={`fb-activity-track ${row.value === null ? 'astra-activity-unknown' : ''}`}
+              >
                 <i
                   style={{
-                    height: `${row.count === 0n ? 0 : Math.max(2, (Number(row.count) / Number(max)) * 100)}%`,
+                    height: `${row.value === null || row.value === 0n ? 0 : Math.max(2, Number((row.value * 10000n) / max) / 100)}%`,
                   }}
                 />
               </div>

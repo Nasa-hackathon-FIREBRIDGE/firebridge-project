@@ -1,3 +1,5 @@
+import { UserInputError } from '../../lib/userFeedback'
+import { ApiClientError } from '../../lib/axios'
 import { useRef, useState, type FormEvent } from 'react'
 import type { AnalysisView } from '@firebridge/contracts'
 import { useCreateAnalysis } from '../../hooks/useFirebridge'
@@ -7,16 +9,20 @@ import { JobPanel } from './JobPanel'
 import { validDateRange, validId } from './validation'
 
 function reasonText(value: unknown): string {
-  if (value == null) return '—'
-  if (typeof value === 'string') return value || '—'
-  if (Array.isArray(value)) return value.length ? value.map(reasonText).join('; ') : '—'
-  if (typeof value === 'object') {
-    const entries = Object.entries(value)
-    return entries.length
-      ? entries.map(([key, entry]) => `${key}: ${reasonText(entry)}`).join('; ')
-      : '—'
+  if (value == null || (Array.isArray(value) && !value.length))
+    return 'No additional reason supplied'
+  const reasons: Record<string, string> = {
+    NO_WEATHER_RELEASE: 'No weather release is available for this analysis.',
+    NO_REPORTS_RELEASE: 'No reports release is available for this analysis.',
+    NO_COMPATIBLE_RELEASE: 'No compatible published dataset covers the selected period.',
+    GRID_REQUIRED: 'A prepared grid is required for this component.',
+    NO_OBSERVATION_MASKS: 'Observation masks have not been provided.',
+    'No weather release': 'No weather release is available for this analysis.',
   }
-  return String(value)
+  if (Array.isArray(value)) return [...new Set(value.map(reasonText))].join(' ')
+  return typeof value === 'string' && reasons[value]
+    ? reasons[value]
+    : 'This component has incomplete or unavailable published inputs. Review its data provenance.'
 }
 
 export function AnalysisPanel({
@@ -47,8 +53,13 @@ export function AnalysisPanel({
     const end_date_exclusive = String(form.get('end'))
     if (!validDateRange(start_date, end_date_exclusive)) {
       setFormError(
-        new Error('Use valid dates; the exclusive end date must be after the start date.'),
+        new UserInputError(
+          'Use valid dates; the exclusive end date must be after the start date.',
+          'end',
+        ),
       )
+      const field = event.currentTarget.elements.namedItem('end')
+      if (field instanceof HTMLElement) field.focus()
       return
     }
     const input = { area_id: areaId, start_date, end_date_exclusive }
@@ -89,11 +100,28 @@ export function AnalysisPanel({
             <div className="fb-field-pair">
               <label>
                 Start date (UTC)
-                <input name="start" type="date" required />
+                <input name="start" type="date" required onChange={() => setFormError(null)} />
               </label>
               <label>
                 End date, exclusive (UTC)
-                <input name="end" type="date" required />
+                <input
+                  name="end"
+                  aria-label="End date, exclusive (UTC)"
+                  type="date"
+                  required
+                  aria-invalid={formError instanceof UserInputError && formError.field === 'end'}
+                  aria-describedby={
+                    formError instanceof UserInputError && formError.field === 'end'
+                      ? 'analysis-date-error'
+                      : undefined
+                  }
+                  onChange={() => setFormError(null)}
+                />
+                {formError instanceof UserInputError && formError.field === 'end' && (
+                  <span className="fb-field-error" id="analysis-date-error">
+                    Choose an end date after the start date. The end day is excluded.
+                  </span>
+                )}
               </label>
             </div>
             <p className="fb-muted">
@@ -107,7 +135,7 @@ export function AnalysisPanel({
         </form>
       </details>
       {!areaId && <p className="fb-muted">Save or open an area to enable analysis creation.</p>}
-      <ApiError error={formError} />
+      <ApiError context="analysis" operation="write" error={formError} />
       {create.data && (
         <div className="fb-feedback" role="status">
           <strong>Analysis request accepted: {create.data.status}</strong>
@@ -127,7 +155,7 @@ export function AnalysisPanel({
             event.preventDefault()
             const value = String(new FormData(event.currentTarget).get('analysis-id')).trim()
             if (!validId(value)) {
-              setFormError(new Error('Enter a valid analysis UUID.'))
+              setFormError(new UserInputError('Enter a valid analysis UUID.'))
               return
             }
             setFormError(null)
@@ -145,7 +173,7 @@ export function AnalysisPanel({
         </form>
       </details>
       {loading && <p role="status">Loading analysis…</p>}
-      <ApiError error={error} retry={refresh} />
+      <ApiError context="analysis" error={error} retry={refresh} />
       {analysis ? (
         <div className="fb-details">
           <div className="fb-health-heading">
@@ -178,7 +206,13 @@ export function AnalysisPanel({
               components are not completed results.
             </p>
           )}
-          {analysis.error_code && <p role="alert">Analysis error: {analysis.error_code}</p>}
+          {analysis.status === 'failed' && (
+            <ApiError
+              context="analysis"
+              operation="write"
+              error={new ApiClientError('', 'EXECUTION_FAILED')}
+            />
+          )}
           {analysis.components.length ? (
             <div className="fb-table-scroll">
               <table>

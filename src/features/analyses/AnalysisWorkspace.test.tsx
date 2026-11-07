@@ -123,12 +123,23 @@ function installApi({ ready = false, missing = false, failed = false, expired = 
 }
 
 describe('API workspace integration with isolated HTTP responses', () => {
+  it('keeps the geometry label stable and focuses invalid geometry without sending a creation request', () => {
+    const requests = installApi({ ready: true })
+    mount()
+    fireEvent.change(screen.getByLabelText('Area name'), { target: { value: 'Invalid draft' } })
+    fireEvent.change(screen.getByLabelText('GeoJSON Polygon'), { target: { value: 'not JSON' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save area' }))
+    const geometry = screen.getByLabelText('GeoJSON Polygon')
+    expect(geometry.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(geometry)
+    expect(requests.some((request) => request.url === '/areas')).toBe(false)
+  })
   it('keeps liveness independent of unavailable catalogue and shows an honest empty workflow', async () => {
     const requests = installApi()
     mount()
     await screen.findByText('alive')
     expect(screen.getByText('not ready')).toBeTruthy()
-    expect(screen.getByText(/HTTP 503/)).toBeTruthy()
+    expect(screen.getByText(/data dependencies are not ready/)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Request analysis' }).hasAttribute('disabled')).toBe(
       false,
     ) // Disabled through the fieldset.
@@ -146,7 +157,7 @@ describe('API workspace integration with isolated HTTP responses', () => {
       target: { value: JSON.stringify(areaFixture.geometry) },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save area' }))
-    await screen.findByText('Area created (201).')
+    await screen.findByText('Area saved. Ready for analysis.')
     expect(await screen.findByText('not prepared')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Start date (UTC)'), { target: { value: '2024-01-01' } })
     fireEvent.change(screen.getByLabelText('End date, exclusive (UTC)'), {
@@ -158,10 +169,12 @@ describe('API workspace integration with isolated HTTP responses', () => {
     expect(within(table).getByText('ready')).toBeTruthy()
     expect(within(table).getByText('missing')).toBeTruthy()
     expect(await screen.findByText(`API layer ${analysisId}`)).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'Observations' }))
     await screen.findByRole('table', {
       name: 'Native detection records from the selected analysis',
     })
     expect(screen.getAllByRole('heading', { name: 'Observation records' })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('tab', { name: 'Context & notes' }))
     expect(screen.getAllByRole('heading', { name: 'Analysis context' })).toHaveLength(1)
     const request = requests.find((r) => r.url === '/analyses')!
     expect(request.body).toEqual({
@@ -173,9 +186,14 @@ describe('API workspace integration with isolated HTTP responses', () => {
       data_mode: 'standard_only',
     })
     expect(request.key).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'Exports' }))
     fireEvent.click(screen.getByRole('button', { name: 'Prepare export' }))
     await screen.findByRole('button', { name: 'Download file' })
     expect(requests.find((r) => r.url.endsWith('/exports'))?.key).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'Observations' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Exports' }))
+    await screen.findByRole('button', { name: 'Download file' })
+    expect(requests.filter((r) => r.url.endsWith('/exports'))).toHaveLength(1)
     expect(document.body.textContent).not.toContain('never-display')
   })
   it('shows missing analyses and never requests their result tiles or exports', async () => {
@@ -190,7 +208,7 @@ describe('API workspace integration with isolated HTTP responses', () => {
       throw new AxiosError('offline', 'ERR_NETWORK', config)
     }
     mount()
-    await waitFor(() => expect(screen.getAllByText('Unable to reach the API.')).toHaveLength(2))
+    await waitFor(() => expect(screen.getAllByText('We couldn’t connect to the server.')).toHaveLength(2))
     expect(document.body.textContent).not.toContain('synthetic records')
   })
   it.each([{ failed: true }, { expired: true }])(
@@ -198,10 +216,11 @@ describe('API workspace integration with isolated HTTP responses', () => {
     async (state) => {
       installApi({ ready: true, ...state })
       mount(`?analysis=${analysisId}`)
+      fireEvent.click(screen.getByRole('tab', { name: 'Exports' }))
       await screen.findByRole('button', { name: 'Prepare export' })
       fireEvent.click(screen.getByRole('button', { name: 'Prepare export' }))
       if (state.failed) {
-        await screen.findByText(/backend reports this failure as retryable/)
+        await screen.findByText(/server allows recovery/)
         expect(screen.getByRole('button', { name: 'Download file' }).hasAttribute('disabled')).toBe(
           true,
         )
@@ -235,6 +254,6 @@ describe('API workspace integration with isolated HTTP responses', () => {
     await act(async () => {
       release()
     })
-    await screen.findByText('Area created (201).')
+    await screen.findByText('Area saved. Ready for analysis.')
   })
 })

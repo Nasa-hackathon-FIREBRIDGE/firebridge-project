@@ -1,31 +1,49 @@
 import { CalendarDays, Database, ScanLine } from 'lucide-react'
 import { ApiError } from '../analyses/Feedback'
 import { useNativeSummary, useRelease } from './useResults'
+import { summarizeCounts } from '../../lib/nativeCounts'
 
 export function ObservationSummary({
   analysisId,
   releaseId,
+  status,
 }: {
   analysisId?: string
   releaseId?: string
+  status?: string
 }) {
   const summary = useNativeSummary(analysisId)
   const release = useRelease(releaseId)
-  const count = summary.data?.native_detections_by_source.reduce(
-    (total, source) => total + BigInt(source.count),
-    0n,
-  )
+  const count = summary.data ? summarizeCounts(summary.data.native_detections_by_source) : undefined
+  const waiting = analysisId
+    ? summary.isError
+      ? 'Records currently unavailable'
+      : 'Loading native records…'
+    : ['queued', 'running'].includes(status ?? '')
+      ? 'Processing; satellite results are not ready yet'
+      : status
+        ? 'No ready satellite results are available'
+        : 'Select an analysis to load its records'
   return (
     <>
       <div className="fb-data-strip" aria-label="Selected analysis facts">
         <div>
           <Database size={18} />
           <span>
-            Native records<strong>{count === undefined ? '—' : count.toLocaleString()}</strong>
+            Native records
+            <strong>
+              {count?.value == null
+                ? '—'
+                : `${count.lowerBound ? '≥ ' : ''}${count.value.toLocaleString()}`}
+            </strong>
             <small>
               {summary.data
-                ? 'Selected source inventory · lower bounds may apply'
-                : 'Select an analysis to load its records'}
+                ? count?.value === null
+                  ? 'Source inventory is incomplete; total unknown'
+                  : count?.lowerBound
+                    ? 'Lower bound · inventory is incomplete'
+                    : 'Selected source inventory'
+                : waiting}
             </small>
           </span>
         </div>
