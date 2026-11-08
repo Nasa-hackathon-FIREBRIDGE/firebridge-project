@@ -64,14 +64,14 @@ export function useCreateExplanation() {
   return useMutation({
     mutationFn: ({ id, key }: { id: string; key: string }) => results.createExplanation(id, key),
     onSuccess: async (value) => {
-      client.setQueryData(['firebridge', 'explanation', value.explanation_id], value)
+      client.setQueryData(key(value.explanation_id, 'explanation'), value)
       await client.invalidateQueries({ queryKey: workspaceKeys.jobs })
     },
   })
 }
 export function useExplanation(id?: string) {
   return useQuery({
-    queryKey: ['firebridge', 'explanation', id ?? ''],
+    queryKey: key(id, 'explanation'),
     queryFn: ({ signal }) => results.explanation(id!, signal),
     enabled: !!id,
     refetchInterval: (q) =>
