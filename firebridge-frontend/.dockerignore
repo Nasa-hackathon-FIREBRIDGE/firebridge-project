@@ -1,4 +1,9 @@
 node_modules
+.github
+**/tests
+**/*.test.*
+**/*.spec.*
+**/*.md
 dist
 dist-ssr
 .git
