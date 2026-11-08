@@ -1,4 +1,10 @@
 node_modules
+.github
+**/tests
+**/*.test.*
+**/*.spec.*
+**/*.md
+docs
 npm-debug.log
 .git
 coverage
