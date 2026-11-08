@@ -136,7 +136,14 @@ describe('Phase 4 selection matches Phase 3 on PostgreSQL/PostGIS', () => {
     ).rows[0];
     keys.push(metadata.result_manifest_uri);
     expect(metadata).toMatchObject({ status: 'succeeded', progress: { rows: 2 } });
-    const file = await app.inject('/api/v1/jobs/' + job + '/download');
+    const unsigned = await app.inject('/api/v1/jobs/' + job + '/download');
+    expect(unsigned.statusCode, unsigned.body).toBe(400);
+    expect(unsigned.json().code).toBe('INVALID_DOWNLOAD_LINK');
+    const jobResponse = await app.inject('/api/v1/jobs/' + job);
+    expect(jobResponse.statusCode, jobResponse.body).toBe(200);
+    const downloadUrl = jobResponse.json().data.download_url;
+    expect(downloadUrl).toEqual(expect.stringContaining(`/api/v1/jobs/${job}/download?`));
+    const file = await app.inject(downloadUrl);
     expect(file.statusCode, file.body).toBe(200);
     expect(file.body.trim().split(/\r?\n/)).toHaveLength(3);
     expect(file.body).toContain('terra');
