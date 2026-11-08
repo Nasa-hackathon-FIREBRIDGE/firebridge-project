@@ -1,0 +1,90 @@
+name: Staging application checks
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+
+defaults:
+  run:
+    working-directory: firebridge-backend
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/firebridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: firebridge-backend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: firebridge
+          POSTGRES_PASSWORD: firebridge
+          POSTGRES_DB: firebridge_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U firebridge -d firebridge_phase1_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://firebridge:firebridge@127.0.0.1:5432/firebridge_phase1_test
+      PHASE1_TEST_DATABASE_URL: postgresql://firebridge:firebridge@127.0.0.1:5432/firebridge_phase1_test
+      PHASE1_TEST_REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: firebridge-backend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run prisma:deploy --workspace @firebridge/database
+      - run: npm run test:postgres --workspace @firebridge/api
+      - run: npm run test:postgres --workspace @firebridge/worker
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firebridge-frontend
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/firebridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            firebridge-backend/package-lock.json
+            firebridge-frontend/package-lock.json
+      - run: npm ci
+        working-directory: firebridge-backend
+      - run: npm run build --workspace @firebridge/contracts
+        working-directory: firebridge-backend
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
