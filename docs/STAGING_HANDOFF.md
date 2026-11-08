@@ -104,6 +104,32 @@ Aucun accès au VPS, changement de base ou téléchargement NASA n'a été effec
 pour préparer cette livraison. Les contrôles utilisateur des fonctionnalités
 restent à réaliser avec l'équipe sur les données réelles après raccordement.
 
+## Vérifications de la livraison du 8 novembre 2026
+
+Les arbres Git des deux dossiers ont été comparés aux commits sources : leur
+contenu est identique. Les quatre branches des deux contributeurs figurent dans
+l'historique de staging. Les fichiers privés et les artefacts locaux sont exclus.
+Les chemins de travail et de lockfiles du workflow GitHub ont été vérifiés.
+
+La configuration Compose a été validée et la construction des images API,
+worker et frontend est vérifiée séparément sous le projet Docker
+`firebridge-staging-review`, sans lancement de conteneurs ni migration de base.
+Les tests fonctionnels restent manuels, conformément à l'organisation de l'équipe.
+Le résultat des jobs GitHub est à consulter après le push de cette branche.
+
+La construction a signalé des dépendances backend à mettre à jour : npm audit
+rapporte 20 alertes au total, dont deux critiques, en incluant les dépendances
+de développement. Une lecture séparée avec `npm audit --omit=dev --json`
+rapporte six alertes de production : trois modérées et trois élevées, aucune
+critique. Les paquets signalés sont `@fastify/static`, `@prisma/config`,
+`deepmerge-ts`, `glob`, `minimatch` et `prisma` (certaines alertes sont liées entre
+elles). Le frontend installé séparément n'a pas d'alerte signalée à cette date.
+
+La mise à jour et sa validation sont à planifier avant l'exposition publique sur
+le VPS. Les images backend installent actuellement aussi les dépendances de
+développement. Aucune mise à jour automatique ni commande `audit fix --force`
+n'a été appliquée pendant le regroupement des versions de l'équipe.
+
 ## Intégrer les prochains avancements
 
 Depuis un clone de staging propre, actualiser les références, vérifier les
