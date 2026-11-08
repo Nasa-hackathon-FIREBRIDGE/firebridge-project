@@ -15,6 +15,7 @@ dotenv.config({ path: resolve(process.cwd(), '../../.env') });
 import { prisma } from '@firebridge/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
+import { env } from '../../src/config/env.js';
 
 type App = Awaited<ReturnType<typeof createApp>>;
 
@@ -68,7 +69,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       payload
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode, response.body).toBe(201);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.message).toBe('Area created.');
@@ -102,7 +103,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       payload
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.message).toBe('Equivalent area already exists.');
@@ -145,7 +146,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       }
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode, response.body).toBe(400);
     expect(response.json().status).toBe('error');
     expect(response.json().code).toBe('VALIDATION_ERROR');
     expect(response.json().message).toMatch(/self-intersection|not valid/i);
@@ -178,7 +179,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       }
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode, response.body).toBe(201);
     expect(response.json().data.surface_km2).toBeGreaterThan(0);
     // 2 degrees longitude * 1 degree latitude at 17S is roughly 24,000 km2
     expect(response.json().data.surface_km2).toBeLessThan(50000);
@@ -190,7 +191,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       url: `/api/v1/areas/${createdAreaId}`
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.data.id).toBe(createdAreaId);
@@ -212,14 +213,14 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       }
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode, response.body).toBe(400);
     expect(response.json().code).toBe('NO_COMPATIBLE_RELEASE');
   });
 
   it('7. POST /api/v1/analyses atomically creates analysis, components, job, and outbox event with REPEATABLE READ', async () => {
     createdSatelliteReleaseId = randomUUID();
 
-    // Seed a published satellite release covering our test window in PostgreSQL
+    // Selection requires the configured scope and an actual publication timestamp.
     await prisma.$executeRaw`
       INSERT INTO firebridge.data_releases (
         id,
@@ -232,10 +233,11 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
         manifest_uri,
         dataset_kind,
         scope_key,
-        observation_cutoff
+        observation_cutoff,
+        published_at
       ) VALUES (
         ${createdSatelliteReleaseId}::uuid,
-        ${'satellite-release-' + Date.now()},
+        ${'TEST ONLY - satellite-release-' + Date.now()},
         'published',
         'retrospective',
         'v1.0.0',
@@ -243,8 +245,9 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
         '0000000000000000000000000000000000000000000000000000000000000000',
         's3://bucket/manifest.json',
         'satellite',
-        'global',
-        '2030-01-01T00:00:00Z'::timestamptz
+        ${env.DEFAULT_SCOPE_KEY},
+        '2030-01-01T00:00:00Z'::timestamptz,
+        now()
       );
     `;
 
@@ -258,7 +261,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       }
     });
 
-    expect(response.statusCode).toBe(202);
+    expect(response.statusCode, response.body).toBe(202);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.message).toBe('Analysis queued.');
@@ -267,6 +270,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
     expect(json.data.metric_key).toBe('native_detections_v1');
     expect(json.data.grid_id).toBeNull();
     expect(json.data.data_mode).toBe('standard_only');
+    expect(json.data.release_id).toBe(createdSatelliteReleaseId);
 
     createdAnalysisId = json.data.id;
     createdJobId = json.data.job_id;
@@ -279,11 +283,19 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
     expect(analysisRows).toHaveLength(1);
 
     // 2. analysis_components
-    const componentRows = await prisma.$queryRaw<Array<{ component: string; status: string }>>`
-      SELECT component, status FROM firebridge.analysis_components WHERE analysis_id = ${createdAnalysisId}::uuid;
+    const componentRows = await prisma.$queryRaw<
+      Array<{ component: string; status: string; release_id: string | null }>
+    >`
+      SELECT component, status, release_id::text FROM firebridge.analysis_components WHERE analysis_id = ${createdAnalysisId}::uuid;
     `;
-    expect(componentRows.length).toBeGreaterThanOrEqual(1);
-    expect(componentRows.some((c) => c.component === 'satellite' && c.status === 'ready')).toBe(true);
+    expect(componentRows).toHaveLength(3);
+    expect(componentRows).toEqual(
+      expect.arrayContaining([
+        { component: 'satellite', status: 'ready', release_id: createdSatelliteReleaseId },
+        { component: 'weather_historical', status: 'missing', release_id: null },
+        { component: 'reports', status: 'missing', release_id: null }
+      ])
+    );
 
     // 3. api_jobs
     const jobRows = await prisma.$queryRaw<Array<{ id: string; status: string }>>`
@@ -293,7 +305,9 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
     expect(jobRows[0]?.status).toBe('queued');
 
     // 4. outbox_events
-    const outboxRows = await prisma.$queryRaw<Array<{ id: string; aggregate_id: string; status: string }>>`
+    const outboxRows = await prisma.$queryRaw<
+      Array<{ id: string; aggregate_id: string; status: string }>
+    >`
       SELECT id::text, aggregate_id, status FROM firebridge.outbox_events WHERE aggregate_id = ${createdAnalysisId};
     `;
     expect(outboxRows).toHaveLength(1);
@@ -311,27 +325,39 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       }
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.message).toBe('Existing analysis reused.');
     expect(json.data.id).toBe(createdAnalysisId);
     expect(json.data.job_id).toBe(createdJobId);
+
+    const counts = await prisma.$queryRaw<
+      Array<{ analyses: bigint; components: bigint; jobs: bigint; events: bigint; keys: bigint }>
+    >`
+      SELECT
+        (SELECT count(*) FROM firebridge.analyses WHERE area_id = ${createdAreaId}::uuid) AS analyses,
+        (SELECT count(*) FROM firebridge.analysis_components WHERE analysis_id = ${createdAnalysisId}::uuid) AS components,
+        (SELECT count(*) FROM firebridge.api_jobs WHERE analysis_id = ${createdAnalysisId}::uuid) AS jobs,
+        (SELECT count(*) FROM firebridge.outbox_events WHERE aggregate_id = ${createdAnalysisId}) AS events,
+        (SELECT count(*) FROM firebridge.analysis_request_keys WHERE job_id = ${createdJobId}::uuid) AS keys;
+    `;
+    expect(counts[0]).toEqual({ analyses: 1n, components: 3n, jobs: 1n, events: 1n, keys: 1n });
   });
 
-  it('9. GET /api/v1/analyses/:id returns 200 with components and evaluates partial status', async () => {
+  it('9. GET /api/v1/analyses/:id returns 200 with components and preserves queued status', async () => {
     const response = await app.inject({
       method: 'GET',
       url: `/api/v1/analyses/${createdAnalysisId}`
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.data.id).toBe(createdAnalysisId);
     expect(json.data.area_id).toBe(createdAreaId);
     expect(json.data.components).toHaveLength(3);
-    // Since satellite is ready but weather/reports are missing, status is partial
+    // Missing optional components do not turn an unprocessed analysis into a completed result.
     expect(json.data.status).toBe('queued');
     expect(json.data.job.id).toBe(createdJobId);
   });
@@ -342,7 +368,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       url: `/api/v1/jobs/${createdJobId}`
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.data.id).toBe(createdJobId);

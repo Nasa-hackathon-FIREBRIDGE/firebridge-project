@@ -110,11 +110,15 @@ describe('Phase 1 on migrated PostgreSQL/PostGIS and Redis', () => {
 
   it('verifies PostgreSQL, Redis and the catalog without mocked probes', async () => {
     const response = await get('/health/ready');
-    expect(response.statusCode).toBe(200);
-    expect(response.json().checks).toMatchObject({
-      database: 'ready',
-      redis: 'ready',
-      catalogue: 'ready'
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({
+      request_id: response.headers['x-request-id'],
+      schema_version: '1',
+      data: {
+        status: 'ok',
+        checks: { database: 'ready', redis: 'ready', catalogue: 'ready' }
+      },
+      warnings: []
     });
   });
 

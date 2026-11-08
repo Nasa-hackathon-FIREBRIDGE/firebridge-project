@@ -121,6 +121,8 @@ This route only reads the database and sends `Cache-Control: no-store`. Polling 
 
 `GET /health/live` (under `/api/v1`) reports process liveness without a database query. `/health/ready` probes PostgreSQL, Redis and the configured default catalog, with bounded checks. The catalog provider is wired per Fastify application. A failing dependency returns `503`; external providers are not polled. Worker health is `not_checked`; the worker registers `analysis.requested` and `ingestion.plan.requested` separately.
 
+Health responses use the common envelope above: readiness status and dependency checks are returned in `data.status` and `data.checks`.
+
 The application does not seed synthetic releases. Ingestion must publish real metadata, membership and aliases using the [documented JSON conventions](docs/PHASE_1.md#contrat-à-respecter-côté-ingestion). Test fixtures run in an isolated embedded database and never populate the application database.
 
 ## Sources and Phase 0 integration
@@ -144,6 +146,8 @@ The five additive migrations create HealthCheck, Sources, the complete v2 busine
 ### Creation, result caching and request retries
 
 `POST /analyses` resolves the satellite and optional weather/reports releases before computing the result-cache key. Selection, cache lookup, analysis/components/job creation, request-key binding and outbox insertion use one `REPEATABLE READ` transaction. The cache identity includes the exact release UUIDs (null for missing context), normalized request parameters and all baseline/weather/news policies, plus the trusted requester identity. JSON object-key order does not change the identity. Changed versions or policies give distinct results; existing analyses retain their pinned inputs.
+
+Selected releases must match `DEFAULT_SCOPE_KEY`, use the `retrospective` stream, have `status=published` and a non-null `published_at`, and have an observation cutoff covering `end_date_exclusive`. Without a compatible satellite release, creation returns `400 NO_COMPATIBLE_RELEASE`.
 
 An explicit `Idempotency-Key` is a retry identity, separate from the result-cache identity: the same key and normalized intent return the original analysis/job (`200`), even after a new publication. Changed intent under the same key returns `409 IDEMPOTENCY_CONFLICT`. Use a fresh key, or omit the optional header, for an intentional request using newly selected versions. Keys contain 1-256 printable non-space ASCII characters. `analysis_request_keys` durably binds additional retry keys to an existing cached job without creating duplicate jobs. Retries of pre-migration analysis jobs remain supported through their original job key and request specification.
 
@@ -199,7 +203,9 @@ Retired feed gaps are presented as `accepted_unavailable` without retries; reads
 | ------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | GET    | `/api/v1/analyses/{id}/tiles/detections/{z}/{x}/{y}.mvt` | Binary MVT with bounded point aggregation at all zoom levels                                        |
 | POST   | `/api/v1/analyses/{id}/exports`                          | `202` with job ID; JSON `{"format":"csv"}`, also `geojson` or `parquet`; `Idempotency-Key` required |
-| GET    | `/api/v1/jobs/{id}/download`                             | Stream the completed, unexpired export; `409` pending, `410` expired                                |
+| GET    | `/api/v1/jobs/{id}/download?expires=…&signature=…`         | Stream the completed, unexpired export using the signed `download_url` from `GET /api/v1/jobs/{id}` |
+
+For a succeeded, unexpired export, retrieve the job and follow its `data.download_url` verbatim. The HMAC signature binds the job ID and expiration; links last at most five minutes and never outlive the file. An unsigned or invalid link returns `400 INVALID_DOWNLOAD_LINK`; an expired link returns `410 DOWNLOAD_LINK_EXPIRED` and can be refreshed by retrieving the job again. Pending exports return `409`; expired or removed files return `410 EXPORT_GONE`.
 
 Optional export filters are `source_id` and `day_night`; source filters must narrow the frozen selection. All paths honor the saved satellite release, sources, mode, UTC interval and exact AOI. Prepared partitions must all be valid, complete and consistent with SQL membership. A satellite component mismatch or incomplete serving slice returns `409`, including before a tile cache hit. Unsupported modes/quality policies are refused. Tile and export HTTP responses are private/no-store; Redis stores version-bound tiles internally for the configured TTL. Worker exports use a consistent database snapshot, bounded streaming and shared local storage. The current API has no identity provider; requester fields do not establish authenticated ownership. See [integration validation](docs/PHASE_4_REVIEW.md).
 

@@ -136,7 +136,25 @@ describe('Phase 4 selection matches Phase 3 on PostgreSQL/PostGIS', () => {
     ).rows[0];
     keys.push(metadata.result_manifest_uri);
     expect(metadata).toMatchObject({ status: 'succeeded', progress: { rows: 2 } });
-    const file = await app.inject('/api/v1/jobs/' + job + '/download');
+    const detail = await app.inject('/api/v1/jobs/' + job);
+    expect(detail.statusCode, detail.body).toBe(200);
+    expect(detail.json().data.status).toBe('succeeded');
+    const downloadUrl = detail.json().data.download_url;
+    expect(downloadUrl).toEqual(expect.any(String));
+    const signed = new URL(downloadUrl, 'http://localhost');
+    expect(signed.pathname).toBe('/api/v1/jobs/' + job + '/download');
+
+    const unsigned = await app.inject(signed.pathname);
+    expect(unsigned.statusCode, unsigned.body).toBe(400);
+    expect(unsigned.json().code).toBe('INVALID_DOWNLOAD_LINK');
+    // Alter a well-formed signature so the HMAC check, rather than query parsing, rejects it.
+    const signature = signed.searchParams.get('signature')!;
+    signed.searchParams.set('signature', (signature[0] === '0' ? '1' : '0') + signature.slice(1));
+    const tampered = await app.inject(signed.pathname + signed.search);
+    expect(tampered.statusCode, tampered.body).toBe(400);
+    expect(tampered.json().code).toBe('INVALID_DOWNLOAD_LINK');
+
+    const file = await app.inject(downloadUrl);
     expect(file.statusCode, file.body).toBe(200);
     expect(file.body.trim().split(/\r?\n/)).toHaveLength(3);
     expect(file.body).toContain('terra');
