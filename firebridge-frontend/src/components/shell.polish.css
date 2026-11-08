@@ -1,0 +1,61 @@
+/* Phase 5: shared chrome and feedback. No route, map or data lifecycle changes. */
+.fb-shell .sidebar { color: var(--text-secondary); }
+.fb-shell .nav-link { min-height: var(--target-control); font: var(--weight-label) var(--type-table)/var(--leading-table) var(--font-ui); color: var(--text-secondary); }
+.fb-shell .nav-link-active { color: var(--accent); }
+.fb-shell .nav-heading { min-height: var(--target-control); margin-block: 0 var(--space-2); font: var(--weight-heading) var(--type-label)/var(--leading-label) var(--font-ui); color: var(--text-secondary); letter-spacing: 0; text-transform: none; }
+.fb-shell .astra-demo-navigation > summary > span { font: var(--type-label)/var(--leading-label) var(--font-ui); color: var(--text-secondary); letter-spacing: 0; }
+.fb-shell .astra-brand-link strong { font-size: var(--type-table); }
+.fb-shell .astra-brand-link .fb-brand-symbol { flex-shrink: 0; }
+.fb-shell .astra-brand-link > div > span { color: var(--text-secondary); font: var(--type-label)/var(--leading-label) var(--font-ui); letter-spacing: 0; text-transform: lowercase; }
+.fb-shell .astra-brand-link > div > span::first-letter { text-transform: uppercase; }
+.fb-shell .astra-workspace-context :is(strong,small),.fb-shell .astra-sidebar-foot :is(p,small),.fb-shell .astra-public-label,.fb-shell .astra-coordinate { color: var(--text-secondary); font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .astra-workspace-context strong,.fb-shell .astra-sidebar-foot strong { color: var(--text-primary); }
+.fb-shell .astra-sidebar-foot { flex-shrink: 0; }
+.fb-shell .breadcrumbs { min-width: 0; gap: var(--space-2); color: var(--text-secondary); font: var(--type-label)/var(--leading-table) var(--font-ui); }
+.fb-shell .breadcrumbs strong { color: var(--text-primary); overflow-wrap: anywhere; }
+.fb-shell .breadcrumb-slash { color: var(--text-secondary); }
+.fb-shell :is(.astra-data-notice,.global-demo-banner) { font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell :is(.astra-data-notice,.global-demo-banner) a { min-height: var(--target-control); align-content: center; }
+.fb-shell .topbar-title { min-width: 0; }
+.fb-shell .topbar { gap: var(--space-2); }
+.fb-shell .topbar-demo { height: auto; min-height: 58px; padding-block: var(--space-2); }
+.fb-shell .topbar-controls { flex-wrap: wrap; gap: var(--space-2); }
+.fb-shell .topbar :is(.date-filter,.satellite-filter-button,.icon-button) { min-height: var(--target-control); }
+.fb-shell .topbar .icon-button { min-width: var(--target-control); }
+.fb-shell .topbar :is(.date-filter input,.satellite-filter-button,.topbar-status,.satellite-count,.date-separator) { font-size: var(--type-label); color: var(--text-secondary); }
+.fb-shell .topbar .date-filter { height: auto; }
+.fb-shell .topbar .date-filter input { width: 110px; min-height: var(--target-control); }
+.fb-shell .topbar .global-search :is(input,button) { min-height: var(--target-control); font-size: var(--type-body); }
+.fb-shell .topbar .satellite-popover :is(label,span,small,strong,p,button) { font-size: var(--type-label); }
+.fb-shell .topbar .satellite-popover label { min-height: var(--target-control); }
+.fb-shell .topbar :is(.satellite-popover,.global-search) { top: calc(100% + var(--space-2)); }
+.fb-shell :is(.fb-eyebrow,.astra-eyebrow,.platform-eyebrow,.overline,.dash-eyebrow) { font: var(--weight-label) var(--type-label)/var(--leading-label) var(--font-ui); color: var(--text-secondary); letter-spacing: 0; text-transform: none; }
+.fb-shell.astra-shell :is(.fw-workspace,.dash-dashboard) :is(.fb-eyebrow,.dash-eyebrow) { letter-spacing: 0; }
+.fb-shell :is(.fb-workspace-footer,.dash-footer,.page-footer) { font: var(--type-label)/var(--leading-table) var(--font-ui); color: var(--text-secondary); letter-spacing: 0; }
+.fb-shell :is(.fb-workspace-footer,.dash-footer,.page-footer) :is(span,small,a) { font-size: inherit; color: inherit; letter-spacing: 0; }
+.fb-shell :is(.nav-link,.ui-button,.button,.map-icon-button,.map-context-controls button,.map-draw-button,.dash-record,.dash-area-card,.ui-card,.geo-record-link,.astra-analysis-tabs > button,.api-tabs > button,summary) { transition: background-color var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard),box-shadow var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard); }
+.fb-shell :is(.ui-button,.button,.map-icon-button,.map-context-controls button,.map-draw-button,.astra-analysis-tabs > button,.api-tabs > button):active:not(:disabled) { box-shadow: inset 0 0 0 1px currentColor; }
+.fb-shell :is(.dash-record,.dash-area-card):focus-within { border-color: var(--accent); }
+.fb-shell .ui-card:hover { border-color: var(--dim); }
+.fb-shell :is(a,button,summary,input,select,textarea):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.fb-shell .astra-analysis-tabs,.fb-shell .api-tabs:has(.ui-tab-indicator) { position: relative; }
+.ui-tab-indicator { position: absolute; left: 0; bottom: 3px; height: 2px; background: var(--accent); border-radius: var(--radius-pill); pointer-events: none; transition: transform var(--motion-standard) var(--ease-standard),width var(--motion-standard) var(--ease-standard); }
+.fb-shell .sidebar { transition: transform var(--motion-standard) var(--ease-standard),visibility 0s; }
+@media (max-width: 820px) {
+  .fb-shell .sidebar { visibility: hidden; pointer-events: none; transition: transform var(--motion-standard) var(--ease-standard),visibility 0s var(--motion-standard); }
+  .fb-shell .sidebar-open { visibility: visible; pointer-events: auto; transition-delay: 0s; }
+  .fb-shell :is(.mobile-menu,.astra-sidebar-close) { min-width: var(--target-control); min-height: var(--target-control); width: var(--target-control); height: var(--target-control); flex-shrink: 0; color: var(--text-primary); }
+  .fb-shell .astra-brand-row { margin-inline: 0; gap: var(--space-2); }
+  .fb-shell .astra-brand-link { min-width: 0; }
+  .fb-shell .astra-brand-link > div { min-width: 0; }
+  .fb-shell .astra-header-context { gap: var(--space-2); }
+  .fb-shell .astra-public-label { white-space: normal; }
+  .fb-shell .topbar-demo .astra-header-context { flex-basis: 100%; width: 100%; flex-shrink: 1; }
+  .fb-shell .topbar-demo .topbar-controls { width: 100%; }
+  .fb-shell .topbar-demo .satellite-popover { left: 0; right: auto; top: calc(100% + var(--space-2)); }
+  .fb-shell .topbar-demo .global-search-wrap { position: static; }
+  .fb-shell .topbar-demo .global-search { top: calc(100% + var(--space-2)); left: var(--space-3); right: var(--space-3); width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fb-shell *,.fb-shell *::before,.fb-shell *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
