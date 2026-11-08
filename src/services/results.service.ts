@@ -33,7 +33,7 @@ const page = (v: Record<string, unknown>) =>
   text(v.analysis_id) && (v.next_cursor === null || text(v.next_cursor))
 const explanation = (v: Record<string, unknown>) =>
   ['explanation_id', 'analysis_id', 'job_id', 'snapshot_sha256'].every((k) => text(v[k])) &&
-  ['queued', 'running', 'succeeded', 'template_fallback', 'failed', 'cancelled'].includes(
+  ['queued', 'running', 'succeeded', 'validated', 'template_fallback', 'rejected', 'failed', 'cancelled'].includes(
     String(v.status),
   ) &&
   ['fr', 'en'].includes(String(v.language)) &&

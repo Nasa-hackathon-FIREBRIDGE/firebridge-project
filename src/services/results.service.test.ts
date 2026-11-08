@@ -92,6 +92,27 @@ describe('public results service with isolated responses', () => {
     respond(data)
     expect(await results.context('analysis', 'weather')).toEqual(data)
   })
+  it.each(['validated', 'rejected'])(
+    'accepts the backend explanation status %s',
+    async (status) => {
+      respond({
+        ...fixtures.explanation,
+        status,
+        output: status === 'rejected' ? null : fixtures.explanation.output,
+      })
+
+      await expect(results.explanation('note')).resolves.toMatchObject({ status })
+    },
+  )
+
+  it('rejects an unknown explanation status', async () => {
+    respond({ ...fixtures.explanation, status: 'unexpected_status' })
+
+    await expect(results.explanation('note')).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+    })
+  })
+
   it('preserves an explanation intent key and posts only the supported deterministic input', async () => {
     respond(fixtures.explanation)
     await results.createExplanation('analysis', 'stable-key')
