@@ -1,0 +1,1096 @@
+// SQL migrations preserve PostGIS types, CHECK constraints, generated columns and partial indexes.
+// Prisma maps migrated metadata; spatial reads/writes use parameterized SQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["firebridge", "public"]
+}
+
+model Source {
+  id                                                   String            @id
+  name                                                 String
+  provider                                             String
+  kind                                                 String
+  platform                                             String?
+  instrument                                           String?
+  product                                              String
+  collection                                           String
+  processingStream                                     String            @map("processing_stream")
+  documentationUrl                                     String            @map("documentation_url")
+  citation                                             String
+  licenseInfo                                          String            @map("license_info")
+  nativeResolutionM                                    Float?            @map("native_resolution_m")
+  schemaVersion                                        String            @map("schema_version")
+  metadata                                             Json              @default("{}")
+  assets                                               Asset[]
+  detections                                           Detection[]
+  feedSources                                          FeedSource[]
+  modelVersionsModelVersionsReferenceSourceIdTosources ModelVersion[]    @relation("model_versions_reference_source_idTosources")
+  modelVersionsModelVersionsSourceIdTosources          ModelVersion[]    @relation("model_versions_source_idTosources")
+  observations                                         Observation[]
+  weatherLocations                                     WeatherLocation[]
+  weatherSummaries                                     WeatherSummary[]
+
+  @@index([kind])
+  @@index([provider])
+  @@map("sources")
+  @@schema("firebridge")
+}
+
+model Area {
+  id                     String                  @id @db.Uuid
+  name                   String
+  version                String
+  geom                   Unsupported("geometry")
+  geometrySha256         String                  @map("geometry_sha256")
+  displayTimezone        String                  @map("display_timezone")
+  provenance             String
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  analyses               Analysis[]
+  areaCells              AreaCell[]
+  ingestionSubscriptions IngestionSubscription[]
+
+  @@unique([geometrySha256, version])
+  @@index([geom], map: "areas_geom_gist", type: Gist)
+  @@map("areas")
+  @@schema("firebridge")
+}
+
+model Asset {
+  id                 String                   @id @db.Uuid
+  sourceId           String                   @map("source_id")
+  nativeKey          String                   @map("native_key")
+  revision           String
+  sourceUrl          String                   @map("source_url")
+  storageUri         String                   @map("storage_uri")
+  sha256             String
+  byteSize           BigInt                   @map("byte_size")
+  timeStart          DateTime?                @map("time_start") @db.Timestamptz(6)
+  timeEnd            DateTime?                @map("time_end") @db.Timestamptz(6)
+  footprint          Unsupported("geometry")?
+  retrievedAt        DateTime                 @map("retrieved_at") @db.Timestamptz(6)
+  validationStatus   String                   @map("validation_status")
+  metadata           Json                     @default("{}")
+  sources            Source                   @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  detections         Detection[]
+  fetchAssets        FetchAsset[]
+  grids              Grid[]
+  newsReports        NewsReport[]
+  observationAssets  ObservationAsset[]
+  qualityIssues      QualityIssue[]
+  releaseAssets      ReleaseAsset[]
+  sourceAvailability SourceAvailability[]
+  weatherValues      WeatherValue[]
+
+  @@unique([id, sourceId])
+  @@unique([sourceId, nativeKey, revision, sha256])
+  @@index([footprint], map: "assets_footprint_gist", type: Gist)
+  @@map("assets")
+  @@schema("firebridge")
+}
+
+model DataPartition {
+  id                                                                         String                @id @db.Uuid
+  pipelineRunId                                                              String                @map("pipeline_run_id") @db.Uuid
+  kind                                                                       String
+  seriesKey                                                                  String                @map("series_key")
+  partitionKey                                                               String                @map("partition_key")
+  supportSpec                                                                Json                  @map("support_spec")
+  storageUri                                                                 String                @map("storage_uri")
+  sha256                                                                     String
+  inputManifestUri                                                           String                @map("input_manifest_uri")
+  schemaVersion                                                              String                @map("schema_version")
+  rowCount                                                                   BigInt                @map("row_count")
+  servingComplete                                                            Boolean               @map("serving_complete")
+  validationStatus                                                           String                @map("validation_status")
+  createdAt                                                                  DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  pipelineRuns                                                               PipelineRun           @relation(fields: [pipelineRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  partitionDependenciesPartitionDependenciesInputPartitionIdTodataPartitions PartitionDependency[] @relation("partition_dependencies_input_partition_idTodata_partitions")
+  partitionDependenciesPartitionDependenciesPartitionIdTodataPartitions      PartitionDependency[] @relation("partition_dependencies_partition_idTodata_partitions")
+  partitionDetections                                                        PartitionDetection[]
+  releasePartitions                                                          ReleasePartition[]
+
+  @@unique([id, seriesKey, partitionKey])
+  @@unique([seriesKey, partitionKey, sha256])
+  @@index([seriesKey, partitionKey, createdAt(sort: Desc)], map: "partitions_key")
+  @@map("data_partitions")
+  @@schema("firebridge")
+}
+
+model DataRelease {
+  id                  String              @id @db.Uuid
+  name                String              @unique
+  status              String
+  stream              String
+  codeVersion         String              @map("code_version")
+  config              Json
+  configSha256        String              @map("config_sha256")
+  manifestUri         String              @map("manifest_uri")
+  parentReleaseId     String?             @map("parent_release_id") @db.Uuid
+  datasetKind         String              @map("dataset_kind")
+  scopeKey            String              @map("scope_key")
+  observationCutoff   DateTime            @map("observation_cutoff") @db.Timestamptz(6)
+  validationReportUri String?             @map("validation_report_uri")
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  publishedAt         DateTime?           @map("published_at") @db.Timestamptz(6)
+  analyses            Analysis[]
+  analysisComponents  AnalysisComponent[]
+  dailyActivity       DailyActivity[]
+  dataReleases        DataRelease?        @relation("data_releasesTodata_releases", fields: [parentReleaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  childReleases       DataRelease[]       @relation("data_releasesTodata_releases")
+  evaluations         Evaluation[]
+  featureSets         FeatureSet[]
+  matchedPairs        MatchedPair[]
+  observations        Observation[]
+  pipelineRuns        PipelineRun[]
+  predictions         Prediction[]
+  releaseAliases      ReleaseAlias[]
+  releaseAssets       ReleaseAsset[]
+  changesFrom         ReleaseChange[]     @relation("release_changes_from_release_idTodata_releases")
+  changesTo           ReleaseChange[]     @relation("release_changes_to_release_idTodata_releases")
+  releasePartitions   ReleasePartition[]
+
+  @@index([scopeKey, status], map: "data_releases_scope_status")
+  @@map("data_releases")
+  @@schema("firebridge")
+}
+
+model FeedSource {
+  feedId             String               @map("feed_id")
+  sourceId           String               @map("source_id")
+  selector           Json
+  ingestionFeeds     IngestionFeed        @relation(fields: [feedId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources            Source               @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sourceAvailability SourceAvailability[]
+
+  @@id([feedId, sourceId])
+  @@map("feed_sources")
+  @@schema("firebridge")
+}
+
+model Grid {
+  id               String                  @id
+  version          String
+  projectionSrid   Int                     @map("projection_srid")
+  cellSizeM        Float                   @map("cell_size_m")
+  originXM         Float                   @map("origin_x_m")
+  originYM         Float                   @map("origin_y_m")
+  supportedExtent  Unsupported("geometry") @map("supported_extent")
+  landMaskAssetId  String                  @map("land_mask_asset_id") @db.Uuid
+  constructionSpec Json                    @map("construction_spec")
+  analyses         Analysis[]
+  gridCells        GridCell[]
+  assets           Asset                   @relation(fields: [landMaskAssetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("grids")
+  @@schema("firebridge")
+}
+
+model IngestionFeed {
+  id                     String                  @id
+  provider               String
+  adapter                String
+  adapterVersion         String                  @map("adapter_version")
+  endpointTemplate       String                  @map("endpoint_template")
+  credentialRef          String?                 @map("credential_ref")
+  rateLimitGroup         String                  @map("rate_limit_group")
+  capabilitySpec         Json                    @map("capability_spec")
+  state                  String
+  verifiedAt             DateTime?               @map("verified_at") @db.Timestamptz(6)
+  feedSources            FeedSource[]
+  ingestionSubscriptions IngestionSubscription[]
+
+  @@map("ingestion_feeds")
+  @@schema("firebridge")
+}
+
+model IngestionSubscription {
+  id                   String                @id @db.Uuid
+  feedId               String                @map("feed_id")
+  areaId               String                @map("area_id") @db.Uuid
+  scopeKey             String                @map("scope_key")
+  mode                 String
+  intervalSeconds      Int                   @map("interval_seconds")
+  overlapSeconds       Int                   @map("overlap_seconds")
+  historyStart         DateTime              @map("history_start") @db.Timestamptz(6)
+  fixedEndExclusive    DateTime?             @map("fixed_end_exclusive") @db.Timestamptz(6)
+  requestConfig        Json                  @map("request_config")
+  configSha256         String                @map("config_sha256")
+  enabled              Boolean               @default(false)
+  nextDueAt            DateTime?             @map("next_due_at") @db.Timestamptz(6)
+  leaseOwner           String?               @map("lease_owner")
+  leaseExpiresAt       DateTime?             @map("lease_expires_at") @db.Timestamptz(6)
+  fetchRuns            FetchRun[]
+  ingestionCheckpoints IngestionCheckpoint[]
+  ingestionGaps        IngestionGap[]
+  areas                Area                  @relation(fields: [areaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestionFeeds       IngestionFeed         @relation(fields: [feedId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([feedId, scopeKey, mode, configSha256])
+  @@map("ingestion_subscriptions")
+  @@schema("firebridge")
+}
+
+model MetricDefinition {
+  id            String          @id
+  version       String
+  unit          String
+  family        String
+  description   String
+  definition    Json
+  requiresMasks Boolean         @map("requires_masks")
+  requiresModel Boolean         @map("requires_model")
+  analyses      Analysis[]
+  dailyActivity DailyActivity[]
+
+  @@map("metric_definitions")
+  @@schema("firebridge")
+}
+
+model PipelineRun {
+  id                String          @id @db.Uuid
+  releaseId         String?         @map("release_id") @db.Uuid
+  stage             String
+  idempotencyKey    String          @unique @map("idempotency_key")
+  status            String
+  codeVersion       String          @map("code_version")
+  config            Json
+  inputManifestUri  String          @map("input_manifest_uri")
+  outputManifestUri String?         @map("output_manifest_uri")
+  startedAt         DateTime?       @map("started_at") @db.Timestamptz(6)
+  finishedAt        DateTime?       @map("finished_at") @db.Timestamptz(6)
+  errorCode         String?         @map("error_code")
+  logUri            String?         @map("log_uri")
+  dataPartitions    DataPartition[]
+  fetchRuns         FetchRun[]
+  dataReleases      DataRelease?    @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qualityIssues     QualityIssue[]
+
+  @@map("pipeline_runs")
+  @@schema("firebridge")
+}
+
+model ReleaseAlias {
+  alias        String
+  scopeKey     String      @map("scope_key")
+  releaseId    String      @map("release_id") @db.Uuid
+  generation   BigInt      @default(0)
+  updatedAt    DateTime    @map("updated_at") @db.Timestamptz(6)
+  dataReleases DataRelease @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([alias, scopeKey])
+  @@index([releaseId], map: "release_aliases_release")
+  @@map("release_aliases")
+  @@schema("firebridge")
+}
+
+model ReleaseAsset {
+  releaseId    String      @map("release_id") @db.Uuid
+  assetId      String      @map("asset_id") @db.Uuid
+  role         String
+  assets       Asset       @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases DataRelease @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([releaseId, assetId, role])
+  @@map("release_assets")
+  @@schema("firebridge")
+}
+
+model ReleaseChange {
+  id                   String                   @id @db.Uuid
+  fromReleaseId        String                   @map("from_release_id") @db.Uuid
+  toReleaseId          String                   @map("to_release_id") @db.Uuid
+  seriesKey            String                   @map("series_key")
+  affectedStart        DateTime                 @map("affected_start") @db.Timestamptz(6)
+  affectedEndExclusive DateTime                 @map("affected_end_exclusive") @db.Timestamptz(6)
+  affectedArea         Unsupported("geometry")? @map("affected_area")
+  reason               String
+  diffManifestUri      String                   @map("diff_manifest_uri")
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  fromRelease          DataRelease              @relation("release_changes_from_release_idTodata_releases", fields: [fromReleaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  toRelease            DataRelease              @relation("release_changes_to_release_idTodata_releases", fields: [toReleaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([toReleaseId], map: "release_changes_to")
+  @@map("release_changes")
+  @@schema("firebridge")
+}
+
+model ReleasePartition {
+  releaseId      String        @map("release_id") @db.Uuid
+  seriesKey      String        @map("series_key")
+  partitionKey   String        @map("partition_key")
+  partitionId    String        @map("partition_id") @db.Uuid
+  dataPartitions DataPartition @relation(fields: [partitionId, seriesKey, partitionKey], references: [id, seriesKey, partitionKey], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases   DataRelease   @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([releaseId, seriesKey, partitionKey])
+  @@map("release_partitions")
+  @@schema("firebridge")
+}
+
+model SourceAvailability {
+  feedId                String     @map("feed_id")
+  sourceId              String     @map("source_id")
+  checkedAt             DateTime   @map("checked_at") @db.Timestamptz(6)
+  availableStart        DateTime?  @map("available_start") @db.Timestamptz(6)
+  availableEndExclusive DateTime?  @map("available_end_exclusive") @db.Timestamptz(6)
+  status                String
+  evidenceAssetId       String?    @map("evidence_asset_id") @db.Uuid
+  detail                Json
+  assets                Asset?     @relation(fields: [evidenceAssetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  feedSources           FeedSource @relation(fields: [feedId, sourceId], references: [feedId, sourceId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([feedId, sourceId, checkedAt])
+  @@index([feedId, sourceId, checkedAt(sort: Desc)], map: "source_availability_recent")
+  @@map("source_availability")
+  @@schema("firebridge")
+}
+
+model HealthCheck {
+  id        String   @id
+  createdAt DateTime @default(now())
+  status    String
+
+  @@schema("public")
+}
+
+model SpatialReferenceSystem {
+  srid      Int     @id
+  authName  String? @map("auth_name") @db.VarChar(256)
+  authSrid  Int?    @map("auth_srid")
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
+
+  @@map("spatial_ref_sys")
+  @@ignore
+  @@schema("public")
+}
+
+model AiExplanation {
+  id                  String           @id @db.Uuid
+  snapshotId          String           @map("snapshot_id") @db.Uuid
+  language            String
+  question            String
+  provider            String
+  modelId             String           @map("model_id")
+  promptVersion       String           @map("prompt_version")
+  toolContractVersion String           @map("tool_contract_version")
+  outputJson          Json?            @map("output_json")
+  status              String
+  validationReport    Json?            @map("validation_report")
+  toolTraceUri        String?          @map("tool_trace_uri")
+  inputTokens         Int?             @map("input_tokens")
+  outputTokens        Int?             @map("output_tokens")
+  cacheKey            String           @unique @map("cache_key")
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt         DateTime?        @map("completed_at") @db.Timestamptz(6)
+  evidenceSnapshots   EvidenceSnapshot @relation(fields: [snapshotId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  apiJobs             ApiJob[]
+
+  @@map("ai_explanations")
+  @@schema("firebridge")
+}
+
+model Analysis {
+  id                 String              @id @db.Uuid
+  areaId             String              @map("area_id") @db.Uuid
+  releaseId          String              @map("release_id") @db.Uuid
+  startDate          DateTime            @map("start_date") @db.Date
+  endDateExclusive   DateTime            @map("end_date_exclusive") @db.Date
+  timeBasis          String              @map("time_basis")
+  metricKey          String              @map("metric_key")
+  gridId             String?             @map("grid_id")
+  selectionPolicy    String              @map("selection_policy")
+  weightingVersion   String              @map("weighting_version")
+  baselineSpec       Json?               @map("baseline_spec")
+  weatherPolicy      Json                @map("weather_policy")
+  newsPolicy         Json                @map("news_policy")
+  requestSpec        Json                @map("request_spec")
+  cacheKey           String              @unique @map("cache_key")
+  status             String
+  errorCode          String?             @map("error_code")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt        DateTime?           @map("completed_at") @db.Timestamptz(6)
+  areas              Area                @relation(fields: [areaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  grids              Grid?               @relation(fields: [gridId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  metricDefinitions  MetricDefinition    @relation(fields: [metricKey], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases       DataRelease         @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  analysisComponents AnalysisComponent[]
+  analysisEventLinks AnalysisEventLink[]
+  apiJobs            ApiJob[]
+  calendarPeriods    CalendarPeriod[]
+  evidenceSnapshots  EvidenceSnapshot[]
+  weatherSummaries   WeatherSummary[]
+
+  @@map("analyses")
+  @@schema("firebridge")
+}
+
+model AnalysisComponent {
+  analysisId   String       @map("analysis_id") @db.Uuid
+  component    String
+  releaseId    String?      @map("release_id") @db.Uuid
+  status       String
+  reasons      Json         @default("[]")
+  analyses     Analysis     @relation(fields: [analysisId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases DataRelease? @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([analysisId, component])
+  @@map("analysis_components")
+  @@schema("firebridge")
+}
+
+model AnalysisEventLink {
+  analysisId         String        @map("analysis_id") @db.Uuid
+  eventId            String        @map("event_id") @db.Uuid
+  relation           String
+  matchMethodVersion String        @map("match_method_version")
+  temporalMatch      Json          @map("temporal_match")
+  spatialMatch       Json          @map("spatial_match")
+  independence       String
+  evidenceNote       String        @map("evidence_note")
+  reviewedBy         String?       @map("reviewed_by")
+  reviewedAt         DateTime?     @map("reviewed_at") @db.Timestamptz(6)
+  analyses           Analysis      @relation(fields: [analysisId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reportedEvents     ReportedEvent @relation(fields: [eventId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([analysisId, eventId, matchMethodVersion])
+  @@map("analysis_event_links")
+  @@schema("firebridge")
+}
+
+model ApiJob {
+  explanationRequestKeys ExplanationRequestKey[]
+  analysisRequestKeys    AnalysisRequestKey[]
+  id                     String                  @id @db.Uuid
+  kind                   String
+  analysisId             String?                 @map("analysis_id") @db.Uuid
+  explanationId          String?                 @map("explanation_id") @db.Uuid
+  requestedBy            String?                 @map("requested_by") // Preserved legacy metadata; public workflows omit it.
+  requestHash            String                  @map("request_hash")
+  idempotencyKey         String                  @map("idempotency_key")
+  requestSpec            Json                    @map("request_spec")
+  status                 String
+  attempt                Int                     @default(0)
+  leaseExpiresAt         DateTime?               @map("lease_expires_at") @db.Timestamptz(6)
+  progress               Json                    @default("{}")
+  resultManifestUri      String?                 @map("result_manifest_uri")
+  resultSha256           String?                 @map("result_sha256")
+  resultByteSize         BigInt?                 @map("result_byte_size")
+  expiresAt              DateTime?               @map("expires_at") @db.Timestamptz(6)
+  errorCode              String?                 @map("error_code")
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt            DateTime?               @map("completed_at") @db.Timestamptz(6)
+  analyses               Analysis?               @relation(fields: [analysisId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  aiExplanations         AiExplanation?          @relation(fields: [explanationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([requestedBy, idempotencyKey])
+  @@unique([idempotencyKey], map: "jobs_public_request_key")
+  @@index([status, createdAt], map: "jobs_status")
+  @@map("api_jobs")
+  @@schema("firebridge")
+}
+
+model AreaCell {
+  areaId            String   @map("area_id") @db.Uuid
+  cellId            BigInt   @map("cell_id")
+  overlapLandAreaM2 Float    @map("overlap_land_area_m2")
+  weightingVersion  String   @map("weighting_version")
+  areas             Area     @relation(fields: [areaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  gridCells         GridCell @relation(fields: [cellId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([areaId, cellId, weightingVersion])
+  @@map("area_cells")
+  @@schema("firebridge")
+}
+
+model CalendarPeriod {
+  analysisId              String   @map("analysis_id") @db.Uuid
+  periodStart             DateTime @map("period_start") @db.Date
+  periodEndExclusive      DateTime @map("period_end_exclusive") @db.Date
+  resolution              String
+  responseNumeratorM2Days Float    @map("response_numerator_m2_days")
+  eligibleLandM2Days      Float    @map("eligible_land_m2_days")
+  possibleLandM2Days      Float    @map("possible_land_m2_days")
+  responseValue           Float?   @default(dbgenerated("(response_numerator_m2_days / NULLIF(eligible_land_m2_days, (0)::double precision))")) @map("response_value")
+  coverageFraction        Float?   @default(dbgenerated("(eligible_land_m2_days / possible_land_m2_days)")) @map("coverage_fraction")
+  observedWeightFraction  Float?   @map("observed_weight_fraction")
+  validCellDays           BigInt   @map("valid_cell_days")
+  baselineYearCount       Int      @default(0) @map("baseline_year_count")
+  seasonalPercentile      Float?   @map("seasonal_percentile")
+  uncertainty             Json?
+  status                  String
+  reasons                 Json     @default("[]")
+  analyses                Analysis @relation(fields: [analysisId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([analysisId, periodStart, resolution])
+  @@map("calendar_periods")
+  @@schema("firebridge")
+}
+
+model DailyActivity {
+  releaseId         String           @map("release_id") @db.Uuid
+  cellId            BigInt           @map("cell_id")
+  reportingDate     DateTime         @map("reporting_date") @db.Date
+  timeBasis         String           @map("time_basis")
+  metricKey         String           @map("metric_key")
+  selectionPolicy   String           @map("selection_policy")
+  observationId     String?          @map("observation_id") @db.Uuid
+  predictionId      String?          @map("prediction_id") @db.Uuid
+  responseValue     Float?           @map("response_value")
+  status            String
+  candidateCount    Int              @map("candidate_count")
+  reasons           Json             @default("[]")
+  gridCells         GridCell         @relation(fields: [cellId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  metricDefinitions MetricDefinition @relation(fields: [metricKey], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  observations      Observation?     @relation(fields: [observationId, releaseId, cellId], references: [id, releaseId, cellId], onDelete: NoAction, onUpdate: NoAction)
+  predictions       Prediction?      @relation(fields: [predictionId, releaseId, cellId], references: [id, releaseId, cellId], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases      DataRelease      @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([releaseId, cellId, reportingDate, timeBasis, metricKey, selectionPolicy])
+  @@index([releaseId, reportingDate, metricKey], map: "daily_activity_period")
+  @@map("daily_activity")
+  @@schema("firebridge")
+}
+
+model Detection {
+  id                  BigInt                  @id @default(autoincrement())
+  assetId             String                  @map("asset_id") @db.Uuid
+  sourceId            String                  @map("source_id")
+  nativeRecordKey     String                  @map("native_record_key")
+  recordSha256        String                  @map("record_sha256")
+  identityKey         String?                 @map("identity_key")
+  identityMethod      String                  @map("identity_method")
+  processingLevel     String                  @map("processing_level")
+  acquiredAt          DateTime                @map("acquired_at") @db.Timestamptz(6)
+  geom                Unsupported("geometry")
+  confidenceRaw       String?                 @map("confidence_raw")
+  confidenceScheme    String                  @map("confidence_scheme")
+  typeRaw             String?                 @map("type_raw")
+  dayNight            String?                 @map("day_night")
+  frpMw               Float?                  @map("frp_mw")
+  brightnessBands     Json                    @default("{}") @map("brightness_bands")
+  scanKm              Float?                  @map("scan_km")
+  trackKm             Float?                  @map("track_km")
+  crossTrackSample    Int?                    @map("cross_track_sample")
+  nativeFields        Json                    @default("{}") @map("native_fields")
+  assets              Asset                   @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources             Source                  @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  partitionDetections PartitionDetection[]
+
+  @@unique([assetId, nativeRecordKey])
+  @@unique([sourceId, recordSha256])
+  @@index([geom], map: "detections_geom_gist", type: Gist)
+  @@index([sourceId, acquiredAt], map: "detections_source_time")
+  @@map("detections")
+  @@schema("firebridge")
+}
+
+model Evaluation {
+  id                    String       @id @db.Uuid
+  modelId               String       @map("model_id") @db.Uuid
+  releaseId             String       @map("release_id") @db.Uuid
+  experiment            String
+  sliceKey              String       @map("slice_key")
+  splitManifestUri      String       @map("split_manifest_uri")
+  sampleCount           BigInt       @map("sample_count")
+  positiveCount         BigInt       @map("positive_count")
+  independentBlockCount Int          @map("independent_block_count")
+  metrics               Json
+  baselineMetrics       Json         @map("baseline_metrics")
+  uncertaintyMethod     String?      @map("uncertainty_method")
+  reportUri             String       @map("report_uri")
+  modelVersions         ModelVersion @relation(fields: [modelId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases          DataRelease  @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([modelId, releaseId, experiment, sliceKey])
+  @@map("evaluations")
+  @@schema("firebridge")
+}
+
+model EvidenceSnapshot {
+  id             String          @id @db.Uuid
+  analysisId     String          @map("analysis_id") @db.Uuid
+  schemaVersion  String          @map("schema_version")
+  evidenceJson   Json            @map("evidence_json")
+  sha256         String
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  aiExplanations AiExplanation[]
+  analyses       Analysis        @relation(fields: [analysisId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([analysisId, sha256])
+  @@map("evidence_snapshots")
+  @@schema("firebridge")
+}
+
+model FeatureSet {
+  id               String         @id @db.Uuid
+  releaseId        String         @map("release_id") @db.Uuid
+  version          String
+  artifactUri      String         @map("artifact_uri")
+  sha256           String
+  featureContract  Json           @map("feature_contract")
+  splitManifestUri String         @map("split_manifest_uri")
+  splitSha256      String         @map("split_sha256")
+  rowCount         BigInt         @map("row_count")
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  dataReleases     DataRelease    @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  modelVersions    ModelVersion[]
+
+  @@map("feature_sets")
+  @@schema("firebridge")
+}
+
+model FetchAsset {
+  fetchRunId String   @map("fetch_run_id") @db.Uuid
+  assetId    String   @map("asset_id") @db.Uuid
+  role       String
+  pageKey    String   @map("page_key")
+  assets     Asset    @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  fetchRuns  FetchRun @relation(fields: [fetchRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([fetchRunId, assetId, role, pageKey])
+  @@map("fetch_assets")
+  @@schema("firebridge")
+}
+
+model FetchRun {
+  id                     String                @id @db.Uuid
+  subscriptionId         String                @map("subscription_id") @db.Uuid
+  pipelineRunId          String?               @map("pipeline_run_id") @db.Uuid
+  requestKey             String                @map("request_key")
+  attempt                Int
+  queryStart             DateTime              @map("query_start") @db.Timestamptz(6)
+  queryEndExclusive      DateTime              @map("query_end_exclusive") @db.Timestamptz(6)
+  queryBasis             String                @map("query_basis")
+  sanitizedRequest       Json                  @map("sanitized_request")
+  status                 String
+  enumerationComplete    Boolean               @default(false) @map("enumeration_complete")
+  pageCount              Int                   @default(0) @map("page_count")
+  recordCount            BigInt?               @map("record_count")
+  startedAt              DateTime?             @map("started_at") @db.Timestamptz(6)
+  completedAt            DateTime?             @map("completed_at") @db.Timestamptz(6)
+  maxObservationAt       DateTime?             @map("max_observation_at") @db.Timestamptz(6)
+  httpStatus             Int?                  @map("http_status")
+  retryAfter             DateTime?             @map("retry_after") @db.Timestamptz(6)
+  errorCode              String?               @map("error_code")
+  fetchAssets            FetchAsset[]
+  pipelineRuns           PipelineRun?          @relation(fields: [pipelineRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestionSubscriptions IngestionSubscription @relation(fields: [subscriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestionCheckpoints   IngestionCheckpoint[]
+  ingestionGaps          IngestionGap[]
+
+  @@unique([subscriptionId, requestKey, attempt])
+  @@index([subscriptionId, startedAt(sort: Desc)], map: "fetch_runs_recent")
+  @@map("fetch_runs")
+  @@schema("firebridge")
+}
+
+model GridCell {
+  id            BigInt                  @id @default(autoincrement())
+  gridId        String                  @map("grid_id")
+  gridX         Int                     @map("grid_x")
+  gridY         Int                     @map("grid_y")
+  geom          Unsupported("geometry")
+  areaM2        Float                   @map("area_m2")
+  landAreaM2    Float                   @map("land_area_m2")
+  areaCells     AreaCell[]
+  dailyActivity DailyActivity[]
+  grids         Grid                    @relation(fields: [gridId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  matchedPairs  MatchedPair[]
+  observations  Observation[]
+  predictions   Prediction[]
+
+  @@unique([gridId, gridX, gridY])
+  @@index([geom], map: "grid_cells_geom_gist", type: Gist)
+  @@map("grid_cells")
+  @@schema("firebridge")
+}
+
+model IngestionCheckpoint {
+  subscriptionId         String                @map("subscription_id") @db.Uuid
+  stage                  String
+  cursorBasis            String                @map("cursor_basis")
+  committedUntil         DateTime?             @map("committed_until") @db.Timestamptz(6)
+  cursorJson             Json                  @default("{}") @map("cursor_json")
+  lastSuccessRunId       String?               @map("last_success_run_id") @db.Uuid
+  updatedAt              DateTime              @map("updated_at") @db.Timestamptz(6)
+  generation             BigInt                @default(0)
+  fetchRuns              FetchRun?             @relation(fields: [lastSuccessRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestionSubscriptions IngestionSubscription @relation(fields: [subscriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([subscriptionId, stage])
+  @@map("ingestion_checkpoints")
+  @@schema("firebridge")
+}
+
+model IngestionGap {
+  id                     String                @id @db.Uuid
+  subscriptionId         String                @map("subscription_id") @db.Uuid
+  gapStart               DateTime              @map("gap_start") @db.Timestamptz(6)
+  gapEndExclusive        DateTime              @map("gap_end_exclusive") @db.Timestamptz(6)
+  kind                   String
+  status                 String
+  discoveredAt           DateTime              @map("discovered_at") @db.Timestamptz(6)
+  lastAttemptAt          DateTime?             @map("last_attempt_at") @db.Timestamptz(6)
+  retryAfter             DateTime?             @map("retry_after") @db.Timestamptz(6)
+  resolvedByRunId        String?               @map("resolved_by_run_id") @db.Uuid
+  evidence               Json
+  fetchRuns              FetchRun?             @relation(fields: [resolvedByRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ingestionSubscriptions IngestionSubscription @relation(fields: [subscriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status, retryAfter], map: "gaps_pending")
+  @@map("ingestion_gaps")
+  @@schema("firebridge")
+}
+
+model MatchedPair {
+  id                                                                          String      @id @db.Uuid
+  releaseId                                                                   String      @map("release_id") @db.Uuid
+  cellId                                                                      BigInt      @map("cell_id")
+  seriesKey                                                                   String      @map("series_key")
+  referenceObservationId                                                      String      @map("reference_observation_id") @db.Uuid
+  sourceObservationId                                                         String      @map("source_observation_id") @db.Uuid
+  timeDeltaSeconds                                                            Int         @map("time_delta_seconds")
+  sharedUsableLandM2                                                          Float       @map("shared_usable_land_m2")
+  sharedUsableFraction                                                        Float       @map("shared_usable_fraction")
+  sharedSupportUri                                                            String      @map("shared_support_uri")
+  eligible                                                                    Boolean
+  referenceTarget                                                             Boolean?    @map("reference_target")
+  sourceAnyOnSharedSupport                                                    Boolean?    @map("source_any_on_shared_support")
+  splitName                                                                   String?     @map("split_name")
+  blockId                                                                     String?     @map("block_id")
+  episodeGroupId                                                              String?     @map("episode_group_id")
+  exclusionReasons                                                            Json        @default("[]") @map("exclusion_reasons")
+  gridCells                                                                   GridCell    @relation(fields: [cellId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  observationsMatchedPairsReferenceObservationIdReleaseIdCellIdToobservations Observation @relation("matched_pairs_reference_observation_id_release_id_cell_idToobservations", fields: [referenceObservationId, releaseId, cellId], references: [id, releaseId, cellId], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases                                                                DataRelease @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  observationsMatchedPairsSourceObservationIdReleaseIdCellIdToobservations    Observation @relation("matched_pairs_source_observation_id_release_id_cell_idToobservations", fields: [sourceObservationId, releaseId, cellId], references: [id, releaseId, cellId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([releaseId, seriesKey, referenceObservationId])
+  @@unique([releaseId, seriesKey, sourceObservationId])
+  @@index([releaseId, seriesKey, splitName], map: "pairs_split")
+  @@map("matched_pairs")
+  @@schema("firebridge")
+}
+
+model ModelVersion {
+  id                                             String       @id @db.Uuid
+  name                                           String
+  version                                        String
+  featureSetId                                   String       @map("feature_set_id") @db.Uuid
+  sourceId                                       String       @map("source_id")
+  referenceSourceId                              String       @map("reference_source_id")
+  algorithm                                      String
+  artifactUri                                    String       @map("artifact_uri")
+  sha256                                         String
+  targetDefinition                               Json         @map("target_definition")
+  supportDomain                                  Json         @map("support_domain")
+  calibrationManifestUri                         String       @map("calibration_manifest_uri")
+  status                                         String
+  createdAt                                      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  evaluations                                    Evaluation[]
+  featureSets                                    FeatureSet   @relation(fields: [featureSetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sourcesModelVersionsReferenceSourceIdTosources Source       @relation("model_versions_reference_source_idTosources", fields: [referenceSourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sourcesModelVersionsSourceIdTosources          Source       @relation("model_versions_source_idTosources", fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  predictions                                    Prediction[]
+
+  @@unique([name, version])
+  @@map("model_versions")
+  @@schema("firebridge")
+}
+
+model NewsReport {
+  id                   String          @id @db.Uuid
+  assetId              String          @map("asset_id") @db.Uuid
+  canonicalUrl         String          @map("canonical_url")
+  title                String
+  publisher            String
+  language             String
+  publishedAt          DateTime?       @map("published_at") @db.Timestamptz(6)
+  publicationPrecision String          @map("publication_precision")
+  retrievedAt          DateTime        @map("retrieved_at") @db.Timestamptz(6)
+  contentSha256        String          @map("content_sha256")
+  summary              String?
+  originalReportingUrl String?         @map("original_reporting_url")
+  syndicationGroup     String?         @map("syndication_group")
+  sourceLineage        String          @map("source_lineage")
+  extractionVersion    String          @map("extraction_version")
+  reviewStatus         String          @map("review_status")
+  assets               Asset           @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reportedEvents       ReportedEvent[]
+
+  @@unique([canonicalUrl, contentSha256, extractionVersion])
+  @@index([publishedAt], map: "news_reports_published")
+  @@map("news_reports")
+  @@schema("firebridge")
+}
+
+model ObservationAsset {
+  observationId String      @map("observation_id") @db.Uuid
+  assetId       String      @map("asset_id") @db.Uuid
+  role          String
+  assets        Asset       @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  observations  Observation @relation(fields: [observationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([observationId, assetId, role])
+  @@map("observation_assets")
+  @@schema("firebridge")
+}
+
+model Observation {
+  id                                                                          String             @id @db.Uuid
+  releaseId                                                                   String             @map("release_id") @db.Uuid
+  cellId                                                                      BigInt             @map("cell_id")
+  sourceId                                                                    String             @map("source_id")
+  passKey                                                                     String             @map("pass_key")
+  timeStart                                                                   DateTime           @map("time_start") @db.Timestamptz(6)
+  timeEnd                                                                     DateTime           @map("time_end") @db.Timestamptz(6)
+  representativeTime                                                          DateTime           @map("representative_time") @db.Timestamptz(6)
+  localSolarDate                                                              DateTime           @map("local_solar_date") @db.Date
+  regime                                                                      String
+  landAreaM2                                                                  Float              @map("land_area_m2")
+  usableLandM2                                                                Float?             @map("usable_land_m2")
+  cloudLandM2                                                                 Float?             @map("cloud_land_m2")
+  invalidLandM2                                                               Float?             @map("invalid_land_m2")
+  unobservedLandM2                                                            Float?             @map("unobserved_land_m2")
+  usableSupportUri                                                            String?            @map("usable_support_uri")
+  detectionLinksUri                                                           String?            @map("detection_links_uri")
+  coverageStatus                                                              String             @map("coverage_status")
+  retainedDetectionCount                                                      Int?               @map("retained_detection_count")
+  retainedAny                                                                 Boolean?           @map("retained_any")
+  eligible                                                                    Boolean
+  exclusionReasons                                                            Json               @default("[]") @map("exclusion_reasons")
+  qaPolicyVersion                                                             String             @map("qa_policy_version")
+  geometrySummary                                                             Json               @default("{}") @map("geometry_summary")
+  dailyActivity                                                               DailyActivity[]
+  matchedPairsMatchedPairsReferenceObservationIdReleaseIdCellIdToobservations MatchedPair[]      @relation("matched_pairs_reference_observation_id_release_id_cell_idToobservations")
+  matchedPairsMatchedPairsSourceObservationIdReleaseIdCellIdToobservations    MatchedPair[]      @relation("matched_pairs_source_observation_id_release_id_cell_idToobservations")
+  observationAssets                                                           ObservationAsset[]
+  gridCells                                                                   GridCell           @relation(fields: [cellId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases                                                                DataRelease        @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources                                                                     Source             @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  predictions                                                                 Prediction[]
+
+  @@unique([id, releaseId, cellId])
+  @@unique([releaseId, cellId, sourceId, passKey, qaPolicyVersion])
+  @@index([releaseId, cellId, representativeTime], map: "observations_cell_time")
+  @@map("observations")
+  @@schema("firebridge")
+}
+
+model AnalysisRequestKey {
+  requestedBy    String?  @map("requested_by") // Preserved legacy metadata.
+  idempotencyKey String   @id @map("idempotency_key")
+  requestHash    String   @map("request_hash")
+  jobId          String   @map("job_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  apiJobs        ApiJob   @relation(fields: [jobId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([jobId], map: "analysis_request_keys_job")
+  @@map("analysis_request_keys")
+  @@schema("firebridge")
+}
+
+model ExplanationRequestKey {
+  requestedBy    String   @map("requested_by")
+  idempotencyKey String   @map("idempotency_key")
+  requestHash    String   @map("request_hash")
+  jobId          String   @map("job_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  apiJobs        ApiJob   @relation(fields: [jobId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([requestedBy, idempotencyKey])
+  @@index([jobId], map: "explanation_request_keys_job")
+  @@map("explanation_request_keys")
+  @@schema("firebridge")
+}
+
+model OutboxEvent {
+  id             String    @id @db.Uuid
+  eventType      String    @map("event_type")
+  aggregateId    String    @map("aggregate_id")
+  dedupeKey      String    @unique @map("dedupe_key")
+  payload        Json
+  status         String
+  attempts       Int       @default(0)
+  availableAt    DateTime  @map("available_at") @db.Timestamptz(6)
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz(6)
+  deliveredAt    DateTime? @map("delivered_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("outbox_events")
+  @@schema("firebridge")
+}
+
+model PartitionDependency {
+  partitionId                                                         String        @map("partition_id") @db.Uuid
+  inputPartitionId                                                    String        @map("input_partition_id") @db.Uuid
+  role                                                                String
+  dataPartitionsPartitionDependenciesInputPartitionIdTodataPartitions DataPartition @relation("partition_dependencies_input_partition_idTodata_partitions", fields: [inputPartitionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dataPartitionsPartitionDependenciesPartitionIdTodataPartitions      DataPartition @relation("partition_dependencies_partition_idTodata_partitions", fields: [partitionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([partitionId, inputPartitionId, role])
+  @@map("partition_dependencies")
+  @@schema("firebridge")
+}
+
+model PartitionDetection {
+  partitionId    String        @map("partition_id") @db.Uuid
+  detectionId    BigInt        @map("detection_id")
+  detections     Detection     @relation(fields: [detectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dataPartitions DataPartition @relation(fields: [partitionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([partitionId, detectionId])
+  @@index([detectionId, partitionId], map: "partition_detections_reverse")
+  @@map("partition_detections")
+  @@schema("firebridge")
+}
+
+model Prediction {
+  id                  String          @id @db.Uuid
+  releaseId           String          @map("release_id") @db.Uuid
+  cellId              BigInt          @map("cell_id")
+  observationId       String          @map("observation_id") @db.Uuid
+  modelId             String          @map("model_id") @db.Uuid
+  responseProbability Float?          @map("response_probability")
+  status              String
+  supportReasons      Json            @default("[]") @map("support_reasons")
+  featuresUri         String          @map("features_uri")
+  uncertainty         Json?
+  dailyActivity       DailyActivity[]
+  gridCells           GridCell        @relation(fields: [cellId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  modelVersions       ModelVersion    @relation(fields: [modelId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  observations        Observation     @relation(fields: [observationId, releaseId, cellId], references: [id, releaseId, cellId], onDelete: NoAction, onUpdate: NoAction)
+  dataReleases        DataRelease     @relation(fields: [releaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([id, releaseId, cellId])
+  @@unique([observationId, modelId])
+  @@map("predictions")
+  @@schema("firebridge")
+}
+
+model QualityIssue {
+  id             String      @id @db.Uuid
+  pipelineRunId  String      @map("pipeline_run_id") @db.Uuid
+  assetId        String?     @map("asset_id") @db.Uuid
+  ruleId         String      @map("rule_id")
+  severity       String
+  status         String
+  affectedCount  BigInt      @map("affected_count")
+  sampleLocator  Json        @map("sample_locator")
+  explanation    String
+  resolutionNote String?     @map("resolution_note")
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  assets         Asset?      @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pipelineRuns   PipelineRun @relation(fields: [pipelineRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([pipelineRunId, severity, status], map: "issues_run")
+  @@map("quality_issues")
+  @@schema("firebridge")
+}
+
+model ReportedEvent {
+  id                   String                   @id @db.Uuid
+  reportId             String                   @map("report_id") @db.Uuid
+  claimIndex           Int                      @map("claim_index")
+  eventStart           DateTime?                @map("event_start") @db.Date
+  eventEndExclusive    DateTime?                @map("event_end_exclusive") @db.Date
+  datePrecision        String                   @map("date_precision")
+  placeText            String?                  @map("place_text")
+  location             Unsupported("geometry")?
+  locationPrecision    String                   @map("location_precision")
+  locationUncertaintyM Float?                   @map("location_uncertainty_m")
+  geocodingMethod      String?                  @map("geocoding_method")
+  eventClusterKey      String?                  @map("event_cluster_key")
+  reportedEventType    String?                  @map("reported_event_type")
+  reportedBurnedAreaHa Float?                   @map("reported_burned_area_ha")
+  reportedCause        String?                  @map("reported_cause")
+  claimSummary         String                   @map("claim_summary")
+  reviewStatus         String                   @map("review_status")
+  reviewedBy           String?                  @map("reviewed_by")
+  reviewedAt           DateTime?                @map("reviewed_at") @db.Timestamptz(6)
+  analysisEventLinks   AnalysisEventLink[]
+  newsReports          NewsReport               @relation(fields: [reportId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([reportId, claimIndex])
+  @@index([eventStart, eventEndExclusive], map: "reported_events_dates")
+  @@index([location], map: "reported_events_geom_gist", type: Gist)
+  @@map("reported_events")
+  @@schema("firebridge")
+}
+
+model WeatherLocation {
+  id                String                   @id @db.Uuid
+  sourceId          String                   @map("source_id")
+  nativeLocationKey String                   @map("native_location_key")
+  supportKind       String                   @map("support_kind")
+  geom              Unsupported("geometry")
+  footprint         Unsupported("geometry")?
+  elevationM        Float?                   @map("elevation_m")
+  nativeResolutionM Float?                   @map("native_resolution_m")
+  metadata          Json                     @default("{}")
+  sources           Source                   @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  weatherValues     WeatherValue[]
+
+  @@unique([id, sourceId])
+  @@unique([sourceId, nativeLocationKey])
+  @@index([geom], map: "weather_location_geom_gist", type: Gist)
+  @@map("weather_locations")
+  @@schema("firebridge")
+}
+
+model WeatherSummary {
+  id                       String   @id @db.Uuid
+  analysisId               String   @map("analysis_id") @db.Uuid
+  sourceId                 String   @map("source_id")
+  variable                 String
+  unit                     String
+  periodStart              DateTime @map("period_start") @db.Timestamptz(6)
+  periodEnd                DateTime @map("period_end") @db.Timestamptz(6)
+  statistic                String
+  value                    Float?
+  spatialMethod            String   @map("spatial_method")
+  spatialWeightsUri        String   @map("spatial_weights_uri")
+  inputManifestUri         String   @map("input_manifest_uri")
+  temporalCoverageFraction Float    @map("temporal_coverage_fraction")
+  spatialCoverageFraction  Float    @map("spatial_coverage_fraction")
+  status                   String
+  reasons                  Json     @default("[]")
+  analyses                 Analysis @relation(fields: [analysisId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sources                  Source   @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([analysisId, sourceId, variable, periodStart, periodEnd, statistic])
+  @@map("weather_summaries")
+  @@schema("firebridge")
+}
+
+model WeatherValue {
+  id               BigInt          @id @default(autoincrement())
+  locationId       String          @map("location_id") @db.Uuid
+  sourceId         String          @map("source_id")
+  assetId          String          @map("asset_id") @db.Uuid
+  variable         String
+  unit             String
+  validStart       DateTime        @map("valid_start") @db.Timestamptz(6)
+  validEnd         DateTime        @map("valid_end") @db.Timestamptz(6)
+  issuedAt         DateTime?       @map("issued_at") @db.Timestamptz(6)
+  availableAt      DateTime?       @map("available_at") @db.Timestamptz(6)
+  dataKind         String          @map("data_kind")
+  statistic        String
+  value            Float?
+  qualityStatus    String          @map("quality_status")
+  derivation       Json            @default("{}")
+  assets           Asset           @relation(fields: [assetId, sourceId], references: [id, sourceId], onDelete: NoAction, onUpdate: NoAction)
+  weatherLocations WeatherLocation @relation(fields: [locationId, sourceId], references: [id, sourceId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([assetId, locationId, variable, validStart, validEnd])
+  @@index([locationId, variable, validStart], map: "weather_values_lookup")
+  @@map("weather_values")
+  @@schema("firebridge")
+}

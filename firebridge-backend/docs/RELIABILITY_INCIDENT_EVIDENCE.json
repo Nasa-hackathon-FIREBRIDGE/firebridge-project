@@ -1,0 +1,66 @@
+{
+  "verified_on": "2026-11-01",
+  "method": "Read-only SQL, Redis commands, Docker metadata, and an in-place AOF parser printing only the four incident identifiers and command/field names.",
+  "redis": {
+    "started_at": "2026-11-01T02:16:25.620378453Z",
+    "volume": "firebridge_redis_data",
+    "volume_created_at": "2026-10-26T17:02:48Z",
+    "data_directory": "/data",
+    "appendonly": true,
+    "appendfsync": "everysec",
+    "maxmemory_policy": "noeviction",
+    "evicted_keys_since_start": 0,
+    "aof_load": "Startup log confirms successful loading of base RDB and incremental AOF.",
+    "database": 0,
+    "expected_queue": "firebridge-default",
+    "expected_hashes_found": 0,
+    "historical_test_queue_hashes_found": 4
+  },
+  "jobs": [
+    {
+      "job_id": "ccf710aa-23c5-4c28-af58-f811cc920d02",
+      "analysis_id": "000ad15a-0c79-4c8e-bb91-2358333e1f4b",
+      "event_id": "5ec117d2-7bd9-49a7-a570-7dd9ac9feffe",
+      "actual_queue": "test-queue-0bd4648a-488e-4d6f-8259-9a5561708448",
+      "delivered_at": "2026-10-30T06:42:30.098570Z",
+      "aof_hash_command_sequence": 204
+    },
+    {
+      "job_id": "a633032f-bd64-4615-b993-ae391736a798",
+      "analysis_id": "ce56de70-33bb-4214-8908-38d4ec60938b",
+      "event_id": "ae9eb1ef-c5ed-47ae-9634-8d911919890b",
+      "actual_queue": "test-queue-0bd4648a-488e-4d6f-8259-9a5561708448",
+      "delivered_at": "2026-10-30T06:42:30.103051Z",
+      "aof_hash_command_sequence": 211
+    },
+    {
+      "job_id": "d9584ac1-5e02-4faf-bc66-a87f149d4024",
+      "analysis_id": "b8f86537-0d02-4a80-9b96-7ed436316337",
+      "event_id": "51a7898d-ee23-452e-9460-e92ed49c0f55",
+      "actual_queue": "test-queue-cfe3e505-d280-46aa-bbc8-370fcfb1f8d8",
+      "delivered_at": "2026-10-30T06:44:54.594674Z",
+      "aof_hash_command_sequence": 237
+    },
+    {
+      "job_id": "fc62336c-9d36-4a90-88cb-06f625297118",
+      "analysis_id": "b08dde5d-8ab0-4aef-a9bd-df755b5eecaf",
+      "event_id": "f0d2c1ba-4cb8-4e19-b48f-ef25685f2d76",
+      "actual_queue": "test-queue-cfe3e505-d280-46aa-bbc8-370fcfb1f8d8",
+      "delivered_at": "2026-10-30T06:44:54.600020Z",
+      "aof_hash_command_sequence": 244
+    }
+  ],
+  "common_sql_state": {
+    "status": "queued",
+    "attempt": 0,
+    "progress_percent": 0,
+    "completed_at": null,
+    "outbox_status": "delivered",
+    "outbox_attempts": 1,
+    "payload_job_id_matches": true
+  },
+  "historical_processing_timestamps": "Two representative hashes had no processedOn or finishedOn values; all four had added/waiting commands in the filtered AOF summary.",
+  "historical_source": "HEAD version of outbox-dispatcher.test.ts constructs an unscoped dispatcher with test-queue-<randomUUID>.",
+  "interpretation": "Confirmed wrong-queue delivery; the unscoped historical test dispatcher is the strongly supported mechanism. Exact invoking process/command remains unknown. Redis restart/data loss is not needed to explain the incident.",
+  "historical_recovery_performed": false
+}

@@ -1,0 +1,161 @@
+# FIREBRIDGE
+
+L’[intégration backend/frontend publique livrée](docs/INTEGRATION_REPORT.md) conserve `/api/v1`, documente les dix endpoints sans authentification, la reprise non destructive appliquée, les services/hooks Axios et les tests HTTP avec worker réel. La base active possède désormais un [catalogue de test explicitement synthétique](docs/TEST_DATA.md) : sa readiness répond 200, sans que ces fixtures soient présentées comme des observations NASA réelles.
+
+L’[audit initial de l’intégration backend/frontend du 4 novembre 2026](docs/INTEGRATION_AUDIT.md) relève l’état réel des conteneurs, l’historique de migration incompatible de la base active, les contrôles d’accès manquants et les résultats des vérifications ciblées. Consulter ses prérequis avant toute reprise des migrations ou reconstruction de l’environnement existant.
+
+FIREBRIDGE est le backend du projet NASA Space Apps Challenge « Harmonization of MODIS and VIIRS Hot Spots ». Il utilise TypeScript, Fastify et PostgreSQL/PostGIS, avec un worker séparé pour les traitements longs.
+
+La phase 1 implémente le catalogue et les versions. La phase 2 apporte les zones, les analyses et les jobs. La phase 3 lit les détections, le résumé, le calendrier natif et la provenance sous `/api/v1/analyses/{id}`. Les routes Sources et les opérations de phase 5 sont également implémentées. La phase 6 ajoute les lectures de contexte préparé et les explications factuelles. La phase 4 est intégrée : tuiles MVT, exports CSV/GeoJSON/Parquet et téléchargement, avec les mêmes sources, versions et contrôles de complétude que les lectures natives. Voir le [compte rendu d’intégration](docs/PHASE_4_REVIEW.md).
+
+Les guides de [phase 1](docs/PHASE_1.md), de [phase 3](docs/PHASE_3.md), de [phase 5](docs/PHASE_5.md) et de [phase 6](docs/PHASE_6.md) décrivent les contrats d’intégration, les limites et la compatibilité des migrations. Le [contrat HTTP](API.md) décrit les paramètres et les réponses. Les documents de conception fournis par l’équipe restent dans `documents/`.
+
+La phase 5 ajoute les six endpoints d’opérations d’ingestion : abonnements, backfills, relances, tentatives, lacunes et disponibilité par source. Les demandes sont enregistrées atomiquement dans PostgreSQL et l’outbox ; le worker prépare des tentatives bornées. **Le téléchargement, la publication NASA et le scheduler périodique restent à implémenter.** Les jobs planifiés restent `queued`, au stade `awaiting_fetch_executor`, sans résultat de téléchargement inventé. L’administration exige un `INGESTION_ADMIN_TOKEN` ; voir le guide pour les capacités des feeds, les budgets et les fixtures isolées.
+
+## Architecture overview
+
+Les endpoints implémentés suivent le parcours route → controller → service → repository. Le [guide d’architecture API](docs/API_ARCHITECTURE.md) décrit les responsabilités et les fichiers des phases 1, 3, 5 et 6.
+
+La phase 6 sert la météo et les rapports attachés aux versions de l’analyse et les résultats scientifiques déjà préparés et attestés par le pipeline. Sans ces prérequis, les résultats restent explicitement manquants ou non supportés. Le worker génère un résumé déterministe des comptages natifs, vérifié et cité (`template_fallback`), sans fournisseur d’IA externe ni réponse aux questions libres. Le téléchargement des contextes, les calculs scientifiques et l’explication complète de ces contextes restent à développer.
+
+- `apps/api`: HTTP API layer, routing, request validation, controllers, middleware, and API documentation
+- `apps/worker`: asynchronous processing and queue workers using BullMQ and Redis
+- `packages/domain`: business entities and domain rules
+- `packages/contracts`: shared interfaces and DTOs
+- `packages/database`: migrations PostgreSQL/PostGIS et modèles Prisma des tables migrées. La phase 1 utilise des requêtes SQL paramétrées avec `pg` ; les Sources utilisent Prisma.
+- `packages/integrations`: external provider adapters for satellite, weather, storage, and AI integrations
+- `packages/observability`: logging and tracing helpers
+
+## Local development
+
+Prérequis : Node.js 22 ou supérieur, npm et Docker Desktop démarré pour PostgreSQL/PostGIS.
+
+1. Copier `.env.example` vers `.env` si ce fichier n’existe pas déjà.
+2. Remplacer `CURSOR_SECRET` par une valeur aléatoire d’au moins 32 caractères. Tous les processus API doivent partager la même valeur. Une rotation invalide les anciens curseurs.
+3. Installer et démarrer :
+
+```bash
+npm ci
+docker compose up -d postgres redis
+npm run prisma:deploy --workspace @firebridge/database
+npm run dev:api
+```
+
+Sous PowerShell, utiliser `npm.cmd` si l’exécution des scripts `npm.ps1` est bloquée.
+
+Les migrations de `main` sont reprises dans `packages/database/prisma/migrations/`. Sur une base de développement configurée, appliquer les migrations existantes avec :
+
+```bash
+npm run prisma:deploy --workspace @firebridge/database
+```
+
+Les trois premières migrations créent `public.HealthCheck`, `firebridge.sources`, puis les 15 tables nécessaires au catalogue et aux versions : assets, releases, membres, runs, zones, grilles, métriques, feeds, disponibilités, abonnements et partitions. La nouvelle migration active PostGIS, préserve les tables existantes et n’insère aucune donnée. Le fichier `firebridge_schema_v2.sql` reste un artefact de conception : ne pas l’exécuter par-dessus les migrations.
+
+La quatrième migration, `20261101000000_phase2_native_serving`, réconcilie le schéma complet de la branche phase 2 en ajoutant seulement les 31 tables restantes. Les trois premières migrations et les données existantes sont conservées. Une base créée avec l’ancienne migration consolidée de la branche phase 2 doit être reprise séparément : voir le [guide phase 3](docs/PHASE_3.md).
+
+La cinquième migration, `20261101010000_analysis_request_keys`, ajoute le registre durable des clés de requêtes d’analyse. La clé de cache tient désormais compte des releases satellite/météo/rapports sélectionnées et des politiques de la demande. Une même demande avec de nouvelles versions peut créer une analyse distincte ; un rejeu avec le même `Idempotency-Key` conserve le résultat d’origine. Aucun ancien résultat n’est réécrit. Voir le [contrat de réutilisation](docs/PHASE_3.md#création-et-réutilisation-des-analyses).
+
+Le modèle Prisma conserve aussi la table historique `HealthCheck` et une correspondance ignorée par le client pour `spatial_ref_sys`, qui appartient à PostGIS. Les champs spatiaux sont `Unsupported("geometry")` ; les contraintes `CHECK`, les types spatiaux précis et les index partiels restent définis dans les migrations SQL. Toute nouvelle migration doit préserver ces éléments.
+
+La sixième migration, `20261101020000_explanation_request_keys`, ajoute les clés durables d’explication. Appliquer cette migration avant le démarrage de l’API et du worker de phase 6.
+
+La septième migration, `20261101030000_phase4_serving_indexes`, ajoute seulement les index des jobs de phase 4. Elle est placée après la création de `api_jobs`, sans remplacer les migrations déjà appliquées. Une base issue de l’ancien historique consolidé de la branche du collègue nécessite la réconciliation décrite dans le guide de phase 3 ; ne pas réécrire ses enregistrements Prisma manuellement.
+
+Si le port Redis `6379` est occupé, choisir par exemple `REDIS_PORT=16379` et `REDIS_URL=redis://localhost:16379` dans `.env`, puis relancer les services. Les conteneurs continuent d’utiliser leur port interne `6379`.
+
+Le client Prisma et le package database sont générés avant le démarrage, la compilation et les tests de l’API. Aucune migration n’est lancée automatiquement par le serveur.
+
+L’API écoute sur `http://localhost:3000`. Swagger est accessible sur `http://localhost:3000/api-docs` et son document JSON sur `/api-docs/json`.
+
+**Aucune donnée NASA ni release n’est inventée au démarrage.** Tant que l’ingestion n’a pas publié de release et d’alias pour le scope choisi, `/catalog` sans paramètres et `/health/ready` répondent `503`. `/health/live` reste disponible. Un scope explicitement inconnu répond `404`.
+
+La readiness vérifie PostgreSQL, Redis et la disponibilité du catalogue, avec un délai borné. Les lectures du catalogue ne contactent pas Redis, mais l’API reste déclarée non prête si une dépendance requise échoue. Les endpoints de santé canoniques sont `/api/v1/health/live` et `/api/v1/health/ready`.
+
+`CORS_ORIGINS` permet une liste d’origines navigateur autorisées, séparées par des virgules. En développement, la liste vide reste permissive. En production, configurer cette liste et remplacer les secrets de pagination.
+
+Le worker peut être lancé avec `npm run dev:worker`. La phase 2 apporte un dispatcher d’outbox et le processeur `analysis.requested`, qui gère actuellement le cycle de vie et les composants. Les comptages natifs de phase 3 sont des lectures SQL bornées ; le worker ne réalise pas encore d’ingestion NASA ni d’harmonisation.
+
+## Validation
+
+Pour tester manuellement les trois endpoints, démarrer l’API avec une base initialisée et une release publiée, puis ouvrir `http://localhost:3000/api-docs/`. Le [contrat HTTP](API.md) décrit les paramètres et les réponses à vérifier. Les fixtures fictives versionnées servent aux tests automatisés ci-dessous ; aucun serveur de démo n’est livré dans le dépôt.
+
+```bash
+npm run lint
+npm run build
+npm test
+```
+
+Les tests des routes exécutent les requêtes SQL dans PostgreSQL embarqué via PGlite avec des données fictives isolées. Ils appliquent la chaîne réelle des migrations, avec une adaptation des types et fonctions PostGIS pour ces tests de métadonnées. Aucun accès NASA, Redis ou Docker n’est requis pour `npm test`.
+
+Une suite séparée vérifie les migrations et les endpoints sur PostgreSQL/PostGIS et Redis réels. Elle charge des données fictives uniquement dans la base nommée `firebridge_phase1_test`, avec des scopes et des identifiants synthétiques. Le jeu courant des phases 1/3 utilise `phase1_test` et des releases préfixées `TEST ONLY`. Elle conserve ce jeu après les tests pour permettre une vérification manuelle. **Elle refuse toute autre base.** Créer cette base une seule fois :
+
+```bash
+docker compose exec postgres createdb -U firebridge firebridge_phase1_test
+```
+
+Puis, dans PowerShell, adapter le port Redis à celui de `.env` :
+
+```powershell
+$env:PHASE1_TEST_DATABASE_URL='postgresql://firebridge:firebridge@localhost:5432/firebridge_phase1_test'
+$env:PHASE1_TEST_REDIS_URL='redis://localhost:16379'
+$env:DATABASE_URL=$env:PHASE1_TEST_DATABASE_URL
+npm.cmd run prisma:deploy --workspace @firebridge/database
+Remove-Item Env:DATABASE_URL
+npm.cmd run test:postgres --workspace @firebridge/api
+npm.cmd run test:postgres --workspace @firebridge/worker
+```
+
+Pour préparer les données synthétiques de la phase 3 après les tests :
+
+```powershell
+npm.cmd run fixtures:phase3 --workspace @firebridge/api
+```
+
+La commande est limitée à `firebridge_phase1_test` et affiche l’identifiant de l’analyse à utiliser. Elle remplace les fixtures de cette base dédiée, sans toucher à la base principale. Elle ne démarre aucun serveur de démonstration.
+
+Pour consulter ce jeu avec Swagger sur un port distinct :
+
+```powershell
+$env:DATABASE_URL=$env:PHASE1_TEST_DATABASE_URL
+$env:REDIS_URL=$env:PHASE1_TEST_REDIS_URL
+$env:DEFAULT_SCOPE_KEY='phase1_test'
+$env:PORT='3002'
+npm.cmd run dev:api
+```
+
+Ouvrir `http://localhost:3002/api-docs/`. Ces réponses utilisent une vraie base PostgreSQL, mais leurs données restent fictives. Fermer ce terminal après les essais pour retrouver les paramètres habituels de `.env` dans une nouvelle session.
+
+Le workflow GitHub Actions exécute lint, build et tests rapides, ainsi qu’un job PostgreSQL/PostGIS et Redis dédié, sur les Pull Requests et les branches `main`, `staging` et `feat/**`.
+
+## Démarrage du backend avec Docker Compose
+
+L’API, le worker, PostgreSQL/PostGIS et Redis peuvent être démarrés ensemble.
+Docker Desktop doit être lancé et le fichier `.env` configuré.
+
+La base sélectionnée doit avoir reçu les migrations. Les données et les versions
+publiées sont préparées séparément ; Docker ne télécharge pas de données NASA.
+
+Depuis le dossier backend :
+
+```powershell
+docker compose up -d --build
+docker compose ps
+```
+
+Le projet Compose se nomme `firebridge-project`.
+L’API est accessible sur http://localhost:3000 et Swagger sur
+http://localhost:3000/api-docs.
+
+L’API et le worker utilisent `DOCKER_DATABASE_URL` et `DOCKER_REDIS_URL`.
+Les variables `DATABASE_URL` et `REDIS_URL` servent aux programmes lancés
+directement sur l’ordinateur.
+
+Pour suivre les logs :
+
+```powershell
+docker compose logs -f --tail=50 api worker
+```
+
+Le frontend Vite reste lancé séparément.
+Si aucune version n’est publiée pour le périmètre configuré,
+le catalogue et la readiness peuvent répondre 503.
