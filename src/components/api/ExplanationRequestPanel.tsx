@@ -20,7 +20,7 @@ export function ExplanationRequestPanel({ id }: { id: string }) {
       <label>Langue<select value={language} onChange={(e) => setLanguage(e.target.value as ExplanationInput['language'])}><option value="fr">Français</option><option value="en">English</option></select></label>
       <label>Question (facultative)<textarea value={question} maxLength={512} onChange={(e) => setQuestion(e.target.value)} /></label>
       <button className="button button-primary" disabled={mutation.isPending}>{mutation.isPending ? 'Envoi…' : 'Demander la synthèse'}</button>
-    </form><ApiErrorMessage error={mutation.error} />
+    </form><ApiErrorMessage operation="write" error={mutation.error} />
     {mutation.data && (
   <div>
     <Facts

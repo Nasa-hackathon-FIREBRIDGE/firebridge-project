@@ -51,9 +51,9 @@ export function ChatWidget({ service = localAssistant }: { service?: AssistantSe
   return (
     <div className="chat-root" onKeyDown={(event) => { if (event.key === 'Escape' && open) { event.stopPropagation(); close() } }}>
       {open && (
-        <section className="chat-panel" role="dialog" aria-label="Astra Data Assistant" aria-modal="false">
+        <section className="chat-panel" role="dialog" aria-label="FIREBRIDGE Data Assistant" aria-modal="false">
           <header className="chat-header">
-            <span className="chat-title"><Bot size={16} /><strong>Astra Data Assistant</strong></span>
+            <span className="chat-title"><Bot size={16} /><strong>FIREBRIDGE Data Assistant</strong></span>
             <span className="chat-header-actions">
               <button type="button" className="icon-button" aria-label="Clear conversation" title="Clear conversation" onClick={() => { setMessages([]); setError('') }} disabled={!messages.length}><Trash2 size={14} /></button>
               <button type="button" className="icon-button" aria-label="Close data assistant" onClick={close}><X size={15} /></button>

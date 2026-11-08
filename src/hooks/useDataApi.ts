@@ -7,6 +7,7 @@ import { ingestion } from '../services/ingestion.service'
 import { explanations } from '../services/explanations.service'
 import type { AvailabilityQuery, CalendarQuery, ComparisonQuery, CoverageQuery, DateQuery, DetectionQuery, PageQuery, ReportsQuery, UpdatesQuery, WeatherQuery } from '../services/data.types'
 import type { Resource } from '../services/resource'
+import { workspaceKeys } from './useWorkspace'
 
 function useAnalysisResource<T>(id: string, name: string, params: object, load: (signal: AbortSignal) => Promise<Resource<T>>, enabled = true) {
   return useQuery({ queryKey: apiKeys.result(id, name, params), queryFn: ({ signal }) => load(signal), enabled: !!id && enabled })
@@ -51,6 +52,7 @@ export function useCreateExplanation() {
   const client = useQueryClient()
   return useMutation({ mutationFn: explanations.create, retry: false, onSuccess: async ({ data }) => {
     if (data.job_id) await client.invalidateQueries({ queryKey: apiKeys.job(data.job_id), exact: true })
+    await client.invalidateQueries({ queryKey: workspaceKeys.jobs })
   } })
 }
 export function useExplanation(id: string) {

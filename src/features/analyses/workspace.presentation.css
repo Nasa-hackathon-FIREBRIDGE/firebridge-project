@@ -1,0 +1,182 @@
+/* Phase 4: composition/roles only. Renderer, queries, layers and scientific scope are unchanged. */
+.fb-shell .fw-workspace { --workflow-width: 340px; color: var(--text-primary); }
+.fb-shell .fw-workspace :is(h1,h2,h3,h4) { color: var(--text-primary); font-family: var(--font-ui); }
+.fb-shell .fw-workspace h1 { font-size: var(--type-title); line-height: var(--leading-title); }
+.fb-shell .fw-workspace h2 { font-size: var(--type-section); line-height: var(--leading-section); }
+.fb-shell .fw-workspace h3 { font-size: var(--type-subsection); line-height: var(--leading-subsection); }
+.fb-shell .fw-workspace :is(p,td,th,legend) { font-size: var(--type-table); line-height: var(--leading-body); }
+.fb-shell .fw-workspace :is(label,small,.fb-muted,.geo-metadata-note,.fb-eyebrow,.fw-helper) { color: var(--text-secondary); font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .fw-workspace :is(code,.fb-hash) { font: var(--type-label)/var(--leading-table) var(--mono); overflow-wrap: anywhere; }
+.fb-shell .fw-workspace :is(time,.fb-numeric,.fb-data-strip strong) { font-variant-numeric: tabular-nums; }
+.fb-shell .fw-workspace :is(input:not([type='checkbox']),select,textarea) { min-width: 0; min-height: var(--target-control); border: var(--border-control); border-radius: var(--radius-control); background: var(--surface-2); color: var(--text-primary); font: var(--type-body)/var(--leading-body) var(--font-ui); color-scheme: dark; }
+.fb-shell .fw-workspace input::placeholder,.fb-shell .fw-workspace textarea::placeholder { color: var(--text-secondary); opacity: 1; }
+.fb-shell .fw-workspace :is(input,select,textarea,button):disabled { opacity: 1; color: var(--text-secondary); }
+.fb-shell .fw-workspace :is(button,a,input,select,textarea,summary):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.fb-shell .fw-workspace :is(.button,.icon-button) { min-height: var(--target-control); min-width: var(--target-control); border-radius: var(--radius-control); font-size: var(--type-table); }
+.fb-shell .fw-workspace .button:disabled { border: var(--border-control); background: var(--surface-2); }
+.fb-shell .fw-workspace .fb-section { border: var(--border-decorative); border-radius: var(--radius-card); background: var(--surface-2); box-shadow: none; padding: var(--space-6); min-width: 0; }
+.fb-shell .fw-workspace .fb-section-heading { gap: var(--space-3); }
+.fb-shell .fw-workspace .fb-section-heading h2 { font-size: var(--type-section); line-height: var(--leading-section); }
+.fb-shell .fw-workspace .fb-section-heading p { color: var(--text-secondary); font-size: var(--type-table); line-height: var(--leading-body); }
+.fb-shell .fw-workspace .fb-eyebrow { font-family: var(--font-ui); letter-spacing: .5px; }
+.fb-shell .fw-workspace .fb-page-heading { gap: var(--space-4); padding-bottom: var(--space-4); margin-bottom: var(--space-4); }
+.fb-shell .fw-workspace .fb-page-heading p { color: var(--text-secondary); font-size: var(--type-body); line-height: var(--leading-body); }
+.fb-shell .fw-workspace .fb-heading-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.fb-shell .fw-workspace .astra-analysis-selection { padding: var(--space-4); border: var(--border-decorative); border-radius: var(--radius-control); background: var(--surface-2); }
+.fb-shell .fw-workspace .astra-analysis-selection strong { font-size: var(--type-subsection); line-height: var(--leading-subsection); overflow-wrap: anywhere; }
+.fb-shell .fw-workspace .astra-analysis-selection small { color: var(--text-secondary); font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .astra-analysis-selection .ui-copyable-id code { display: inline; color: var(--text-primary); font-size: var(--type-label); }
+.fw-release-banner { margin-block: var(--space-3); }
+.fw-release-banner .ui-banner-content > strong { font-size: var(--type-table); overflow-wrap: anywhere; }
+.fb-shell .fw-workspace .astra-analysis-tabs { display: flex; gap: var(--space-1); max-width: 100%; overflow-x: auto; padding: var(--space-1) var(--space-1) var(--space-2); margin-block: var(--space-4); scrollbar-width: thin; scroll-padding-inline: var(--space-2); }
+.fb-shell .fw-workspace .astra-analysis-tabs > button { flex: 0 0 auto; min-height: var(--target-control); padding: var(--space-2) var(--space-4); border: 1px solid transparent; border-radius: var(--radius-control); font: var(--weight-label) var(--type-table)/var(--leading-table) var(--font-ui); color: var(--text-secondary); }
+.fb-shell .fw-workspace .astra-analysis-tabs > button[aria-selected='true'] { color: var(--accent); border-color: var(--accent); background: var(--surface-3); }
+.fb-shell .fw-workspace .geo-filter-bar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); border: var(--border-decorative); border-radius: var(--radius-control); background: var(--surface-2); margin-bottom: var(--space-4); }
+.fb-shell .fw-workspace .geo-filter-bar > label { min-width: 180px; flex: 1; }
+.fb-shell .fw-workspace .geo-filter-label { color: var(--text-secondary); font-size: var(--type-label); }
+.fb-shell .fw-workspace .geo-filter-bar label { display: grid; gap: var(--space-2); }
+.fb-shell .fw-workspace .geo-filter-bar > .fw-date-range { flex: 2 1 360px; }
+.fw-filter-dates { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-3); }
+.fw-date-range { min-width: 0; }
+.fw-date-note,.fb-shell .fw-workspace .fw-filter-scope { color: var(--text-secondary); font: var(--type-label)/var(--leading-table) var(--font-ui); margin: var(--space-2) 0; font-variant-numeric: tabular-nums; }
+.fw-filter-scope { flex-basis: 100%; }
+.ui-popover { z-index: var(--z-popover); width: min(360px,calc(100vw - 24px)); max-height: var(--radix-popover-content-available-height); overflow-y: auto; padding: var(--space-4); display: grid; gap: var(--space-3); color: var(--text-primary); background: var(--surface-3); border: var(--border-control); border-radius: var(--radius-card); box-shadow: var(--shadow-overlay); font: var(--type-table)/var(--leading-table) var(--font-ui); }
+.ui-popover h3 { margin: 0; color: var(--text-primary); font-size: var(--type-subsection); line-height: var(--leading-subsection); }
+.ui-popover p { margin: 0; color: var(--text-secondary); font-size: var(--type-label); line-height: var(--leading-table); }
+.fw-action-strip { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); border: var(--border-decorative); border-radius: var(--radius-control); background: var(--surface-2); }
+.fw-action-strip p { color: var(--text-secondary); margin: 0; flex: 1 1 220px; }
+.fb-shell .fw-workspace .geo-workspace-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--space-4); align-items: start; }
+.fb-shell .fw-workspace .geo-setup { grid-row: 2; min-width: 0; border: var(--border-decorative); border-radius: var(--radius-card); background: var(--surface-2); }
+.fb-shell .fw-workspace .geo-setup > summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-4); min-height: var(--target-control); color: var(--text-primary); font-size: var(--type-table); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .geo-setup > summary > span { color: var(--text-secondary); font-size: var(--type-label); }
+.fb-shell .fw-workspace .geo-setup:not([open]) > summary > span { display: none; }
+.fw-steps { padding: var(--space-4); border-top: var(--border-decorative); }
+.fb-shell .fw-workspace .fb-workflow { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; }
+.fb-shell .fw-workspace .fb-workflow .fb-section { border: 0; border-top: var(--border-decorative); border-radius: 0; padding: var(--space-4); }
+.fb-shell .fw-workspace .fb-workflow .fb-section-heading h2 { font-size: var(--type-subsection); line-height: var(--leading-subsection); }
+.fb-shell .fw-workspace .fb-workflow .fb-field-pair { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--space-3); }
+.fb-shell .fw-workspace .fb-workflow .fb-form fieldset { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.fb-shell .fw-workspace .fb-editor,.fb-shell .fw-workspace .fb-resource-loader,.fw-advanced { padding: var(--space-3); border: var(--border-decorative); border-radius: var(--radius-control); background: var(--surface-2); margin-top: var(--space-3); }
+.fb-shell .fw-workspace :is(.fb-editor,.fb-resource-loader,.fw-advanced) > summary { min-height: var(--target-control); align-content: center; color: var(--text-primary); font-size: var(--type-label); line-height: var(--leading-table); cursor: pointer; }
+.fb-shell .fw-workspace .fb-editor > summary > span { color: var(--text-secondary); font-size: var(--type-label); }
+.fw-primary-submit { align-self: stretch; }
+.fb-shell .fw-workspace .fw-loaded-areas { display: grid; gap: var(--space-2); margin-block: var(--space-3); }
+.fb-shell .fw-workspace .fb-load-form { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); }
+.fb-shell .fw-workspace .fb-details { min-width: 0; margin-top: var(--space-4); }
+.fb-shell .fw-workspace .fb-details dl { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--space-3); }
+.fb-shell .fw-workspace .fb-details dd { min-width: 0; overflow-wrap: anywhere; }
+.fb-shell .fw-workspace .fb-results { min-width: 0; grid-row: 1; }
+.fb-shell .fw-workspace .fb-map-panel { padding: 0; overflow: visible; }
+.fb-shell .fw-workspace .fb-map-panel > .fb-section-heading { padding: var(--space-4); }
+.fb-shell .fw-workspace .fb-map-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-4); }
+.fb-shell .fw-workspace .fb-map-toolbar > label { display: flex; align-items: center; gap: var(--space-2); min-height: var(--target-control); }
+.fb-shell .fw-workspace .geo-map-modes { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.fb-shell .fw-workspace .geo-map-modes button { min-height: var(--target-control); padding: var(--space-2) var(--space-3); font-size: var(--type-label); border-radius: var(--radius-control); }
+.fb-shell .fw-workspace .geo-map-modes button[aria-pressed='true'] { color: var(--accent); background: var(--surface-3); border: 1px solid var(--accent); }
+.fb-shell .fw-workspace .geo-spatial-body { position: relative; isolation: isolate; display: block; }
+.fb-shell .fw-workspace .fb-map-panel .map-frame { height: clamp(360px,56dvh,560px); min-height: 0; width: 100%; isolation: isolate; z-index: var(--z-content); }
+.fb-shell .fw-workspace .map-canvas { height: 100%; }
+.fb-shell .fw-workspace .map-frame :is(.map-context-controls,.map-actions,.map-context-panel,.map-scale,.map-loading,.map-basemap-banner,.map-control-error,.map-empty,.map-draw-bar,.maplibregl-ctrl-attrib,.maplibregl-ctrl-scale) { background: var(--surface-2); color: var(--text-primary); border: var(--border-decorative); border-radius: var(--radius-control); }
+@supports (backdrop-filter: blur(8px)) { .fb-shell .fw-workspace .map-frame :is(.map-context-controls,.map-actions,.map-context-panel,.map-scale,.map-loading,.map-basemap-banner,.map-control-error,.map-empty,.map-draw-bar,.maplibregl-ctrl-attrib,.maplibregl-ctrl-scale) { background: var(--map-glass); backdrop-filter: blur(var(--map-glass-blur)); } }
+.fb-shell .fw-workspace .map-context-controls { left: var(--space-3); top: var(--space-3); max-width: calc(100% - 88px); z-index: var(--z-map-tools); }
+.fb-shell .fw-workspace .map-context-controls > button { min-width: var(--target-control); min-height: var(--target-control); font-size: var(--type-label); color: var(--text-primary); }
+.fb-shell .fw-workspace .map-context-controls > button:first-child span { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-shell .fw-workspace .map-context-controls svg { flex-shrink: 0; }
+.fb-shell .fw-workspace .map-actions { top: var(--space-3); right: var(--space-3); padding: 2px; gap: 0; width: 48px; z-index: var(--z-map-tools); }
+.fb-shell .fw-workspace .map-actions .map-icon-button { width: var(--target-control); height: var(--target-control); min-width: var(--target-control); min-height: var(--target-control); color: var(--text-primary); }
+.fb-shell .fw-workspace .fw-extra-tools { display: flex; flex-direction: column; align-items: center; }
+.fb-shell .fw-workspace .fw-tools-toggle { display: none; }
+.fb-shell .fw-workspace .map-context-panel { top: 68px; left: var(--space-3); width: min(320px,calc(100% - 88px)); max-height: max(120px,calc(100% - 240px)); overflow-y: auto; z-index: var(--z-map-tools); padding: var(--space-3); }
+.fb-shell .fw-workspace .map-context-panel header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.fb-shell .fw-workspace .map-context-panel :is(label,small,p,span) { color: var(--text-secondary); font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .map-context-panel strong { color: var(--text-primary); font-size: var(--type-table); }
+.fb-shell .fw-workspace .map-layer-row { min-height: var(--target-control); gap: var(--space-3); }
+.fb-shell .fw-workspace .map-scale { left: var(--space-3); bottom: 36px; font: var(--type-label)/var(--leading-table) var(--font-ui); color: var(--text-secondary); z-index: 1; }
+.fb-shell .fw-workspace .map-loading,.fb-shell .fw-workspace .map-empty { font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .map-empty { max-width: min(320px,calc(100% - 132px)); }
+.fb-shell .fw-workspace .map-frame:has(.map-context-panel) .map-empty { top: auto; bottom: 40px; left: var(--space-3); transform: none; max-width: calc(100% - 24px); max-height: 120px; overflow-y: auto; }
+.fb-shell .fw-workspace .map-draw-bar { top: auto; left: var(--space-3); right: var(--space-3); bottom: 40px; transform: none; height: auto; padding: var(--space-2); max-width: none; z-index: var(--z-map-tools); }
+.fb-shell .fw-workspace .map-draw-button { min-height: var(--target-control); padding: var(--space-2) var(--space-3); font-size: var(--type-label); }
+.fb-shell .fw-workspace .map-draw-hint { color: var(--text-primary); font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .map-frame:has(.map-draw-bar) .map-scale { display: none; }
+.fb-shell .fw-workspace .map-frame:has(.map-draw-bar) .map-empty { top: 68px; left: var(--space-3); bottom: auto; transform: none; max-width: min(180px,calc(100% - 112px)); max-height: 80px; overflow-y: auto; }
+.fb-shell .fw-workspace .map-frame:has(.map-empty) .map-scale { display: none; }
+.fb-shell .fw-workspace .maplibregl-ctrl-attrib { max-width: 230px; font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .maplibregl-ctrl-attrib a { color: var(--text-primary); }
+.fb-shell .fw-workspace .maplibregl-ctrl-scale { color: var(--text-primary); font-size: var(--type-label); line-height: var(--leading-label); }
+.fb-shell .fw-workspace .fb-map-caption { padding: var(--space-4); color: var(--text-secondary); }
+.fb-shell .fw-workspace .fb-map-caption p { margin: var(--space-2) 0 0; font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .fb-map-caption > div { font-size: var(--type-label); line-height: var(--leading-table); }
+.fw-map-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); display: grid; gap: var(--space-2); justify-items: start; width: min(320px,calc(100% - 132px)); padding: var(--space-4); color: var(--text-primary); background: var(--surface-2); border: var(--border-decorative); border-radius: var(--radius-card); z-index: 1; }
+.fw-map-empty .ui-button { max-width: 100%; white-space: normal; font-size: var(--type-label); }
+.fw-map-empty p { margin: 0; color: var(--text-secondary); font-size: var(--type-table); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .geo-spatial-body:has([aria-label='Cancel area drawing'],.map-context-panel,.fw-tools-expanded) .fw-map-empty { display: none; }
+.fb-shell .fw-workspace :is(.geo-loaded-notice,.geo-panel-foot,.geo-panel-description,.geo-metadata-note,.platform-comparison-footnote) { color: var(--text-secondary); font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .geo-temporal { padding: var(--space-4); background: var(--surface-2); border: var(--border-decorative); border-radius: var(--radius-card); margin-top: var(--space-4); }
+.fb-shell .fw-workspace .geo-temporal header { display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: space-between; }
+.fb-shell .fw-workspace .geo-temporal h3 { font-size: var(--type-subsection); line-height: var(--leading-subsection); }
+.fb-shell .fw-workspace .geo-temporal p { color: var(--text-secondary); font-size: var(--type-table); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .geo-timeline { overflow-x: auto; gap: var(--space-2); padding: var(--space-2); }
+.fb-shell .fw-workspace .geo-timeline button { min-width: 72px; min-height: var(--target-control); color: var(--text-primary); border-radius: var(--radius-control); }
+.fb-shell .fw-workspace .geo-timeline :is(strong,time) { font-size: var(--type-label); }
+.fb-shell .fw-workspace .geo-timeline [aria-pressed='true'] { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.fb-shell .fw-workspace .geo-source-grid { gap: var(--space-4); }
+.fb-shell .fw-workspace .geo-source-grid article { padding: var(--space-4); border-radius: var(--radius-card); background: var(--surface-2); border: var(--border-decorative); }
+.fb-shell .fw-workspace .geo-source-grid :is(p,span,dt,dd) { font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .geo-source-count { font-size: var(--type-stat); line-height: var(--leading-stat); }
+.fb-shell .fw-workspace .geo-detection-details { position: relative; inset: auto; width: 100%; max-height: none; z-index: var(--z-content); max-width: 100%; background: var(--surface-2); padding: var(--space-4); border: var(--border-control); border-radius: var(--radius-card); margin-top: var(--space-4); }
+.fb-shell .fw-workspace .geo-detection-details header { align-items: flex-start; }
+.fb-shell .fw-workspace .geo-detection-details header > div { min-width: 0; }
+.fb-shell .fw-workspace .geo-detection-details h3 { overflow-wrap: anywhere; font-size: var(--type-subsection); line-height: var(--leading-subsection); }
+.fb-shell .fw-workspace .geo-detection-details :is(dt,dd,p) { font-size: var(--type-label); line-height: var(--leading-table); color: var(--text-secondary); }
+.fb-shell .fw-workspace .geo-detection-details dd { color: var(--text-primary); }
+.fb-shell .fw-workspace .fb-data-strip { grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-4); padding: var(--space-4); border: var(--border-decorative); border-radius: var(--radius-card); background: var(--surface-2); }
+.fb-shell .fw-workspace .fb-data-strip strong { font-size: var(--type-title); line-height: var(--leading-title); }
+.fb-shell .fw-workspace .fb-data-strip :is(span,small) { color: var(--text-secondary); font-size: var(--type-label); line-height: var(--leading-table); }
+.fb-shell .fw-workspace .fb-table-scroll { max-width: 100%; overflow-x: auto; }
+.fb-shell .fw-workspace table :is(th,td) { padding: var(--space-3); font-size: var(--type-table); line-height: var(--leading-table); color: var(--text-primary); }
+.fb-shell .fw-workspace table small { color: var(--text-secondary); font-size: var(--type-label); }
+.fb-shell .fw-workspace .geo-record-link { min-height: var(--target-control); padding: var(--space-2); color: var(--accent); font-size: var(--type-table); }
+.fb-shell .fw-workspace :is(.geo-export-summary,.fb-details,.fb-job,.fb-feedback) { font-size: var(--type-table); line-height: var(--leading-body); }
+.fb-shell .fw-workspace .fb-workspace-footer { color: var(--text-secondary); font-size: var(--type-label); line-height: var(--leading-table); }
+@media (min-width:1024px) {
+  .fb-shell .fw-workspace .geo-workspace-grid { grid-template-columns: var(--workflow-width) minmax(0,1fr); }
+  .fb-shell .fw-workspace .geo-workspace-grid:has(>.geo-setup:not([open])) { grid-template-columns: 160px minmax(0,1fr); }
+  .fb-shell .fw-workspace .geo-setup { grid-row: 1; grid-column: 1; max-height: clamp(480px,calc(100dvh - 220px),900px); overflow-y: auto; }
+  .fb-shell .fw-workspace .fb-results { grid-row: 1; grid-column: 2; }
+  .fb-shell .fw-workspace .fb-map-panel .map-frame { height: clamp(480px,calc(100dvh - 220px),900px); }
+}
+@media (max-width:1023px) {
+  .fb-shell .fw-workspace .fb-results,.fb-shell .fw-workspace .geo-setup { grid-column: 1; }
+  .fb-shell .fw-workspace .geo-setup { overflow: visible; }
+  .fb-shell .fw-workspace .fb-data-strip { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width:767px) {
+  .fb-shell .fw-workspace .fb-section { padding: var(--space-4); }
+  .fb-shell .fw-workspace .fb-map-panel { padding: 0; }
+  .fb-shell .fw-workspace .fw-filter-dates { grid-template-columns: minmax(0,1fr); }
+  .fb-shell .fw-workspace .geo-filter-bar > .fw-date-range { flex-basis: 100%; }
+  .fb-shell .fw-workspace .fw-action-strip p { flex-basis: 100%; }
+  .fb-shell .fw-workspace .map-context-controls > button:first-child span { max-width: 120px; }
+  .fb-shell .fw-workspace .map-context-controls > button:nth-child(2) span { display: none; }
+  .fb-shell .fw-workspace .fw-tools-toggle { display: flex; }
+  .fb-shell .fw-workspace .fw-extra-tools { display: none; }
+  .fb-shell .fw-workspace .fw-tools-expanded { width: 96px; display: grid; grid-template-columns: repeat(2,44px); }
+  .fb-shell .fw-workspace .fw-tools-expanded .fw-extra-tools { display: contents; }
+  .fb-shell .fw-workspace .fw-tools-expanded .map-control-separator { display: none; }
+  .fb-shell .fw-workspace .map-frame:has(.fw-tools-expanded) .map-context-controls > button:first-child span { max-width: 80px; }
+  .fb-shell .fw-workspace .map-scale { display: flex; bottom: var(--space-16); max-width: 160px; }
+  .fb-shell .fw-workspace .maplibregl-ctrl-attrib { max-width: 220px; }
+  .fb-shell .fw-workspace .map-draw-bar { flex-wrap: wrap; }
+  .fb-shell .fw-workspace .map-draw-hint { flex-basis: 100%; }
+  .fb-shell .fw-workspace .platform-observation-layout { grid-template-columns: minmax(0,1fr); }
+  .fb-shell .fw-workspace .fb-record-table,.fb-shell .fw-workspace .fb-provenance-table,.fb-shell .fw-workspace .fw-component-table { min-width: 0; width: 100%; }
+  .fb-shell .fw-workspace :is(.fb-record-table,.fb-provenance-table,.fw-component-table) thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .fb-shell .fw-workspace :is(.fb-record-table,.fb-provenance-table,.fw-component-table) :is(tbody,tr) { display: block; width: 100%; }
+  .fb-shell .fw-workspace :is(.fb-record-table,.fb-provenance-table,.fw-component-table) tr { border: var(--border-decorative); border-radius: var(--radius-control); margin-bottom: var(--space-3); padding: var(--space-2); }
+  .fb-shell .fw-workspace :is(.fb-record-table,.fb-provenance-table,.fw-component-table) :is(td,th[scope='row']) { display: block; min-width: 0; white-space: normal; overflow-wrap: anywhere; text-align: left; border: 0; padding: var(--space-2); }
+  .fb-shell .fw-workspace :is(.fb-record-table,.fb-provenance-table,.fw-component-table) [data-label]::before { content: attr(data-label); display: block; color: var(--text-secondary); font: var(--type-label)/var(--leading-label) var(--font-ui); margin-bottom: var(--space-1); }
+  .fb-shell .fw-workspace .fb-record-table time { white-space: normal; }
+  .fb-shell .fw-workspace .geo-detection-details { position: relative; inset: auto; width: 100%; max-height: none; }
+}
+@media (prefers-reduced-motion:reduce) { .fb-shell .fw-workspace *,.ui-popover { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

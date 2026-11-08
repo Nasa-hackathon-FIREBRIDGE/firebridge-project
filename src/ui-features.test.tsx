@@ -59,7 +59,7 @@ describe('ChatWidget', () => {
     renderApp()
     expect(screen.queryByRole('dialog')).toBeNull()
     openChat()
-    expect(screen.getByRole('dialog', { name: 'Astra Data Assistant' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'FIREBRIDGE Data Assistant' })).toBeTruthy()
     expect(screen.getByText(/Live AI service is not connected/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Close data assistant' }))
     expect(screen.queryByRole('dialog')).toBeNull()

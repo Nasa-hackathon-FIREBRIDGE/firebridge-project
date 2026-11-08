@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiKeys } from '../services/api.keys'
 import { ingestion } from '../services/ingestion.service'
 import type { BackfillInput, GapsQuery, RefreshInput, SubscriptionsQuery } from '../services/data.types'
+import { workspaceKeys } from './useWorkspace'
 
 export interface AdminSession { id: string; token: string; controller: AbortController }
 export function useSubscriptions(session: AdminSession, params: SubscriptionsQuery) {
@@ -18,7 +19,10 @@ export function useFetchRun(session: AdminSession, id: string) {
 }
 export function useIngestionActions(session: AdminSession) {
   const client = useQueryClient()
-  const refreshLists = () => client.invalidateQueries({ queryKey: apiKeys.adminSession(session.id) })
+  const refreshLists = () => Promise.all([
+    client.invalidateQueries({ queryKey: apiKeys.adminSession(session.id) }),
+    client.invalidateQueries({ queryKey: workspaceKeys.jobs }),
+  ])
   const backfill = useMutation({
     mutationFn: ({ input, key }: { input: BackfillInput; key: string }) =>
       ingestion.backfill(session.token, input, key, session.controller.signal),

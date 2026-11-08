@@ -5,6 +5,7 @@ import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Detection, AreaOfInterest } from '../types'
+import { resultFixtures } from '../services/results.test-fixtures'
 
 const mocks = vi.hoisted(() => {
   type Handler = (event?: unknown) => void
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => {
     handlers: Record<string, Handler[]> = {}
     layerHandlers: Record<string, Handler[]> = {}
     sources = new Map<string, { setData: ReturnType<typeof vi.fn> }>()
+    sourceDefinitions = new Map<string, unknown>()
     layers = new Set<string>()
     remove = vi.fn()
     resize = vi.fn()
@@ -26,7 +28,11 @@ const mocks = vi.hoisted(() => {
     setLayoutProperty = vi.fn()
     addControl = vi.fn()
     zoomTo = vi.fn()
+    easeTo = vi.fn()
     flyTo = vi.fn()
+    fitBounds = vi.fn()
+    isSourceLoaded = () => true
+    querySourceFeatures = vi.fn((): unknown[] => [])
     getZoom = () => 7
     getCanvas = () => this.canvas
     canvas = Object.assign(new EventTarget(), { style: {} as Record<string, string> })
@@ -40,7 +46,13 @@ const mocks = vi.hoisted(() => {
     }
     emit(event: string, payload?: unknown) { this.handlers[event]?.forEach((handler) => handler(payload)) }
     emitLayer(event: string, layer: string, payload?: unknown) { this.layerHandlers[`${event}:${layer}`]?.forEach((handler) => handler(payload)) }
-    addSource(id: string) { this.sources.set(id, { setData: vi.fn() }) }
+    off(event: string, layerOrHandler: string | Handler, handler?: Handler) {
+      if (typeof layerOrHandler === 'string') this.layerHandlers[`${event}:${layerOrHandler}`] = this.layerHandlers[`${event}:${layerOrHandler}`]?.filter((item) => item !== handler) ?? []
+      else this.handlers[event] = this.handlers[event]?.filter((item) => item !== layerOrHandler) ?? []
+    }
+    addSource(id: string, definition?: unknown) { this.sources.set(id, { setData: vi.fn() }); this.sourceDefinitions.set(id, definition) }
+    removeSource(id: string) { this.sources.delete(id) }
+    removeLayer(id: string) { this.layers.delete(id) }
     getSource(id: string) { return this.sources.get(id) }
     addLayer(layer: { id: string }) { this.layers.add(layer.id) }
     getLayer(id: string) { return this.layers.has(id) ? { id } : undefined }
@@ -72,6 +84,8 @@ vi.mock('maplibre-gl', () => ({
   NavigationControl: class {},
   AttributionControl: class {},
   setWorkerUrl: vi.fn(),
+  addProtocol: vi.fn(),
+  LngLatBounds: class { points: unknown[] = []; extend(point: unknown) { this.points.push(point); return this } },
 }))
 vi.mock('terra-draw', () => ({
   TerraDraw: mocks.FakeDraw,
@@ -93,7 +107,7 @@ const area: AreaOfInterest = { id: 'a', name: 'Area', provenance: 'default-demo'
 const records = [makeRecord('d1', 'MODIS'), makeRecord('d2', 'VIIRS')]
 
 function renderMap(overrides: Partial<React.ComponentProps<typeof MapView>> = {}) {
-  const props = { records, selectedId: null, onSelect: vi.fn(), area, showDetections: true, showArea: true, clearDrawingToken: 0, onAreaDrawn: vi.fn(), onAreaRejected: vi.fn(), onClearArea: vi.fn(), styleUrl: '', ...overrides }
+  const props = { records, selectedId: null, onSelect: vi.fn(), area, showDetections: true, showArea: true, clearDrawingToken: 0, onAreaDrawn: vi.fn(), onAreaRejected: vi.fn(), onClearArea: vi.fn(), styleUrl: '', basemapProvider: 'schematic', ...overrides }
   return { props, ...render(<MapView {...props} />) }
 }
 const lastMap = () => FakeMap.instances[FakeMap.instances.length - 1]
@@ -115,11 +129,11 @@ describe('MapView with mocked MapLibre', () => {
     expect(lastDraw().start).toHaveBeenCalled()
   })
 
-  it('without a style URL uses the labelled schematic fallback immediately', () => {
+  it('uses an explicitly selected offline grid without claiming satellite imagery', () => {
     const { container } = renderMap({ styleUrl: '' })
     expect(typeof lastMap().options.style).toBe('object')
     expect(screen.getByText(/SCHEMATIC VIEW — not satellite imagery/)).toBeTruthy()
-    expect(screen.getByText(/VITE_MAP_STYLE_URL is not set/)).toBeTruthy()
+    expect(screen.getByText(/Offline coordinate grid selected/)).toBeTruthy()
     expect(screen.queryByText('Loading basemap…')).toBeNull()
     expect(container.querySelector('[data-basemap="schematic"]')).toBeTruthy()
   })
@@ -127,7 +141,8 @@ describe('MapView with mocked MapLibre', () => {
   it('falls back to the schematic when the style fails to load', () => {
     renderMap({ styleUrl: STYLE })
     act(() => lastMap().emit('error', { error: new Error('HTTP 403') }))
-    expect(screen.getByText(/could not be loaded \(HTTP 403\)/)).toBeTruthy()
+    expect(screen.getByText(/could not be loaded. Check your connection/)).toBeTruthy()
+    expect(screen.queryByText(/HTTP 403/)).toBeNull()
     expect(lastMap().setStyle).toHaveBeenCalledTimes(1)
     expect(lastMap().sources.has('astra-graticule')).toBe(true)
     expect(screen.queryByText('Loading basemap…')).toBeNull()
@@ -236,6 +251,90 @@ describe('MapView with mocked MapLibre', () => {
   })
 })
 
+describe('MapView real-API layer integration (mocked renderer)', () => {
+  it('preserves one renderer and restores record selection across attributed basemap changes', () => {
+    const nativeRecords: import('../features/observations/types').DetectionFeature[] = resultFixtures.detections.features.map((feature) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [feature.geometry.coordinates[0], feature.geometry.coordinates[1]] }, properties: feature.properties }))
+    const { props } = renderMap({ apiMode: true, records: [], nativeRecords, basemapProvider: 'nasa-gibs' })
+    act(() => lastMap().emit('style.load'))
+    const map = lastMap()
+    fireEvent.click(screen.getByRole('button', { name: 'Choose basemap' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Basemap' }), { target: { value: 'hybrid' } })
+    expect(FakeMap.instances).toHaveLength(1)
+    expect(map.setStyle).toHaveBeenCalledTimes(1)
+    expect(map.sources.has('firebridge-native-records')).toBe(true)
+    act(() => map.emitLayer('click', 'firebridge-native-record-points', { features: [{ properties: { id: 'native' } }] }))
+    expect(props.onSelect).toHaveBeenCalledTimes(1)
+    expect(props.onSelect).toHaveBeenCalledWith('native')
+    fireEvent.click(screen.getByRole('button', { name: 'Reset map orientation' }))
+    expect(map.easeTo).toHaveBeenCalledWith(expect.objectContaining({ bearing: 0, pitch: 0 }))
+  })
+  it('distinguishes failed satellite imagery from API data and offers explicit recovery choices', () => {
+    renderMap({ apiMode: true, records: [], basemapProvider: 'nasa-gibs' })
+    act(() => lastMap().emit('style.load'))
+    act(() => { for (let i = 0; i < 3; i++) lastMap().emit('error', { sourceId: 'firebridge-nasa-imagery', error: new Error('offline') }) })
+    expect(screen.getByText(/NASA satellite tiles could not be loaded/)).toBeTruthy()
+    expect(screen.getByText(/SCHEMATIC VIEW — not satellite imagery/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Retry background' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Try streets' })).toBeTruthy()
+    expect(screen.queryByText('Analysis tiles could not be loaded')).toBeNull()
+  })
+  it('switches between native record inspection and aggregate tiles without recreating the map', () => {
+    const nativeRecords: import('../features/observations/types').DetectionFeature[] = resultFixtures.detections.features.map((feature) => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [feature.geometry.coordinates[0], feature.geometry.coordinates[1]] }, properties: feature.properties,
+    }))
+    const { props, rerender } = renderMap({ apiMode: true, records: [], nativeRecords })
+    act(() => lastMap().emit('style.load'))
+    const map = lastMap()
+    expect(map.sources.has('firebridge-native-records')).toBe(true)
+    expect(map.sources.has('astra-demo-points')).toBe(false)
+    const id = nativeRecords[0].properties.detection_id
+    act(() => map.emitLayer('click', 'firebridge-native-record-points', { features: [{ properties: { id } }] }))
+    expect(props.onSelect).toHaveBeenCalledWith(id)
+    rerender(<MapView {...props} selectedId={id} />)
+    expect(map.sources.get('firebridge-native-records')?.setData).toHaveBeenLastCalledWith(expect.objectContaining({ features: [expect.objectContaining({ properties: expect.objectContaining({ id, selected: true }) })] }))
+    rerender(<MapView {...props} nativeRecords={undefined} />)
+    expect(lastMap()).toBe(map)
+    expect(map.sources.has('firebridge-native-records')).toBe(false)
+  })
+  const id = '22222222-2222-4222-8222-222222222222'
+  it('requests only the whitelisted MVT source and renders no demo point source', () => {
+    renderMap({ apiMode: true, apiAnalysisId: id, area: null })
+    act(() => lastMap().emit('style.load'))
+    expect(lastMap().sources.has('astra-demo-points')).toBe(false)
+    expect(lastMap().sourceDefinitions.get('firebridge-detections')).toMatchObject({ type: 'vector', tiles: [`firebridge://tiles/${id}/detections/{z}/{x}/{y}.mvt`] })
+    expect(screen.queryByText(/No demo records/)).toBeNull()
+    expect(screen.getByText('Loading analysis tiles…')).toBeTruthy()
+    act(() => lastMap().emit('idle'))
+    expect(screen.getByText('No detections in the visible tiles')).toBeTruthy()
+  })
+  it('makes no tile source before results are available or while the layer is off', () => {
+    const { rerender, props } = renderMap({ apiMode: true, area: null })
+    act(() => lastMap().emit('style.load'))
+    expect(lastMap().sources.has('firebridge-detections')).toBe(false)
+    rerender(<MapView {...props} apiAnalysisId={id} showDetections={false} />)
+    expect(lastMap().sources.has('firebridge-detections')).toBe(false)
+    rerender(<MapView {...props} apiAnalysisId={id} showDetections />)
+    expect(lastMap().sources.has('firebridge-detections')).toBe(true)
+    rerender(<MapView {...props} apiAnalysisId={id} showDetections={false} />)
+    expect(lastMap().sources.has('firebridge-detections')).toBe(false)
+  })
+  it('shows source failures separately from basemap availability and keeps errors visible on idle', () => {
+    renderMap({ apiMode: true, apiAnalysisId: id, area: null, styleUrl: STYLE })
+    act(() => lastMap().emit('style.load'))
+    act(() => lastMap().emit('error', { sourceId: 'firebridge-detections', error: new Error('503') }))
+    act(() => lastMap().emit('idle'))
+    expect(screen.getByText('Analysis tiles could not be loaded')).toBeTruthy()
+    expect(lastMap().setStyle).not.toHaveBeenCalled()
+  })
+  it('fits a saved area and restores its extent with the dedicated control', () => {
+    renderMap({ apiMode: true })
+    act(() => lastMap().emit('style.load'))
+    expect(lastMap().fitBounds).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Fit study area' }))
+    expect(lastMap().fitBounds).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('Finish drawing control', () => {
   const start = () => {
     const view = renderMap()
@@ -310,7 +409,7 @@ describe('Optional Esri World Imagery provider (mocked MapLibre; no real tiles)'
   it('rejects unknown providers and stays on the schematic', () => {
     renderMap({ basemapProvider: 'someone-else' })
     expect(typeof lastMap().options.style).toBe('object')
-    expect(screen.getByText(/"someone-else" is not supported/)).toBeTruthy()
+    expect(screen.getByText(/map provider is not supported/)).toBeTruthy()
     expect(screen.getByText(/SCHEMATIC VIEW/)).toBeTruthy()
   })
 

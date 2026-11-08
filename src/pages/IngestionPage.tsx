@@ -8,6 +8,8 @@ import type { Resource } from '../services/resource'
 import { ApiErrorMessage, Facts, Filters, Limitations, Pager, Records, ResourcePanel, StructuredValue } from '../components/api/ApiPrimitives'
 import { uuidPattern } from '../components/api/format'
 import { useCursorPage } from '../hooks/useCursorPage'
+import { PageHeader } from '../components/workspace/PageHeader'
+import { ShieldCheck } from 'lucide-react'
 
 export default function IngestionPage() {
   const [session, setSession] = useState<AdminSession | null>(null)
@@ -26,9 +28,8 @@ export default function IngestionPage() {
     client.removeQueries({ queryKey: apiKeys.adminSession(session.id) })
     setSession(null)
   }
-  return <div className="page-content api-workspace"><header className="page-heading"><p className="eyebrow">ADMINISTRATION</p><h1>Ingestion des données</h1>
-    <p>Accès réservé aux opérateurs. Ces actions planifient l’import ; elles ne téléchargent pas de données NASA et ne publient pas de version.</p></header>
-    {!session ? <section className="panel api-section"><h2>Ouvrir une session d’administration temporaire</h2>
+  return <div className="page-content api-workspace platform-ingestion"><PageHeader eyebrow="OPERATIONS / INGESTION ADMINISTRATION" title="Ingestion des données" description="Accès réservé aux opérateurs. Les actions planifient l’import ; elles ne téléchargent pas de données NASA et ne publient pas de version." />
+    {!session ? <section className="panel api-section platform-admin-access"><span className="platform-access-icon"><ShieldCheck size={25} /></span><span className="platform-eyebrow">TECHNICAL ACCESS / MEMORY ONLY</span><h2>Ouvrir une session d’administration temporaire</h2>
       <p>Saisir le jeton d’ingestion fourni par l’administrateur. Il reste uniquement en mémoire pendant cette session ; aucun compte utilisateur n’est créé.</p>
       <form className="api-form" onSubmit={(e) => {
         e.preventDefault()
@@ -38,7 +39,8 @@ export default function IngestionPage() {
         <label>Jeton d’administration<input name="token" type="password" required autoComplete="off" /></label>
         <button className="button button-primary">Accéder à l’administration</button>
       </form>
-    </section> : <><button type="button" className="button button-secondary" onClick={disconnect}>Fermer la session et effacer les résultats d’administration</button><AdminWorkspace key={session.id} session={session} /></>}
+      <p className="platform-access-footnote">Planning only · No automatic publication · No token stored in the browser</p>
+    </section> : <><div className="platform-session-bar"><span><ShieldCheck size={15} />Temporary operator session</span><button type="button" className="button button-secondary" onClick={disconnect}>Fermer la session et effacer les résultats d’administration</button></div><AdminWorkspace key={session.id} session={session} /></>}
   </div>
 }
 function AdminWorkspace({ session }: { session: AdminSession }) {
@@ -49,23 +51,23 @@ function AdminWorkspace({ session }: { session: AdminSession }) {
   const actions = useIngestionActions(session)
   const keyForBackfill = useIntentKey()
   const keyForRefresh = useIntentKey()
-  return <div className="api-stack">
-    <section className="panel api-section"><h2>Souscriptions</h2>
+  return <div className="platform-admin-workspace"><nav className="platform-admin-nav" aria-label="Ingestion sections"><span className="platform-eyebrow">OPERATIONS</span><a href="#ingestion-subscriptions">Subscriptions</a><a href="#ingestion-gaps">Import gaps</a><a href="#ingestion-run">Collection attempt</a><a href="#ingestion-backfill">Historical import</a><a href="#ingestion-refresh">Refresh subscription</a></nav><div className="api-stack">
+    <section className="panel api-section" id="ingestion-subscriptions"><span className="platform-eyebrow">01 / REGISTERED FEEDS</span><h2>Souscriptions</h2>
       <Filters<SubscriptionsQuery> fields={[{ name: 'scope_key', label: 'Périmètre' }, { name: 'feed_id', label: 'Flux' }, { name: 'mode', label: 'Mode', options: ['backfill', 'incremental', 'reconciliation'] }, { name: 'state', label: 'État du flux', options: ['active', 'paused', 'retired', 'unverified'] }, { name: 'enabled', label: 'Activée', options: ['true', 'false'] }, { name: 'limit', label: 'Par page', type: 'number', min: 1, max: 100, value: 20 }]} onApply={setSubscriptions} />
       <SubscriptionsPage key={JSON.stringify(subscriptions)} session={session} params={subscriptions} />
     </section>
-    <section className="panel api-section"><h2>Lacunes d’import</h2>
+    <section className="panel api-section" id="ingestion-gaps"><span className="platform-eyebrow">02 / IMPORT COMPLETENESS</span><h2>Lacunes d’import</h2>
       <p>Un nuage est une condition d’observation, pas une lacune de téléchargement.</p>
       <Filters<GapsQuery> fields={[{ name: 'scope_key', label: 'Périmètre' }, { name: 'feed_id', label: 'Flux' }, { name: 'status', label: 'État', options: ['open', 'retrying', 'resolved', 'accepted_unavailable'] }, { name: 'start', label: 'Début UTC (ISO 8601)' }, { name: 'end_exclusive', label: 'Fin exclusive UTC (ISO 8601)' }, { name: 'limit', label: 'Par page', type: 'number', min: 1, max: 100, value: 20 }]} onApply={setGaps} />
       <GapsPage key={JSON.stringify(gaps)} session={session} params={gaps} />
     </section>
-    <section className="panel api-section"><h2>Inspecter une tentative de collecte</h2>
+    <section className="panel api-section" id="ingestion-run"><span className="platform-eyebrow">03 / FETCH RUN INSPECTION</span><h2>Inspecter une tentative de collecte</h2>
       <form className="api-form" onSubmit={(e) => { e.preventDefault(); setRunId(String(new FormData(e.currentTarget).get('run')).trim()) }}>
         <label>Identifiant de tentative (fetch run)<input name="run" required pattern={uuidPattern} /></label><button className="button button-primary">Inspecter</button>
       </form><p>Cet identifiant désigne une tentative de collecte, pas une tâche de planification.</p>
       {runId && <ResourcePanel title="Tentative de collecte" query={run}>{(data) => <><Facts values={{ Identifiant: data.id, État: data.status, Enregistrements: data.record_count, 'Vide confirmé': data.successful_empty }} /><StructuredValue value={data.sanitized_request} /><h3>Fichiers</h3><Records rows={data.assets} /><h3>Problèmes de qualité</h3><Records rows={data.quality_issues} /></>}</ResourcePanel>}
     </section>
-    <section className="panel api-section"><h2>Planifier un import historique</h2>
+    <section className="panel api-section" id="ingestion-backfill"><span className="platform-eyebrow">04 / HISTORICAL PLAN</span><h2>Planifier un import historique</h2>
       <form className="api-form" onSubmit={(e) => {
         e.preventDefault()
         const values = new FormData(e.currentTarget)
@@ -83,9 +85,9 @@ function AdminWorkspace({ session }: { session: AdminSession }) {
         <label>Produits (séparés par des virgules)<input name="products" required /></label>
         <label>Collection<input name="collection" required /></label><BudgetFields />
         <button className="button button-primary" disabled={actions.backfill.isPending}>Planifier l’import</button>
-      </form><ApiErrorMessage error={actions.backfill.error} /><PlanResult result={actions.backfill.data} />
+      </form><ApiErrorMessage operation="write" error={actions.backfill.error} /><PlanResult result={actions.backfill.data} />
     </section>
-    <section className="panel api-section"><h2>Actualiser une souscription</h2>
+    <section className="panel api-section" id="ingestion-refresh"><span className="platform-eyebrow">05 / REFRESH PLAN</span><h2>Actualiser une souscription</h2>
       <form className="api-form" onSubmit={(e) => {
         e.preventDefault()
         const values = new FormData(e.currentTarget)
@@ -103,9 +105,9 @@ function AdminWorkspace({ session }: { session: AdminSession }) {
         <label>Mode<select name="mode"><option value="poll">poll — vérifier les arrivées</option><option value="repair">repair — réparer une lacune</option><option value="reconcile">reconcile — rechercher des révisions</option></select></label>
         <label>Motif<select name="reason"><option value="manual">manual</option><option value="gap_repair">gap_repair</option><option value="provider_revision">provider_revision</option></select></label>
         <TimeFields /><BudgetFields /><button className="button button-primary" disabled={actions.refresh.isPending}>Planifier l’actualisation</button>
-      </form><ApiErrorMessage error={actions.refresh.error} /><PlanResult result={actions.refresh.data} />
+      </form><ApiErrorMessage operation="write" error={actions.refresh.error} /><PlanResult result={actions.refresh.data} />
     </section>
-  </div>
+  </div></div>
 }
 const text = (values: FormData, name: string) => String(values.get(name) ?? '').trim()
 const csv = (value: string) => [...new Set(value.split(',').map((v) => v.trim()).filter(Boolean))]

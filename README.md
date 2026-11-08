@@ -1,8 +1,33 @@
-# ASTRA MIND frontend
+# FIREBRIDGE frontend
 
-ASTRA MIND's existing interface uses deterministic, explicitly synthetic fixtures to demonstrate a fire-observation exploration workflow. The public FIREBRIDGE API client, services and hooks are implemented separately and have real HTTP integration tests; they are not connected to the visual pages yet. The displayed points remain synthetic. Map tiles are requested only if you configure `VITE_MAP_STYLE_URL` (see below).
+The FIREBRIDGE **Analysis workspace** at `/analyses` connects the public API to area creation, analysis/component monitoring, native MVT tiles and asynchronous exports. It also reads the published catalogue, release provenance, signed pages of native detections, daily inventory counts and analysis context. A factual note is prepared by the existing deterministic worker; no external AI service is called. API liveness and data readiness are independent, and failed requests never substitute demonstration data.
+
+The application uses one responsive FIREBRIDGE shell across research and demonstration views. Its original dark blue identity comes directly from the unchanged `src/index.css`, `src/App.css` and `src/features/analyses/workspace.css`: backgrounds, cyan accents, secondary colors, gradients, borders, buttons and component states retain their original values. The earlier graphite/lime Astra theme has been removed. Source filters and pagination use the backend's saved analysis. Null FRP remains “Not measured”; unknown coverage and missing weather/reports remain explicit. Published synthetic releases retain their exact identifying names beside the results. See [the original integration report](INTEGRATION_REPORT.md), [the latest UI and phase verification report](../FIREBRIDGE_UI_PHASE_VALIDATION.md), and [the current UI/UX and original identity report](FIREBRIDGE_UI_UX_POLISH.md) for evidence and limitations.
+
+The existing demonstration routes remain available. They use deterministic, explicitly synthetic fixtures and are labelled separately from the API workspace. NASA archival satellite imagery is the default geographic background. The API's MVT detection layer is requested only for an available satellite component.
+
+The geospatial workspace now puts the map above collapsible configuration. Shared
+source and UTC date filters drive loaded-record map inspection and the observation
+table. Aggregate tiles always represent the full saved analysis; filtered mode
+explicitly shows only loaded matching records, with signed pagination for more.
+The timeline selects real returned periods, and source comparison preserves unknown
+counts and lower bounds. Record details retain raw confidence schemes, acquisition
+precision and null FRP. `/evidence` provides published provenance and an interpretation
+guide; exports explain that inspection filters do not change the full saved export.
+See [implementation and validation](GEOSPATIAL_TRANSFORMATION.md) for current checks
+and remaining browser/live-integration limits.
+
+The subsequent satellite and platform-wide pass adds real NASA imagery by default,
+basemap/layer/fullscreen controls, cohesive page headers, technical table controls,
+catalogue search and operator-session navigation. The latest complete page inventory,
+production browser checks and provider limits are in
+[the satellite platform report](SATELLITE_PLATFORM_REDESIGN.md).
 
 ## Run locally
+
+The research dashboard is at `/dashboard`, the guided workflow is at `/analyses`, and the published data catalogue is at `/catalog`. `/api-analysis` retains the advanced results tools. Existing demonstration URLs, including `/`, retain their synthetic fixtures and are grouped separately in navigation. Dashboard counts describe loaded public server records, not account-specific or server-wide totals. Pagination follows the backend's identifier order; the analysis register prioritizes the newest timestamps among loaded records and initially shows eight rows.
+
+Use an origin allowed by the backend's CORS policy. The existing local configuration permits `http://localhost:5173`, which is the default Vite origin; alternate preview ports are not automatically authorized.
 
 ```powershell
 npm install
@@ -14,30 +39,35 @@ The app is built with React, TypeScript, Vite, MapLibre GL, Terra Draw, TanStack
 ## Pages
 
 - **Overview:** selection summary, activity charts, map, synthetic record table, and illustrative field notes.
+- **Analysis workspace:** real API records, study areas, jobs, map tiles, observation tables, provenance, context, factual notes and CSV/GeoJSON/Parquet downloads.
 - **Explore map:** selectable synthetic point features, a user-drawn local polygon, shared filters, and CSV export.
 - **Compare sensors:** raw fixture counts, with harmonized response explicitly unavailable.
 - **Activity calendar:** daily synthetic record counts and date selection.
 - **Weather context, Reports & events, Analysis notes, and Watchlist:** honest unavailable states or clearly labeled illustrative content.
 - **Data & methods and Preferences:** fixture provenance, scientific limitations, and local display/filter controls.
+- **Data & methods (`/evidence`):** published catalogue, release tools and scientific interpretation guidance. Preferences continue to control the local demonstration.
 
-All pages share inclusive date filters, platform selection, search, a minimum-FRP filter, and the selected area. CSV export includes provenance and a synthetic-data indicator.
+Demonstration pages share inclusive date filters, platform selection, search, a minimum-FRP filter, and the selected area. Their local CSV export includes provenance and a synthetic-data indicator. The API workspace has independent forms and source filters, uses an exclusive UTC end date, and delegates export generation to the worker. Its area/analysis selection can be reopened from the page URL.
 
 ## Map configuration
 
-The map is a MapLibre GL JS map showing the same filtered synthetic records as the charts and tables (MODIS-style teal, VIIRS-style orange, selected record enlarged).
+MapLibre renders real, interactive raster imagery separately from the observation layers. The default background is NASA GIBS Blue Marble, an archival MODIS composite with native maximum zoom 8. Zooming farther enlarges those tiles; it does not add detail. It is geographic context, not imagery acquired with the selected wildfire records. Demonstration routes retain synthetic point records; the analysis workspace uses saved API results.
 
 - **`VITE_MAP_STYLE_URL`** (optional, build/dev-time): a MapLibre-compatible style JSON URL. Copy `.env.example` to `.env.local` and set it. Do not commit provider keys; a key embedded in a URL is visible in the built bundle. The provider's attribution is shown through the map's attribution control and must not be hidden.
-- **`VITE_BASEMAP_PROVIDER`** (optional): set to `esri-world-imagery` to opt in to Esri's World Imagery raster tiles. Any other non-empty value is rejected and the schematic is used (no silent substitution).
-- **Precedence:** `VITE_MAP_STYLE_URL` > `VITE_BASEMAP_PROVIDER` > schematic. With neither set, **no external map or tile request is made**.
-- **No style URL or provider, or the style fails/times out (10 s):** the app switches to a clearly labelled **schematic view** (dark background with a 1° longitude/latitude grid). A banner states that it is not satellite imagery and that the real basemap is unavailable. No other map provider is contacted as a substitute, and loading never spins indefinitely. Errors after a style has loaded (for example one tile) do not trigger the fallback.
-- **Esri tile failures:** if three tile requests fail before any tile loads, the app falls back to the schematic and says why. If tiles fail after some loaded, imagery stays and a small notice appears.
-- The app itself makes no NASA or other API calls. With a style URL or provider configured, the browser requests that style and its tiles from that provider.
+- **`VITE_BASEMAP_PROVIDER`**: `nasa-gibs` (default), `esri-world-imagery` (licensed opt-in), or `schematic` (offline, no background requests). Unsupported values produce an explicit configuration error and recovery choices.
+- **Precedence:** `VITE_MAP_STYLE_URL` > `VITE_BASEMAP_PROVIDER` > NASA GIBS. NASA GIBS requires no API key. A custom provider can use a browser-safe, origin-restricted token in the environment-configured style URL; all `VITE_*` values are public, so never put private credentials there.
+- **Basemap choices:** satellite; NASA satellite with OSM reference labels; OpenStreetMap streets; NASA shaded relief/bathymetry; and offline grid. Shaded relief is a raster context layer, not 3D terrain. A configured custom style remains selectable. Switching uses the existing MapLibre instance and restores study-area and detection layers.
+- **Loading and failures:** after three initial imagery failures, denied style access or a 10-second timeout, the map shows an explicit **schematic / not satellite imagery** notice with retry and alternative-background actions. API detection failures remain separate. Partial tile failures retain loaded imagery with a notice. No alternative provider is contacted until the user selects it.
+- **Map tools:** layer toggles, legend, zoom, north/pitch reset, study-area extent, polygon drawing and browser fullscreen. Fullscreen availability depends on the browser. No unsupported measurement tool is shown.
+- Background imagery dates and observation acquisition times are independent. Visible provider attribution must remain on the map. Exports contain observation results, not basemap imagery. `/analyses`, `/api-analysis`, `/ingestion`, the catalogue and evidence use `VITE_API_URL` (default `http://localhost:3000/api/v1`).
+
+NASA's [GIBS access documentation](https://nasa-gibs.github.io/gibs-api-docs/access-basics/) describes the public WMTS service and EPSG:3857 tile ordering. Layer identifiers, zoom matrices and the reference-label products were checked against live capabilities. Real NASA/Esri JPEG probes returned HTTP 200 with `Access-Control-Allow-Origin: *`; browser QA additionally loaded NASA tiles. NASA credit is shown with a link to the source. OSM streets follow the [public tile usage policy](https://operations.osmfoundation.org/policies/tiles/): visible attribution, normal browser caching, no prefetch/offline export or automated viewport scanning. Production traffic requiring an SLA should use an appropriately licensed configured provider.
 
 ### Esri World Imagery: terms reviewed and limits
 
 Reviewed on the service's public ArcGIS item/REST metadata (`World_Imagery` MapServer): imagery is licensed under the **Esri Master License Agreement**; the required credit is **"Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"** (rendered by the attribution control, non-collapsed, and must not be removed); the layer is **not intended for tile export or offline use**, so this app never stores, caches or redistributes tiles (only the browser's normal HTTP cache applies); it is intended for use within ArcGIS apps, and Esri's terms (not re-read in full here) govern use from third-party apps, including any usage-based or commercial limits.
 
-This option is intended for local, non-commercial demonstrations only. **Before any public deployment, commercial use, or heavy traffic, confirm Esri's current terms and use an Esri/ArcGIS Location Platform account and API key** (not supplied or hard-coded here), or choose another licensed provider through `VITE_MAP_STYLE_URL`. Imagery is background context only: it has an unknown acquisition date, is not Aqua/Suomi-NPP data, and implies nothing about detections or observation support.
+Esri is never enabled automatically. The [published usage summary](https://goto.arcgis.com/termsofuse/viewsummary) requires appropriate Esri software/subscription or platform licensing; public tile access alone is not a licence, even for a local demonstration. Verify your entitlement before setting `VITE_BASEMAP_PROVIDER=esri-world-imagery`; commercial Living Atlas use can require separate licensing. Imagery dates vary, are not provided by this frontend and imply nothing about detections or observation support.
 
 ### Area drawing (Terra Draw)
 
@@ -71,11 +101,11 @@ npm run build
 
 ## FIREBRIDGE API integration
 
-The original ten-operation integration is documented in [the backend delivery report](../firebridge-backend/docs/INTEGRATION_REPORT.md). The catalogue and the additional phase 1/3/5/6 services are documented in [the frontend integration guide](INTEGRATION_PHASES_1_3_5_6.md). All services use the existing /api/v1 prefix.
+The original ten-operation integration is documented in [the backend delivery report](../firebridge-backend/docs/INTEGRATION_REPORT.md). The frontend integration is documented in [the current frontend report](INTEGRATION_REPORT.md), while the catalogue and additional phase 1/3/5/6 services are documented in [the frontend integration guide](INTEGRATION_PHASES_1_3_5_6.md). All services use the existing /api/v1 prefix.
 
-Install the backend workspace dependencies first (npm ci in ../firebridge-backend), then npm ci here. The predev/prebuild scripts compile the existing shared contracts package. VITE_API_URL defaults to http://localhost:3000/api/v1; copy .env.example to .env.local to override public build-time settings. Invalid URLs fail early.
+Install the backend workspace dependencies first (npm ci in "../firebridge-backend"), then npm ci here. The predev/prebuild scripts compile the existing shared contracts package. VITE_API_URL defaults to http://localhost:3000/api/v1; copy .env.example to .env.local to override public build-time settings. Invalid URLs fail early.
 
-A single Axios instance lives in src/lib/axios.ts. Public services send no authentication, tokens, identity headers or authentication cookies. Only the five ingestion administration operations attach a temporary, manually entered bearer token; it is never stored in Vite configuration or Axios defaults. One QueryClient lives in src/lib/queryClient.ts and is used by the existing App provider. Services are in src/services; the original ten hooks are in src/hooks/useFirebridge.ts and the additional hooks are in useDataApi.ts and useIngestion.ts. Read hooks share in-flight queries and cancellation signals. Write mutations retain their idempotency key when explicitly retrying the same intent. Mutation retries are explicit.
+A single Axios instance lives in src/lib/axios.ts. Public services send no authentication, tokens, identity headers or authentication cookies. Only the five ingestion administration operations attach a temporary, manually entered bearer token; it is never stored in Vite configuration or Axios defaults. One QueryClient lives in src/lib/queryClient.ts and is used by the existing App provider. Services are in src/services; the original ten hooks are in src/hooks/useFirebridge.ts and the additional hooks are in useDataApi.ts and useIngestion.ts. Read hooks share in-flight queries and cancellation signals. Analysis/export mutations require a UUID idempotency key created with createIdempotencyKey(). Write mutations retain their idempotency key when explicitly retrying the same intent. Mutation retries are explicit.
 
 Downloads first read the public job endpoint to obtain its short-lived signed link. These links expire within five minutes and do not represent a user permission. Consultation resources remain public; ingestion administration requires its technical bearer token.
 
