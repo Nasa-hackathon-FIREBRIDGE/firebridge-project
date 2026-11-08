@@ -1,8 +1,17 @@
+# Generated files and local configuration throughout the combined repository.
 node_modules/
 dist/
-.env
-.env.local
+dist-ssr/
 coverage/
-.vitest/
+.qa/
+.data/
+.env
+.env.*
+!.env.example
+*.log
+*.dump
+*.backup
 .DS_Store
-npm-debug.log*
+
+# Personal documents are not part of the staging delivery.
+documents/
