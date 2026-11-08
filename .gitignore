@@ -15,3 +15,11 @@ coverage/
 
 # Personal documents are not part of the staging delivery.
 documents/
+
+# Detailed work reports remain on development branches.
+/docs/
+/firebridge-backend/docs/
+/firebridge-backend/*.md
+!/firebridge-backend/README.md
+/firebridge-frontend/*.md
+!/firebridge-frontend/README.md
