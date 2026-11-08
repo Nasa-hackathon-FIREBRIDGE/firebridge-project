@@ -127,6 +127,28 @@ services:
       timeout: 5s
       retries: 3
 
+  frontend:
+    build:
+      context: ../firebridge-frontend
+      dockerfile: Dockerfile
+      additional_contexts:
+        backend: .
+      args:
+        VITE_API_URL: "${FRONTEND_API_URL:-http://localhost:3000/api/v1}"
+        VITE_MAP_STYLE_URL: "${FRONTEND_MAP_STYLE_URL:-}"
+        VITE_BASEMAP_PROVIDER: "${FRONTEND_BASEMAP_PROVIDER:-}"
+    container_name: firebridge-frontend
+    ports:
+      - '127.0.0.1:5173:80'
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1/']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 volumes:
   postgres_data:
   redis_data:
