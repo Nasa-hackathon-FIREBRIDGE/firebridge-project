@@ -10,11 +10,12 @@ import { DetectionsPanel, SummaryPanel } from '../components/api/NativePanels'
 import { ExplanationRequestPanel } from '../components/api/ExplanationRequestPanel'
 import { ApiClientError } from '../lib/axios'
 import { acceptedFixture, analysisFixture } from '../services/test-fixtures'
+import { MemoryRouter } from 'react-router-dom'
 
 const original = api.defaults.adapter
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  <QueryClientProvider client={client}><MemoryRouter>{children}</MemoryRouter></QueryClientProvider>
 )
 afterEach(() => {
   cleanup()

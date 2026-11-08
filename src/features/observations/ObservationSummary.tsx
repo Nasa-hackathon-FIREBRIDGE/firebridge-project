@@ -2,6 +2,9 @@ import { CalendarDays, Database, ScanLine } from 'lucide-react'
 import { ApiError } from '../analyses/Feedback'
 import { useNativeSummary, useRelease } from './useResults'
 import { summarizeCounts } from '../../lib/nativeCounts'
+import { Banner } from '../../components/ui/Banner'
+import { CopyableId } from '../../components/ui/CopyableId'
+import { Skeleton } from '../../components/ui/Skeleton'
 
 export function ObservationSummary({
   analysisId,
@@ -33,7 +36,7 @@ export function ObservationSummary({
             Native records
             <strong>
               {count?.value == null
-                ? '—'
+                ? analysisId && summary.isPending ? <Skeleton width={80} height={36} label="Loading native records…" /> : '—'
                 : `${count.lowerBound ? '≥ ' : ''}${count.value.toLocaleString()}`}
             </strong>
             <small>
@@ -42,7 +45,7 @@ export function ObservationSummary({
                   ? 'Source inventory is incomplete; total unknown'
                   : count?.lowerBound
                     ? 'Lower bound · inventory is incomplete'
-                    : 'Selected source inventory'
+                    : 'Full saved analysis · source inventory'
                 : waiting}
             </small>
           </span>
@@ -51,7 +54,7 @@ export function ObservationSummary({
           <ScanLine size={18} />
           <span>
             Source streams
-            <strong>{summary.data ? summary.data.native_detections_by_source.length : '—'}</strong>
+            <strong>{summary.data ? summary.data.native_detections_by_source.length : analysisId && summary.isPending ? <Skeleton width={48} height={36} label="Loading source streams…" /> : '—'}</strong>
             <small>Separate native sensor records</small>
           </span>
         </div>
@@ -69,14 +72,15 @@ export function ObservationSummary({
           void summary.refetch()
         }}
       />
+      {summary.isError && summary.data && <Banner tone="warning">Previously loaded source inventory is shown; the latest refresh failed.</Banner>}
       {release.data && (
-        <div className="fb-release-ribbon">
-          <span className="fb-release-label">PINNED DATASET</span>
+        <Banner className="fw-summary-release" title="PINNED DATASET">
           <strong>{release.data.name}</strong>
           <span>
             {release.data.scope_key} / {release.data.dataset_kind}
           </span>
-        </div>
+          <CopyableId value={release.data.id} label="release ID" />
+        </Banner>
       )}
       <ApiError
         error={release.error}

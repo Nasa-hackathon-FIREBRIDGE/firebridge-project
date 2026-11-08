@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
+import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import api from '../../lib/axios'
@@ -44,10 +45,12 @@ function mount(search = '') {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/analyses' + search]}>
         <AnalysisWorkspace />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
 }
+function LocationProbe() { const location = useLocation(); return <output aria-label="Current workspace URL">{location.pathname}{location.search}{location.hash}</output> }
 function installApi({ ready = false, missing = false, failed = false, expired = false } = {}) {
   const requests: { url: string; body: unknown; key: unknown }[] = []
   api.defaults.adapter = async (config) => {
@@ -127,11 +130,15 @@ describe('API workspace integration with isolated HTTP responses', () => {
     const requests = installApi({ ready: true })
     mount()
     fireEvent.change(screen.getByLabelText('Area name'), { target: { value: 'Invalid draft' } })
+    fireEvent.click(screen.getByText('Paste GeoJSON · advanced'))
     fireEvent.change(screen.getByLabelText('GeoJSON Polygon'), { target: { value: 'not JSON' } })
+    fireEvent.click(screen.getByText('Paste GeoJSON · advanced'))
     fireEvent.click(screen.getByRole('button', { name: 'Save area' }))
     const geometry = screen.getByLabelText('GeoJSON Polygon')
     expect(geometry.getAttribute('aria-invalid')).toBe('true')
     expect(document.activeElement).toBe(geometry)
+    expect(geometry.closest('details')?.open).toBe(true)
+    expect(document.getElementById('geometry-error')).toBeVisible()
     expect(requests.some((request) => request.url === '/areas')).toBe(false)
   })
   it('keeps liveness independent of unavailable catalogue and shows an honest empty workflow', async () => {
@@ -141,17 +148,19 @@ describe('API workspace integration with isolated HTTP responses', () => {
     expect(screen.getByText('not ready')).toBeTruthy()
     expect(screen.getByText(/data dependencies are not ready/)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Request analysis' }).hasAttribute('disabled')).toBe(
-      false,
-    ) // Disabled through the fieldset.
+      true,
+    ) // Both the native fieldset and the visible disabled-reason button enforce the same area guard.
     expect(
       screen.getByRole('button', { name: 'Request analysis' }).closest('fieldset')?.disabled,
     ).toBe(true)
     expect(requests.every((r) => r.url.startsWith('/health/'))).toBe(true)
+    expect(screen.getByText(/^Filters affect matching loaded\/paginated map records/)).toBeVisible()
     expect(await screen.findByText('No API tiles requested')).toBeTruthy()
   })
   it('creates an area, submits the exact analysis defaults, shows partial components and queues an export', async () => {
     const requests = installApi({ ready: true })
     mount()
+    expect(screen.queryByRole('button', { name: /Copy accepted/ })).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Area name'), { target: { value: 'My study area' } })
     fireEvent.change(screen.getByLabelText('GeoJSON Polygon'), {
       target: { value: JSON.stringify(areaFixture.geometry) },
@@ -165,6 +174,12 @@ describe('API workspace integration with isolated HTTP responses', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Request analysis' }))
     await screen.findByText(/Partial analysis\./)
+    // jsdom has no scrolling implementation; real scrolling is checked in Chrome.
+    document.getElementById('request-analysis')!.scrollIntoView = vi.fn()
+    fireEvent.click(screen.getByRole('button', { name: 'Open workflow' }))
+    expect(screen.getByRole('button', { name: `Copy accepted analysis ID: ${analysisId}` })).toBeVisible()
+    expect(screen.getByRole('button', { name: `Copy accepted job ID: ${jobId}` })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Dismiss notification' })).not.toBeInTheDocument()
     const table = screen.getByRole('table', { name: 'Component availability' })
     expect(within(table).getByText('ready')).toBeTruthy()
     expect(within(table).getByText('missing')).toBeTruthy()
@@ -189,6 +204,7 @@ describe('API workspace integration with isolated HTTP responses', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Exports' }))
     fireEvent.click(screen.getByRole('button', { name: 'Prepare export' }))
     await screen.findByRole('button', { name: 'Download file' })
+    expect(screen.getByText('Progress not supplied')).toBeVisible()
     expect(requests.find((r) => r.url.endsWith('/exports'))?.key).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: 'Observations' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Exports' }))
@@ -202,6 +218,57 @@ describe('API workspace integration with isolated HTTP responses', () => {
     await screen.findByText('This resource was not found. Check its identifier.')
     expect(screen.queryByRole('button', { name: 'Prepare export' })).toBeNull()
     expect(requests.some((r) => /tiles|exports/.test(r.url))).toBe(false)
+  })
+  it('preserves tab keyboard, query/hash and mounted map identity', async () => {
+    installApi({ ready: true })
+    mount(`?analysis=${analysisId}`)
+    const map = await screen.findByTestId('api-map')
+    const mapTab = screen.getByRole('tab', { name: 'Map workspace' })
+    mapTab.focus()
+    fireEvent.keyDown(mapTab, { key: 'ArrowRight' })
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus()
+    expect(screen.getByRole('status', { name: 'Current workspace URL' })).toHaveTextContent(`/analyses?analysis=${analysisId}#analysis-overview`)
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Overview' }), { key: 'End' })
+    expect(screen.getByRole('tab', { name: 'Exports' })).toHaveFocus()
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Exports' }), { key: 'Home' })
+    expect(mapTab).toHaveFocus()
+    expect(screen.getByRole('status', { name: 'Current workspace URL' })).toHaveTextContent(`/analyses?analysis=${analysisId}`)
+    expect(screen.getByTestId('api-map')).toBe(map)
+  })
+  it('keeps invalid interval reasons visible without requesting an analysis', async () => {
+    const requests = installApi({ ready: true })
+    mount(`?area=${areaId}`)
+    await screen.findByRole('heading', { name: 'TEST ONLY area' })
+    const submit = screen.getByRole('button', { name: 'Request analysis' })
+    expect(submit).toHaveAccessibleDescription('Select a start and end date')
+    fireEvent.change(screen.getByLabelText('Start date (UTC)'), { target: { value: '2024-07-18' } })
+    fireEvent.change(screen.getByLabelText('End date, exclusive (UTC)'), { target: { value: '2024-07-15' } })
+    expect(submit).toBeDisabled()
+    expect(submit).toHaveAccessibleDescription('The exclusive end must be after a valid start date')
+    expect(requests.some(request => request.url === '/analyses')).toBe(false)
+  })
+  it('opens metadata and focuses a timezone validation error without sending a request', () => {
+    const requests = installApi({ ready: true })
+    mount()
+    fireEvent.change(screen.getByLabelText('Area name'), { target: { value: 'Timezone validation QA' } })
+    fireEvent.change(screen.getByLabelText('GeoJSON Polygon'), { target: { value: JSON.stringify(areaFixture.geometry) } })
+    fireEvent.click(screen.getByText('Area metadata · version, timezone and provenance'))
+    fireEvent.change(screen.getByLabelText('Display timezone'), { target: { value: 'Invalid/Zone' } })
+    fireEvent.click(screen.getByText('Area metadata · version, timezone and provenance'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save area' }))
+    expect(screen.getByLabelText('Display timezone')).toHaveFocus()
+    expect(document.getElementById('area-timezone-error')).toBeVisible()
+    expect(requests.some(request => request.url === '/areas')).toBe(false)
+  })
+  it('reveals an empty required metadata field before native form validation', () => {
+    const requests = installApi()
+    mount()
+    fireEvent.change(screen.getByLabelText('Area name'), { target: { value: 'Required metadata QA' } })
+    fireEvent.change(screen.getByLabelText('GeoJSON Polygon'), { target: { value: JSON.stringify(areaFixture.geometry) } })
+    fireEvent.change(screen.getByLabelText('Version'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save area' }))
+    expect(screen.getByLabelText('Version').closest('details')).toHaveAttribute('open')
+    expect(requests.some(request => request.url === '/areas')).toBe(false)
   })
   it('shows API unavailability without falling back to demo results', async () => {
     api.defaults.adapter = async (config) => {

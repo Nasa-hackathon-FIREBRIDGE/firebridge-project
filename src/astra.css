@@ -78,7 +78,7 @@ select {
 }
 .astra-workspace-context small {
   font-size: 11px;
-  color: var(--dim);
+  color: var(--text-secondary);
 }
 .astra-workspace-icon {
   display: grid;
@@ -163,7 +163,7 @@ select {
   color: #c3d3ea;
 }
 .astra-sidebar-foot small {
-  color: var(--dim);
+  color: var(--text-secondary);
   font-size: 10px;
 }
 .astra-orbit {
@@ -206,7 +206,7 @@ select {
   background: var(--accent);
 }
 .astra-coordinate {
-  color: var(--dim);
+  color: var(--text-secondary);
   font: 10px var(--mono);
 }
 .astra-data-notice {
@@ -362,7 +362,7 @@ select {
   letter-spacing: -0.35px;
 }
 .astra-section-title > svg {
-  color: var(--dim);
+  color: var(--text-secondary);
 }
 .astra-muted {
   color: var(--muted);
@@ -410,7 +410,7 @@ select {
   font-size: 12px;
 }
 .astra-metric svg {
-  color: var(--dim);
+  color: var(--text-secondary);
 }
 .astra-metric strong {
   display: block;
@@ -427,7 +427,7 @@ select {
 }
 .astra-count-note {
   margin: 10px 2px 26px;
-  color: var(--dim);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 .astra-dashboard-grid {
@@ -646,11 +646,11 @@ select {
 }
 .astra-job-row strong > span {
   margin-left: 6px;
-  color: var(--dim);
+  color: var(--text-secondary);
 }
 .astra-job-row small {
   display: block;
-  color: var(--dim);
+  color: var(--text-secondary);
   font-size: 10px;
   margin-top: 5px;
 }
@@ -688,7 +688,7 @@ select {
 }
 .astra-area-list small {
   font-size: 10px;
-  color: var(--dim);
+  color: var(--text-secondary);
 }
 .astra-area-list svg {
   color: var(--muted);
@@ -736,7 +736,7 @@ select {
   padding: 28px 0 0;
   margin-top: 28px;
   border-top: 1px solid var(--line-soft);
-  color: var(--dim);
+  color: var(--text-secondary);
   font: 9px var(--mono);
   letter-spacing: 0.6px;
 }
@@ -940,7 +940,7 @@ select {
 }
 .astra-analysis-selection code {
   font: 10px var(--mono);
-  color: var(--dim);
+  color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 .astra-analysis-steps {
@@ -950,7 +950,7 @@ select {
   padding: 16px 0 0;
   margin: 0;
   list-style: none;
-  color: var(--dim);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 .astra-analysis-steps li {

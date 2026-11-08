@@ -1,24 +1,45 @@
 import { UserInputError } from '../../lib/userFeedback'
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import type { AreaView } from '@firebridge/contracts'
 import { useArea, useCreateArea } from '../../hooks/useFirebridge'
 import { ApiError, Empty, Status } from './Feedback'
 import { parseAreaGeometry, validId } from './validation'
+import { workspaceKeys } from '../../hooks/useWorkspace'
+import type { WorkspacePage } from '../../services/workspace.service'
+import { Button } from '../../components/ui/Button'
+import { CopyableId } from '../../components/ui/CopyableId'
+import { SquareDashedMousePointer } from 'lucide-react'
 
 export function AreaPanel({
   id,
   onSelect,
   geometryText,
   onGeometryText,
+  onStartDrawing,
+  onSavingState,
 }: {
   id?: string
   onSelect: (id: string) => void
   geometryText: string
   onGeometryText: (value: string) => void
+  onStartDrawing?: () => void
+  onSavingState?: (pending: boolean) => void
 }) {
   const create = useCreateArea()
   const area = useArea(id)
   const [error, setError] = useState<unknown>(null)
+  const geoEditor = useRef<HTMLDetailsElement>(null)
+  const metadataEditor = useRef<HTMLDetailsElement>(null)
+  const queryClient = useQueryClient()
+  const cachedAreas = queryClient.getQueryData<InfiniteData<WorkspacePage<AreaView>>>(workspaceKeys.areas)?.pages.flatMap(page => page.items) ?? []
+  const loadedAreas = [...new Map([...cachedAreas, ...(area.data ? [area.data] : [])].map(item => [item.id, item])).values()]
+  useEffect(() => { onSavingState?.(create.isPending) }, [create.isPending, onSavingState])
+  useEffect(() => {
+    if (!(error instanceof UserInputError)) return
+    if (error.field === 'geometry' && geoEditor.current) { geoEditor.current.open = true; geoEditor.current.querySelector<HTMLTextAreaElement>('textarea')?.focus() }
+    if (error.field === 'timezone' && metadataEditor.current) { metadataEditor.current.open = true; metadataEditor.current.querySelector<HTMLInputElement>('input[name="timezone"]')?.focus() }
+  }, [error])
   const lock = useRef(false)
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -59,7 +80,7 @@ export function AreaPanel({
     }
   }
   return (
-    <section className="fb-section" aria-labelledby="area-heading">
+    <section className="fb-section fw-area-panel" aria-labelledby="area-heading">
       <div className="fb-section-heading">
         <span className="fb-step">01</span>
         <div>
@@ -67,23 +88,28 @@ export function AreaPanel({
           <p>Draw a boundary on the map or paste Polygon geometry.</p>
         </div>
       </div>
+      {onStartDrawing && <Button variant="primary" onClick={onStartDrawing}><SquareDashedMousePointer size={16} aria-hidden="true" />Draw on map</Button>}
+      <p className="fw-helper">{geometryText ? 'Draft geometry is available. Name and save the area before requesting an analysis.' : 'Draw a polygon, then name and save your study area.'}</p>
       <details className="fb-editor" open={!id}>
         <summary>
           {id ? 'Define another study area' : 'Create a study boundary'}
           <span>Polygon / WGS 84</span>
         </summary>
         <form
+          id="area-create-form"
           className="fb-form"
           onSubmit={(event) => {
             void submit(event)
           }}
         >
           <fieldset disabled={create.isPending}>
-            <div className="fb-field-pair">
               <label>
                 Area name
                 <input name="name" required maxLength={500} placeholder="Name your study area" />
               </label>
+            <Button variant="primary" type="submit" className="fw-primary-submit" loading={create.isPending}>{create.isPending ? 'Saving area…' : 'Save area'}</Button>
+            <details ref={metadataEditor} className="fw-advanced" onInvalidCapture={event => { event.currentTarget.open = true }}><summary>Area metadata · version, timezone and provenance</summary>
+            <div className="fb-field-pair">
               <label>
                 Version
                 <input name="version" defaultValue="v1" required maxLength={100} />
@@ -122,6 +148,8 @@ export function AreaPanel({
                 />
               </label>
             </div>
+            </details>
+            <details ref={geoEditor} className="fw-advanced"><summary>Paste GeoJSON · advanced</summary>
             <label>
               GeoJSON Polygon
               <textarea
@@ -142,6 +170,7 @@ export function AreaPanel({
                 }}
                 placeholder={'{"type":"Polygon","coordinates":[…]}'}
                 required
+                onInvalid={() => { if (geoEditor.current) geoEditor.current.open = true }}
                 spellCheck={false}
               />
               {error instanceof UserInputError && error.field === 'geometry' && (
@@ -154,9 +183,7 @@ export function AreaPanel({
               WGS 84 [longitude, latitude]. Holes and antimeridian crossings are preserved. The
               server validates topology, vertex limits and surface.
             </p>
-            <button className="button button-primary" type="submit">
-              {create.isPending ? 'Saving area…' : 'Save area'}
-            </button>
+            </details>
           </fieldset>
         </form>
       </details>
@@ -170,6 +197,9 @@ export function AreaPanel({
       )}
       <details className="fb-resource-loader">
         <summary>Open a saved area</summary>
+        {loadedAreas.length ? <label className="fw-loaded-areas">Saved areas already loaded<select aria-label="Saved areas already loaded" value={id ?? ''} onChange={event => { if (event.target.value) { if (!validId(event.target.value)) { setError(new UserInputError('Enter a valid area UUID.')); return } setError(null); create.reset(); onSelect(event.target.value) } }}>
+          <option value="">Choose a saved area</option>{loadedAreas.map(item => <option key={item.id} value={item.id}>{item.name} · {item.version}</option>)}
+        </select></label> : <p className="fw-helper">No saved-area list is loaded here. Open an existing UUID below.</p>}
         <form
           className="fb-load-form"
           onSubmit={(event) => {
@@ -219,7 +249,7 @@ function AreaDetails({ area }: { area: AreaView }) {
         <div>
           <dt>Area ID</dt>
           <dd>
-            <code>{area.id}</code>
+            <CopyableId value={area.id} label="area ID" />
           </dd>
         </div>
         <div>

@@ -100,19 +100,20 @@ describe('Real-record dashboard', () => {
   it('joins saved area names, scopes counts to loaded pages and does not eagerly read individual jobs', async () => {
     const calls = install()
     mount()
-    await screen.findByRole('link', { name: 'Analysis 22222222' })
+    await screen.findByRole('link', { name: /TEST ONLY area.*2024-01-01.*2024-01-02.*end excluded/ })
     await waitFor(() => expect(screen.getAllByText('TEST ONLY area').length).toBeGreaterThan(0))
     expect(screen.getByText(/not server-wide totals/)).toBeTruthy()
     expect(calls.filter((call) => call.url === '/analyses')).toHaveLength(1)
     expect(calls.filter((call) => call.url === '/jobs')).toHaveLength(1)
     expect(calls.some((call) => call.url.startsWith('/jobs/'))).toBe(false)
+    expect(calls.some((call) => call.url.startsWith('/areas/'))).toBe(false)
     expect(screen.queryByText(/Synthetic detections/)).toBeNull()
   })
   it('uses the real nextCursor and resets pagination when the server-side status filter changes', async () => {
     const calls = install()
     mount()
     fireEvent.click(await screen.findByRole('button', { name: 'Load more analyses' }))
-    await screen.findByRole('link', { name: 'Analysis 33333333' })
+    await screen.findByRole('link', { name: 'Open analysis 33333333-3333-4333-8333-333333333333' })
     expect(calls.filter((call) => call.url === '/analyses').at(-1)?.params.cursor).toBe('page-two')
     fireEvent.change(screen.getByLabelText('Filter analyses by status'), {
       target: { value: 'failed' },
@@ -122,12 +123,12 @@ describe('Real-record dashboard', () => {
       limit: 20,
       status: 'failed',
     })
-    expect(screen.queryByRole('link', { name: 'Analysis 22222222' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Open analysis 22222222-2222-4222-8222-222222222222' })).toBeNull()
   })
   it('keeps successful resources usable if the job endpoint fails and hides raw backend messages', async () => {
     install({ failJobs: true })
     mount()
-    await screen.findByRole('link', { name: 'Analysis 22222222' })
+    await screen.findByRole('link', { name: /TEST ONLY area.*2024-01-01.*2024-01-02.*end excluded/ })
     await screen.findByText('We couldn’t complete the processing job')
     expect(document.body.textContent).not.toMatch(/password=|private SQL|\/private\/backend/)
     expect(screen.queryByText('No processing activity yet')).toBeNull()
@@ -145,7 +146,7 @@ describe('Real-record dashboard', () => {
       within(
         screen.getByRole('region', { name: 'Analysis statistics for loaded records' }),
       ).getAllByText('0'),
-    ).toHaveLength(4)
+    ).toHaveLength(8) // one accessible final value plus its aria-hidden visual copy per StatCard
   })
   it('stops list polling after processing becomes terminal', async () => {
     vi.useFakeTimers()

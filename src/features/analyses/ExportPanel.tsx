@@ -4,8 +4,10 @@ import { useCreateExport } from '../../hooks/useFirebridge'
 import { createIdempotencyKey } from '../../services/analyses.service'
 import { ApiError } from './Feedback'
 import { JobPanel } from './JobPanel'
+import { Button } from '../../components/ui/Button'
+import { CopyableId } from '../../components/ui/CopyableId'
 
-export function ExportPanel({ analysisId, available }: { analysisId: string; available: boolean }) {
+export function ExportPanel({ analysisId, available, metadata }: { analysisId: string; available: boolean; metadata?: { releaseId: string; start: string; endExclusive: string; areaName?: string } }) {
   const create = useCreateExport()
   const [format, setFormat] = useState<ExportFormat>('csv')
   const [jobId, setJobId] = useState<string>()
@@ -35,8 +37,15 @@ export function ExportPanel({ analysisId, available }: { analysisId: string; ava
         <span className="fb-step">03</span>
         <div>
           <h2 id="exports-heading">Export results</h2>
-          <p>The worker prepares the file asynchronously.</p>
+          <p>Export the saved analysis. The worker prepares your file asynchronously.</p>
         </div>
+      </div>
+      <div className="geo-export-summary">
+        <span className="fb-eyebrow">EXPORT SCOPE / FULL SAVED ANALYSIS</span>
+        <p>Map inspection filters and loaded-page search do not change this export. The file includes the saved analysis interval and sources.</p>
+        <dl><div><dt>Analysis</dt><dd><CopyableId value={analysisId} label="analysis ID" /></dd></div>
+          {metadata && <><div><dt>Study area</dt><dd>{metadata.areaName ?? 'Saved study area'}</dd></div><div><dt>UTC interval</dt><dd>{metadata.start} → {metadata.endExclusive} · end excluded · UTC</dd></div><div><dt>Release</dt><dd><CopyableId value={metadata.releaseId} label="release ID" /></dd></div></>}
+        </dl>
       </div>
       {!available && (
         <p className="fb-muted">
@@ -55,7 +64,7 @@ export function ExportPanel({ analysisId, available }: { analysisId: string; ava
           <select
             aria-label="File format"
             value={format}
-            disabled={create.isPending}
+            disabled={create.isPending || !!jobId}
             onChange={(event) => {
               setFormat(event.target.value as ExportFormat)
               create.reset()
@@ -66,14 +75,16 @@ export function ExportPanel({ analysisId, available }: { analysisId: string; ava
             <option value="parquet">Parquet</option>
           </select>
         </label>
-        <button
+        <Button
           type="submit"
-          className="button button-primary"
+          variant="primary"
           disabled={!available || create.isPending || !!jobId}
+          disabledReason={!available ? 'A ready satellite component in a ready or partial native UTC analysis is required.' : create.isPending ? 'An export request is being submitted.' : jobId ? 'Review the existing export job before starting a new request.' : undefined}
         >
           {create.isPending ? 'Requesting export…' : 'Prepare export'}
-        </button>
+        </Button>
       </form>
+      <div className="geo-export-formats" aria-label="Available export formats"><span><strong>CSV</strong> Tabular records</span><span><strong>GeoJSON</strong> Geographic features</span><span><strong>Parquet</strong> Columnar data</span></div>
       <ApiError context="export" operation="write" error={create.error} />
       {jobId && (
         <>

@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
-import { AlertCircle, RotateCcw } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
+import { Banner } from './ui/Banner'
+import { Button } from './ui/Button'
 import { ApiClientError } from '../lib/axios'
 import {
   logDiagnostic,
@@ -27,8 +29,7 @@ export function FeedbackMessage({
   const feedback = userFeedback(error, context, operation)
   const reference = error instanceof ApiClientError ? safeReference(error.requestId) : undefined
   return (
-    <div className="astra-feedback fb-feedback fb-error" role="alert">
-      <AlertCircle size={18} aria-hidden="true" />
+    <Banner tone="error" className="astra-feedback fb-feedback fb-error" role="alert">
       <div className="astra-feedback-content">
         <strong>{feedback.title}</strong>
         <p>{feedback.message}</p>
@@ -39,12 +40,12 @@ export function FeedbackMessage({
           </details>
         )}
         {retry && feedback.retryable && (
-          <button className="button button-secondary" type="button" onClick={retry}>
-            <RotateCcw size={14} />
+          <Button variant="secondary" type="button" onClick={retry}>
+            <RotateCcw size={14} aria-hidden="true" />
             Try again
-          </button>
+          </Button>
         )}
       </div>
-    </div>
+    </Banner>
   )
 }

@@ -56,6 +56,11 @@ describe('public results service with isolated responses', () => {
       })
     },
   )
+  it('sends UTC start and exclusive end together with the signed cursor and source', async () => {
+    respond(fixtures.detections)
+    await results.detections('analysis', 'source', 'signed-page', undefined, { start: '2024-07-15T00:00:00Z', end_exclusive: '2024-07-16T00:00:00Z' })
+    expect(requests[0].params).toEqual({ limit: 20, source_ids: 'source', cursor: 'signed-page', start: '2024-07-15T00:00:00Z', end_exclusive: '2024-07-16T00:00:00Z' })
+  })
   it('rejects non-integral source counts before they can reach BigInt rendering', async () => {
     const data = structuredClone(fixtures.summary)
     data.native_detections_by_source[0]!.count = '12.3'

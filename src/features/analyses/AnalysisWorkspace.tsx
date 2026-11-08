@@ -9,6 +9,9 @@ import {
   Link2,
   MapPinned,
   Table2,
+  CalendarDays,
+  SlidersHorizontal,
+  LayoutDashboard,
 } from 'lucide-react'
 import { useAnalysis, useArea } from '../../hooks/useFirebridge'
 import type { AreaOfInterest } from '../../types'
@@ -23,11 +26,26 @@ import { HealthStatus } from './HealthStatus'
 import { SpatialPanel } from './SpatialPanel'
 import { parseAreaGeometry } from './validation'
 import { UserInputError } from '../../lib/userFeedback'
-import { Status } from './Feedback'
+import { ApiError, Status } from './Feedback'
+import { ObservationFilterBar } from '../observations/ObservationFilters'
+import { TemporalPanel, SourceComparison } from '../observations/TemporalPanel'
+import { emptyObservationFilters, type ObservationFilters } from '../observations/filters'
+import { useRelease } from '../observations/useResults'
+import { Banner } from '../../components/ui/Banner'
+import { Button } from '../../components/ui/Button'
+import { CopyableId } from '../../components/ui/CopyableId'
+import { Skeleton } from '../../components/ui/Skeleton'
+import { Stepper } from '../../components/ui/Stepper'
+import { requestDisabledReason, workflowSteps, type WorkflowPresentation } from './workspace.presentation'
+import './workspace.presentation.css'
+import { TabIndicator } from '../../components/ui/TabIndicator'
 
 const sections = [
-  { id: 'workspace-top', label: 'Set up & map', icon: MapPinned },
+  { id: 'workspace-top', label: 'Map workspace', icon: MapPinned },
+  { id: 'analysis-overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'observation-records', label: 'Observations', icon: Table2 },
+  { id: 'temporal-analysis', label: 'Timeline', icon: CalendarDays },
+  { id: 'source-comparison', label: 'Compare sources', icon: Layers2 },
   { id: 'data-provenance', label: 'Data & provenance', icon: Database },
   { id: 'analysis-context', label: 'Context & notes', icon: Layers2 },
   { id: 'export-results', label: 'Exports', icon: FileDown },
@@ -53,7 +71,11 @@ export default function AnalysisWorkspace() {
   }
   const mounted = (id: string) => visited.includes(id) || activeSection === id
   const analysisId = params.get('analysis') || undefined
+  const [filterState, setFilterState] = useState<{ id?: string; value: ObservationFilters }>({ value: emptyObservationFilters })
+  const filters = filterState.id === analysisId ? filterState.value : emptyObservationFilters
+  const changeFilters = (value: ObservationFilters) => setFilterState({ id: analysisId, value })
   const analysis = useAnalysis(analysisId)
+  const release = useRelease(analysis.data?.release_id)
   const areaId = analysis.data?.area_id ?? (params.get('area') || undefined)
   const area = useArea(areaId)
   const [geometryText, setGeometryText] = useState('')
@@ -62,8 +84,26 @@ export default function AnalysisWorkspace() {
   const [showLayer, setShowLayer] = useState(true)
   const [copyMessage, setCopyMessage] = useState('')
   const setupRequested = useRef(false)
+  const setupPanel = useRef<HTMLDetailsElement>(null)
   const savedAreaAvailable = !!area.data && !area.isError
+  const [workflowState, setWorkflowState] = useState<WorkflowPresentation>({ start: '', end: '', pending: false })
+  const [areaSaving, setAreaSaving] = useState(false)
+  const disabledReason = requestDisabledReason(savedAreaAvailable, workflowState)
+  const steps = workflowSteps(savedAreaAvailable, workflowState, analysis.isError ? undefined : analysis.data)
+  const openAreaForm = () => {
+    if (setupPanel.current) setupPanel.current.open = true
+    const editor = document.querySelector<HTMLDetailsElement>('#study-area .fb-editor')
+    if (editor) editor.open = true
+  }
+  const startDrawing = () => {
+    const draw = document.querySelector<HTMLButtonElement>('#spatial-workspace [aria-label="Draw area of interest"]')
+    draw?.click()
+    const target = document.getElementById('spatial-workspace')
+    target?.scrollIntoView({ block: 'nearest' })
+    document.querySelector<HTMLButtonElement>('#spatial-workspace [aria-label="Cancel area drawing"]')?.focus({ preventScroll: true })
+  }
   const focusSetup = useCallback(() => {
+    if (setupPanel.current) setupPanel.current.open = true
     const target = document.getElementById(savedAreaAvailable ? 'request-analysis' : 'study-area')
     const editor = target?.querySelector('details')
     if (editor instanceof HTMLDetailsElement) editor.open = true
@@ -124,7 +164,7 @@ export default function AnalysisWorkspace() {
     }
   }
   return (
-    <div className="fb-workspace" id="workspace-top">
+    <div className={`fb-workspace geo-analysis-page fw-workspace ${activeSection === 'workspace-top' ? 'geo-map-active' : ''}`} id="workspace-top">
       <header className="fb-page-heading">
         <div>
           <span className="fb-eyebrow">
@@ -132,7 +172,7 @@ export default function AnalysisWorkspace() {
             RESEARCH / NATIVE OBSERVATIONS
           </span>
           <h1>Analysis workspace</h1>
-          <p>A clear view of the records, their spatial context and the evidence behind them.</p>
+          <p>Satellite context, native observations and the evidence behind each record.</p>
         </div>
         <div className="fb-heading-actions">
           <a
@@ -145,14 +185,14 @@ export default function AnalysisWorkspace() {
                 selectSection('workspace-top')
               }
             }}
-            className="button button-primary"
+            className="ui-button ui-button--primary"
           >
             {analysisId ? 'New analysis' : 'Set up an analysis'}
             <ArrowDown size={14} />
           </a>
-          <button
+          <Button
             type="button"
-            className="button button-secondary"
+            variant="secondary"
             disabled={!analysisId && !areaId}
             onClick={() => {
               void copyLink()
@@ -160,7 +200,7 @@ export default function AnalysisWorkspace() {
           >
             <Link2 size={14} />
             Copy workspace link
-          </button>
+          </Button>
         </div>
       </header>
       {copyMessage && (
@@ -168,35 +208,22 @@ export default function AnalysisWorkspace() {
           {copyMessage}
         </p>
       )}
-      <ol className="astra-analysis-steps" aria-label="Analysis workflow">
-        <li data-complete={!!area.data}>
-          <span>01</span>Define your area
-        </li>
-        <li data-complete={!!analysis.data}>
-          <span>02</span>Configure & run
-        </li>
-        <li data-complete={available}>
-          <span>03</span>Explore the evidence
-        </li>
-      </ol>
-      <HealthStatus />
       {analysis.data && (
         <div className="astra-analysis-selection">
           <div>
             <strong>{area.data?.name ?? 'Selected study area'}</strong>
             <small>
-              {analysis.data.start_date} → {analysis.data.end_date_exclusive} · End excluded · UTC
+              {analysis.data.start_date} → {analysis.data.end_date_exclusive} · end excluded · UTC
             </small>
-            <code>{analysis.data.id}</code>
+            <CopyableId value={analysis.data.id} label="analysis ID" />
           </div>
           <Status value={analysis.data.status} />
         </div>
       )}
-      <ObservationSummary
-        analysisId={resultId}
-        releaseId={analysis.data?.release_id}
-        status={analysis.data?.status}
-      />
+      {analysis.data && <Banner tone="info" title="Pinned dataset" className="fw-release-banner"><strong>{release.data?.name ?? 'Release metadata unavailable'}</strong><CopyableId value={analysis.data.release_id} label="release ID" />{release.isError && <p>Release metadata unavailable</p>}</Banner>}
+      {analysisId && analysis.isPending && <Skeleton height={88} label="Loading the selected analysis…" />}
+      {analysis.isError && analysis.data && <Banner tone="warning">Previously loaded analysis details are shown; the latest refresh failed. Result availability still follows the existing checks.</Banner>}
+      <ApiError context="analysis" error={analysis.error} retry={() => { void analysis.refetch() }} />
       <div
         className="astra-analysis-tabs"
         role="tablist"
@@ -234,14 +261,29 @@ export default function AnalysisWorkspace() {
             {label}
           </button>
         ))}
+        <TabIndicator />
       </div>
+      <div id="panel-analysis-overview" role="tabpanel" aria-labelledby="tab-analysis-overview" hidden={activeSection !== 'analysis-overview'}>
+        {mounted('analysis-overview') && <><ObservationSummary analysisId={resultId} releaseId={analysis.data?.release_id} status={analysis.data?.status} /><SourceComparison analysisId={resultId} /></>}
+      </div>
+      {['workspace-top', 'observation-records', 'temporal-analysis'].includes(activeSection) &&
+        <ObservationFilterBar analysisId={resultId} value={filters} onChange={changeFilters} />}
       <div
         id="panel-workspace-top"
         role="tabpanel"
         aria-labelledby="tab-workspace-top"
         hidden={activeSection !== 'workspace-top'}
       >
-        <div className="fb-workspace-grid">
+        <div className="fw-action-strip" aria-label="Workflow actions">
+          <p id="fw-request-reason">{disabledReason ?? 'Ready to request using the saved area and visible UTC interval.'}</p>
+          <Button onClick={focusSetup}>Open workflow</Button>
+          {!savedAreaAvailable && <Button type="submit" form="area-create-form" aria-label="Save area from workflow" loading={areaSaving} onClick={openAreaForm}>Save area</Button>}
+          <Button type="submit" form="analysis-create-form" variant="primary" aria-label="Request analysis from workflow" disabled={!!disabledReason} aria-describedby="fw-request-reason" onClick={() => { if (setupPanel.current) setupPanel.current.open = true; const editor = document.getElementById('analysis-editor'); if (editor instanceof HTMLDetailsElement) editor.open = true }}>Request analysis</Button>
+        </div>
+        <div className="fb-workspace-grid geo-workspace-grid">
+          <details ref={setupPanel} className="geo-setup" open={!analysisId}>
+          <summary><SlidersHorizontal size={15} /><strong>Analysis configuration</strong><span>Area · UTC interval · processing</span></summary>
+          <div className="fw-steps"><Stepper label="Analysis workflow" steps={steps} /></div>
           <div className="fb-workflow">
             <div id="study-area">
               <AreaPanel
@@ -252,6 +294,8 @@ export default function AnalysisWorkspace() {
                 }}
                 geometryText={geometryText}
                 onGeometryText={setGeometryText}
+                onStartDrawing={startDrawing}
+                onSavingState={setAreaSaving}
               />
             </div>
             <div id="request-analysis">
@@ -259,14 +303,16 @@ export default function AnalysisWorkspace() {
                 areaId={area.data && !area.isError ? areaId : undefined}
                 analysis={analysis.data}
                 loading={!!analysisId && analysis.isPending}
-                error={analysis.error}
+                error={null}
                 refresh={() => {
                   void analysis.refetch()
                 }}
                 onSelect={(id) => setParams({ analysis: id })}
+                onWorkflowState={setWorkflowState}
               />
             </div>
           </div>
+          </details>
           <div className="fb-results">
             <SpatialPanel
               area={mapArea}
@@ -278,7 +324,10 @@ export default function AnalysisWorkspace() {
               onReject={onReject}
               onClear={onClear}
               error={drawingError}
+              filters={filters}
+              onSetup={focusSetup}
             />
+            <TemporalPanel analysisId={resultId} filters={filters} onChange={changeFilters} compact />
           </div>
         </div>
       </div>
@@ -289,8 +338,14 @@ export default function AnalysisWorkspace() {
         hidden={activeSection !== 'observation-records'}
       >
         {mounted('observation-records') && (
-          <ObservationsPanel key={`observations-${analysisId ?? 'empty'}`} analysisId={resultId} />
+          <ObservationsPanel key={`observations-${analysisId ?? 'empty'}`} analysisId={resultId} filters={filters} />
         )}
+      </div>
+      <div id="panel-temporal-analysis" role="tabpanel" aria-labelledby="tab-temporal-analysis" hidden={activeSection !== 'temporal-analysis'}>
+        {mounted('temporal-analysis') && <TemporalPanel analysisId={resultId} filters={filters} onChange={changeFilters} />}
+      </div>
+      <div id="panel-source-comparison" role="tabpanel" aria-labelledby="tab-source-comparison" hidden={activeSection !== 'source-comparison'}>
+        {mounted('source-comparison') && <SourceComparison analysisId={resultId} />}
       </div>
       <div
         id="panel-data-provenance"
@@ -326,6 +381,7 @@ export default function AnalysisWorkspace() {
               key={analysis.data.id}
               analysisId={analysis.data.id}
               available={available}
+              metadata={{ releaseId: analysis.data.release_id, start: analysis.data.start_date, endExclusive: analysis.data.end_date_exclusive, areaName: area.data?.name }}
             />
           ) : (
             <section className="fb-section">
@@ -336,6 +392,7 @@ export default function AnalysisWorkspace() {
             </section>
           ))}
       </div>
+      <details className="geo-system-status"><summary>Service health & data readiness</summary><HealthStatus /></details>
       <footer className="fb-workspace-footer">
         <span>FIREBRIDGE / Evidence-led earth observation</span>
         <span>Public workspace · Native records · UTC time basis</span>

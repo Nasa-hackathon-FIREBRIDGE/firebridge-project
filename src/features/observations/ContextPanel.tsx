@@ -6,6 +6,7 @@ import { createIdempotencyKey } from '../../services/analyses.service'
 import { ApiError, Empty, Status } from '../analyses/Feedback'
 import { JobPanel } from '../analyses/JobPanel'
 import { useContextRead, useCreateExplanation, useExplanation } from './useResults'
+import { CopyableId } from '../../components/ui/CopyableId'
 
 export function ContextPanel({ analysisId, initiallyExpanded = false }: { analysisId?: string; initiallyExpanded?: boolean }) {
   const [expanded, setExpanded] = useState(initiallyExpanded)
@@ -138,7 +139,7 @@ export function ContextPanel({ analysisId, initiallyExpanded = false }: { analys
             {explanation.data && (
               <div className="fb-note-output">
                 <Status value={explanation.data.status} />
-                <code>{explanation.data.explanation_id}</code>
+                <CopyableId value={explanation.data.explanation_id} label="explanation ID" />
                 {isRecord(output) && typeof output.summary === 'string' && (
                   <h3>{output.summary}</h3>
                 )}

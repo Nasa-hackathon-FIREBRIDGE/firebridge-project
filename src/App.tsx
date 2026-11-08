@@ -14,6 +14,7 @@ import './App.css'
 import './components/api/api-workspace.css'
 import './features/analyses/workspace.css'
 import { ApplicationShell } from './components/ApplicationShell'
+import { PageHeader } from './components/workspace/PageHeader'
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const CatalogPage = lazy(() => import('./pages/CatalogPage'))
@@ -26,7 +27,7 @@ const SensorBars = lazy(() => import('./components/Charts').then((module) => ({ 
 import type { BasemapMode } from './components/MapView'
 import { SensorSelector } from './components/SensorSelector'
 import { NO_RECORDS_LABEL, selectedWithoutRecords } from './platforms'
-import { CatalogPanel } from './components/CatalogPanel'
+const EvidencePage = lazy(() => import('./pages/EvidencePage'))
 const MapView = lazy(() => import('./components/MapView').then((module) => ({ default: module.MapView })))
 const AnalysisWorkspace = lazy(() => import('./features/analyses/AnalysisWorkspace'))
 
@@ -82,14 +83,14 @@ function AppPages() {
       <Route path="/reports" element={<WorkspacePage page="reports" />} />
       <Route path="/explain" element={<WorkspacePage page="explain" />} />
       <Route path="/alerts" element={<WorkspacePage page="alerts" />} />
-      <Route path="/evidence" element={<WorkspacePage page="evidence" />} />
+      <Route path="/evidence" element={<EvidencePage />} />
       <Route path="/settings" element={<WorkspacePage page="settings" />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }
 
-type PageKey = 'overview' | 'explore' | 'compare' | 'calendar' | 'weather' | 'reports' | 'explain' | 'alerts' | 'evidence' | 'settings'
+type PageKey = 'overview' | 'explore' | 'compare' | 'calendar' | 'weather' | 'reports' | 'explain' | 'alerts' | 'settings'
 
 function WorkspacePage({ page }: { page: PageKey }) {
   const state = useAppState()
@@ -129,7 +130,7 @@ function WorkspacePage({ page }: { page: PageKey }) {
   if (page === 'explore') return <ExplorePage {...{ records, selectedRecord, selection, clearDrawingToken, handleAreaDrawn, handleAreaRejected, showArea, showDetections, setShowArea, setShowDetections, setSelectedDetectionId, handleDownload, clearArea, notice }} />
 
   return (
-    <div className="page-content">
+    <div className={`page-content platform-demo-page platform-demo-${page}`}>
       {notice && <div className="toast-message" role="status"><Check size={15} />{notice}<button className="icon-button" onClick={() => setNotice('')} aria-label="Dismiss notification"><X size={14} /></button></div>}
       {page === 'overview' && <OverviewPage {...{ summary, comparison, temporal, records, evidence, selection, selectedRecord, clearDrawingToken, handleAreaDrawn, handleAreaRejected, showArea, showDetections, setShowArea, setShowDetections, setSelectedDetectionId, handleDownload, clearArea }} />}
       {page === 'compare' && <ComparePage {...{ comparison, summary, temporal, records }} />}
@@ -138,7 +139,6 @@ function WorkspacePage({ page }: { page: PageKey }) {
       {page === 'reports' && <ReportsPage evidence={evidence} />}
       {page === 'explain' && <ExplainPage summary={summary} />}
       {page === 'alerts' && <AlertsPage />}
-      {page === 'evidence' && <EvidencePage />}
       {page === 'settings' && <SettingsPage {...{ platforms, setPlatforms, frpThresholdMw, setFrpThreshold, showArea, showDetections, setShowArea, setShowDetections, areaName: area.name }} />}
     </div>
   )
@@ -168,7 +168,7 @@ function OverviewPage(props: MapProps & { summary?: ActivitySummary; comparison?
       <div className="dashboard-grid">
         <section className="panel map-panel">
           <div className="panel-heading"><div><h2>Detection footprint</h2><p>{records.length} synthetic records in current selection</p></div><Link className="text-link" to="/explore">Explore map <ArrowRight size={13} /></Link></div>
-          <MapView records={records} selectedId={selectedRecord?.id ?? null} onSelect={setSelectedDetectionId} area={selection.area} showDetections={showDetections} showArea={showArea} clearDrawingToken={clearDrawingToken} onAreaDrawn={handleAreaDrawn} onAreaRejected={handleAreaRejected} onClearArea={clearArea} />
+          <MapView records={records} selectedId={selectedRecord?.id ?? null} onSelect={setSelectedDetectionId} area={selection.area} showDetections={showDetections} showArea={showArea} onShowDetections={setShowDetections} onShowArea={setShowArea} clearDrawingToken={clearDrawingToken} onAreaDrawn={handleAreaDrawn} onAreaRejected={handleAreaRejected} onClearArea={clearArea} />
           <MapToggles {...{ showDetections, showArea, setShowDetections, setShowArea, clearArea }} />
         </section>
         <section className="panel activity-panel">
@@ -202,7 +202,7 @@ function ExplorePage(props: MapProps & { selection: AnalysisSelection; notice: s
       <PageHeading eyebrow="SPATIAL EXPLORATION" title="Explore the fire footprint" description={`${selection.area.name} · Draw a local demo polygon to filter synthetic detections.`} action={<button className="button button-secondary" onClick={handleDownload}><Download size={15} />Export visible</button>} />
       {notice && <div className="toast-message inline-toast" role="status"><Check size={15} />{notice}</div>}
       <div className="explore-layout">
-        <section className="panel explore-map-panel"><MapView records={records} selectedId={selectedRecord?.id ?? null} onSelect={setSelectedDetectionId} area={selection.area} showDetections={showDetections} showArea={showArea} clearDrawingToken={clearDrawingToken} onAreaDrawn={handleAreaDrawn} onAreaRejected={handleAreaRejected} onClearArea={clearArea} fullHeight /><MapToggles {...{ showDetections, showArea, setShowDetections, setShowArea, clearArea }} /></section>
+        <section className="panel explore-map-panel"><MapView records={records} selectedId={selectedRecord?.id ?? null} onSelect={setSelectedDetectionId} area={selection.area} showDetections={showDetections} showArea={showArea} onShowDetections={setShowDetections} onShowArea={setShowArea} clearDrawingToken={clearDrawingToken} onAreaDrawn={handleAreaDrawn} onAreaRejected={handleAreaRejected} onClearArea={clearArea} fullHeight /><MapToggles {...{ showDetections, showArea, setShowDetections, setShowArea, clearArea }} /></section>
         <aside className="panel explore-side"><div className="panel-heading"><div><h2>Selection</h2><p>{records.length} records · synthetic</p></div><SlidersHorizontal size={17} /></div>
           <div className="selected-area"><span className="area-icon"><Map size={16} /></span><span><strong>{selection.area.name}</strong><small>{selection.area.provenance === 'user-drawn' ? 'Custom polygon · local only' : 'Default demonstration extent'}</small></span></div>
           <div className="selection-summary"><span>Date range</span><strong>{formatDate(selection.startDate)} — {formatDate(selection.endDate)}</strong><span>Platforms</span><strong>{selection.platforms.length ? selection.platforms.join(' · ') : 'None selected'}</strong></div>
@@ -243,7 +243,7 @@ function CalendarPage({ temporal, setDay }: { temporal: TemporalSummary[]; setDa
 }
 
 function WeatherPage() {
-  return <><PageHeading eyebrow="ENVIRONMENTAL CONTEXT" title="Weather context" description="Meteorological context is designed for later integration; no provider is connected." /><div className="weather-hero"><div className="weather-icon"><CloudSun size={28} /></div><div><span className="overline">DATA SOURCE STATUS</span><h2>Weather data unavailable</h2><p>ASTRA MIND is operating with local synthetic fixtures. No live or archived meteorological data has been requested.</p></div><span className="status-pill status-muted">NOT CONNECTED</span></div><div className="three-column-grid"><InfoCard icon={<Gauge />} title="Fire weather index" value="—" detail="No meteorological input" /><InfoCard icon={<Activity />} title="Wind conditions" value="—" detail="No wind field available" /><InfoCard icon={<CloudSun />} title="Humidity / temperature" value="—" detail="No reanalysis series loaded" /></div><Callout title="No causal interpretation" text="Weather variables are not available, so this demo cannot attribute detection patterns to weather conditions or forecast fire behavior." /></>
+  return <><PageHeading eyebrow="ENVIRONMENTAL CONTEXT" title="Weather context" description="Meteorological context is designed for later integration; no provider is connected." /><div className="weather-hero"><div className="weather-icon"><CloudSun size={28} /></div><div><span className="overline">DATA SOURCE STATUS</span><h2>Weather data unavailable</h2><p>This demonstration uses local synthetic fixtures. No live or archived meteorological data has been requested.</p></div><span className="status-pill status-muted">NOT CONNECTED</span></div><div className="three-column-grid"><InfoCard icon={<Gauge />} title="Fire weather index" value="—" detail="No meteorological input" /><InfoCard icon={<Activity />} title="Wind conditions" value="—" detail="No wind field available" /><InfoCard icon={<CloudSun />} title="Humidity / temperature" value="—" detail="No reanalysis series loaded" /></div><Callout title="No causal interpretation" text="Weather variables are not available, so this demo cannot attribute detection patterns to weather conditions or forecast fire behavior." /></>
 }
 
 function ReportsPage({ evidence }: { evidence: ReportEvidence[] }) {
@@ -258,13 +258,9 @@ function AlertsPage() {
   return <><PageHeading eyebrow="MONITORING RULES" title="Watchlist" description="Manage future notification ideas. No alert rules or notification integrations are active." /><div className="empty-feature panel"><div className="empty-feature-icon"><AlertTriangle size={22} /></div><h2>No active watch rules</h2><p>Detection notifications are unavailable because this demo has no live data source and no observation-support model.</p><button className="button button-secondary" disabled><Sparkles size={15} />Create a rule <span className="coming-soon">Unavailable</span></button></div><div className="three-column-grid"><InfoCard icon={<ShieldCheck />} title="Data trigger" value="Unavailable" detail="Live source is not connected" /><InfoCard icon={<Activity />} title="Coverage gate" value="Not defined" detail="Valid observation support required" /><InfoCard icon={<AlertTriangle />} title="Delivery" value="Disabled" detail="No notification provider" /></div></>
 }
 
-function EvidencePage() {
-  return <><PageHeading eyebrow="PROVENANCE & SCIENCE" title="Data & methods" description="A transparent inventory of the local demonstration and the evidence it does not contain." /><CatalogPanel /><div className="provenance-grid"><section className="panel"><div className="panel-heading"><div><h2>Current data mode</h2><p>Explicitly local and synthetic</p></div><span className="status-pill status-muted">DEMO FIXTURE</span></div><dl className="provenance-list"><div><dt>Data adapter</dt><dd>Catalogue via FIREBRIDGE API; maps and charts use local synthetic fixtures.</dd></div><div><dt>Detection records</dt><dd>24 deterministic synthetic points</dd></div><div><dt>Satellite files</dt><dd>None loaded by this frontend</dd></div><div><dt>External APIs</dt><dd>Local FIREBRIDGE catalogue connected; external NASA, weather and news providers are not connected.</dd></div><div><dt>Observation coverage</dt><dd>Unknown — no full-mask inputs</dd></div><div><dt>Harmonization status</dt><dd>Not implemented or validated</dd></div><div><dt>Export</dt><dd>Filtered fixture records as CSV</dd></div></dl></section><section className="panel"><div className="panel-heading"><div><h2>Scientific interpretation</h2><p>Supported claims versus open requirements</p></div></div><div className="method-status"><span className="method-mark method-ok"><Check size={13} /></span><div><strong>Raw point counts</strong><small>Derived only from synthetic fixture rows.</small></div></div><div className="method-status"><span className="method-mark method-warn"><Info size={13} /></span><div><strong>Positive / negative classification</strong><small>Full masks and quality state needed; not available.</small></div></div><div className="method-status"><span className="method-mark method-warn"><Info size={13} /></span><div><strong>Spatial / temporal matching</strong><small>Pixel-level acquisition metadata not decoded.</small></div></div><div className="method-status"><span className="method-mark method-warn"><Info size={13} /></span><div><strong>Cross-sensor response</strong><small>Common support and validation not established.</small></div></div></section></div><Callout title="Acquisition and geolocation remain a separate scientific task" text="The VNP14IMG Collection 2 full-mask geolocation companion is still unresolved in the project investigation. This frontend neither resolves that question nor changes the existing acquisition manifest or configuration." /><section className="panel next-steps"><div className="panel-heading"><div><h2>Requirements before a decoding pilot</h2><p>Evidence needed before classifying observation support</p></div></div><ol><li>Resolve the authoritative full-mask geolocation companion for VNP14IMG Collection 2 using product-specific guidance.</li><li>Obtain a compatible fire-mask granule and its full-swath geolocation and required QA metadata.</li><li>Document mask classes, fill values, scan/sample indexing, pixel times, and observation support rules.</li><li>Decode land, cloud, invalid, unprocessed, unknown, and valid non-fire states without treating absent detections as negatives.</li><li>Evaluate common valid land support and pixel-level temporal matching before any harmonization.</li></ol></section></>
-}
-
 function SettingsPage(props: { platforms: AnalysisSelection['platforms']; setPlatforms: (platforms: AnalysisSelection['platforms']) => void; frpThresholdMw: number | null; setFrpThreshold: (value: number | null) => void; showArea: boolean; showDetections: boolean; setShowArea: (value: boolean) => void; setShowDetections: (value: boolean) => void; areaName: string }) {
   const { platforms, setPlatforms, frpThresholdMw, setFrpThreshold, showArea, showDetections, setShowArea, setShowDetections, areaName } = props
-  return <><PageHeading eyebrow="WORKSPACE CONTROLS" title="Preferences" description="These controls affect the local synthetic demonstration only." /><div className="settings-layout"><section className="panel settings-section"><div className="panel-heading"><div><h2>Analysis selection</h2><p>Filters are shared across workspace pages</p></div></div><span className="settings-label">SATELLITE PLATFORMS</span><SensorSelector platforms={platforms} setPlatforms={setPlatforms} /><label className="range-label"><span><strong>Minimum fire radiative power</strong><span>{frpThresholdMw === null ? 'No minimum' : `${frpThresholdMw} MW`}</span></span><input type="range" min="0" max="200" step="10" value={frpThresholdMw ?? 0} onChange={(event) => setFrpThreshold(event.target.value === '0' ? null : Number(event.target.value))} /><small>Illustrative filter only; no scientific threshold is implied.</small></label><div className="settings-row"><div><strong>Current area</strong><small>{areaName}</small></div><span className="status-pill status-muted">LOCAL ONLY</span></div></section><section className="panel settings-section"><div className="panel-heading"><div><h2>Map display</h2><p>Local visibility settings</p></div></div><ToggleRow label="Show synthetic detections" description="Render fixture point markers on the map." checked={showDetections} onChange={setShowDetections} /><ToggleRow label="Show study-area boundary" description="Render the selected demonstration polygon." checked={showArea} onChange={setShowArea} /><div className="settings-divider" /><div className="settings-row"><div><strong>Map style</strong><small>{import.meta.env.VITE_MAP_STYLE_URL ? 'Configured via VITE_MAP_STYLE_URL; falls back to a labelled schematic if it fails' : 'No VITE_MAP_STYLE_URL set: labelled schematic view, no real basemap'}</small></div><span className="status-pill status-muted">{import.meta.env.VITE_MAP_STYLE_URL ? 'CONFIGURED' : 'SCHEMATIC'}</span></div><div className="settings-row"><div><strong>Data handling</strong><small>Fixture data stays in the browser; CSV is downloaded on request.</small></div><ShieldCheck size={16} className="text-teal" /></div></section></div><Callout title="No data-source credentials are configured" text="This frontend does not connect to NASA, Earthdata, weather or report services. The only optional network request is the basemap style you configure via VITE_MAP_STYLE_URL. It does not access credentials or protected data URLs." /></>
+  return <><PageHeading eyebrow="WORKSPACE CONTROLS" title="Preferences" description="These controls affect the local synthetic demonstration only." /><div className="settings-layout platform-preferences"><section className="panel settings-section"><div className="panel-heading"><div><h2>Analysis selection</h2><p>Filters are shared across workspace pages</p></div></div><span className="settings-label">SATELLITE PLATFORMS</span><SensorSelector platforms={platforms} setPlatforms={setPlatforms} /><label className="range-label"><span><strong>Minimum fire radiative power</strong><span>{frpThresholdMw === null ? 'No minimum' : `${frpThresholdMw} MW`}</span></span><input type="range" min="0" max="200" step="10" value={frpThresholdMw ?? 0} onChange={(event) => setFrpThreshold(event.target.value === '0' ? null : Number(event.target.value))} /><small>Illustrative filter only; no scientific threshold is implied.</small></label><div className="settings-row"><div><strong>Current area</strong><small>{areaName}</small></div><span className="status-pill status-muted">LOCAL ONLY</span></div></section><section className="panel settings-section"><div className="panel-heading"><div><h2>Map display</h2><p>Local visibility settings</p></div></div><ToggleRow label="Show synthetic detections" description="Render fixture point markers on the map." checked={showDetections} onChange={setShowDetections} /><ToggleRow label="Show study-area boundary" description="Render the selected demonstration polygon." checked={showArea} onChange={setShowArea} /><div className="settings-divider" /><div className="settings-row"><div><strong>Map style</strong><small>{import.meta.env.VITE_MAP_STYLE_URL ? 'Configured provider style; background dates are independent of observations.' : 'NASA archival satellite composite by default; switch basemaps directly on the map.'}</small></div><span className="status-pill status-muted">{import.meta.env.VITE_MAP_STYLE_URL ? 'CONFIGURED' : 'NASA GIBS'}</span></div><div className="settings-row"><div><strong>Data handling</strong><small>Fixture data stays in the browser; CSV is downloaded on request.</small></div><ShieldCheck size={16} className="text-teal" /></div></section></div><Callout title="Display preferences apply immediately" text="These controls affect local synthetic demonstration records. Saved analysis filters are independent. Background tiles are requested from the selected provider; no private credentials or protected satellite granules are supplied by these settings." /></>
 }
 
 function KpiGrid({ summary, comparison }: { summary?: ActivitySummary; comparison?: SensorComparison }) {
@@ -292,7 +288,7 @@ function EvidenceRow({ evidence }: { evidence: ReportEvidence }) {
 }
 
 function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
-  return <div className="page-heading"><div><span className="overline">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>{action && <div className="page-heading-action">{action}</div>}</div>
+  return <PageHeader eyebrow={eyebrow} title={title} description={description} action={action} />
 }
 
 function InfoCard({ icon, title, value, detail }: { icon: ReactNode; title: string; value: string; detail: string }) {

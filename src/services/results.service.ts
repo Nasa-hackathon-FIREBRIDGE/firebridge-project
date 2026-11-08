@@ -97,6 +97,7 @@ export const results = {
     sourceId: string | undefined,
     cursor: string | undefined,
     signal?: AbortSignal,
+    interval?: { start?: string; end_exclusive?: string },
   ) =>
     read<DetectionPage>(
       analysisPath(id) + '/detections',
@@ -128,7 +129,7 @@ export const results = {
             (f.properties.day_night === null || text(f.properties.day_night)),
         ),
       signal,
-      { limit: 20, source_ids: sourceId, cursor },
+      { limit: 20, source_ids: sourceId, cursor, ...interval },
     ),
   calendar: (id: string, signal?: AbortSignal) =>
     read<NativeCalendar>(

@@ -1,12 +1,16 @@
 import { UserInputError } from '../../lib/userFeedback'
 import { ApiClientError } from '../../lib/axios'
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { AnalysisView } from '@firebridge/contracts'
 import { useCreateAnalysis } from '../../hooks/useFirebridge'
 import { createIdempotencyKey } from '../../services/analyses.service'
 import { ApiError, Empty, Status } from './Feedback'
 import { JobPanel } from './JobPanel'
 import { validDateRange, validId } from './validation'
+import { Button } from '../../components/ui/Button'
+import { CopyableId } from '../../components/ui/CopyableId'
+import { DateRangePicker } from '../../components/ui/DateRangePicker'
+import { requestDisabledReason, type WorkflowPresentation } from './workspace.presentation'
 
 function reasonText(value: unknown): string {
   if (value == null || (Array.isArray(value) && !value.length))
@@ -32,6 +36,7 @@ export function AnalysisPanel({
   error,
   onSelect,
   refresh,
+  onWorkflowState,
 }: {
   areaId?: string
   analysis?: AnalysisView
@@ -39,9 +44,15 @@ export function AnalysisPanel({
   error: unknown
   onSelect: (id: string) => void
   refresh: () => void
+  onWorkflowState?: (state: WorkflowPresentation) => void
 }) {
   const create = useCreateAnalysis()
   const [formError, setFormError] = useState<unknown>(null)
+  const [dateDraft, setDateDraft] = useState({ start: '', end: '' })
+  useEffect(() => { onWorkflowState?.({ ...dateDraft, pending: create.isPending }) }, [dateDraft, create.isPending, onWorkflowState])
+  const disabledReason = requestDisabledReason(!!areaId, { ...dateDraft, pending: create.isPending })
+  const changeStart = (start: string) => { setDateDraft(current => ({ ...current, start })); setFormError(null) }
+  const changeEnd = (end: string) => { setDateDraft(current => ({ ...current, end })); setFormError(null) }
   const intent = useRef<{ payload: string; key: string } | null>(null)
   const lock = useRef(false)
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -77,7 +88,7 @@ export function AnalysisPanel({
     }
   }
   return (
-    <section className="fb-section" aria-labelledby="analysis-heading">
+    <section className="fb-section fw-analysis-panel" aria-labelledby="analysis-heading">
       <div className="fb-section-heading">
         <span className="fb-step">02</span>
         <div>
@@ -91,16 +102,18 @@ export function AnalysisPanel({
           <span>UTC / Native counts</span>
         </summary>
         <form
+          id="analysis-create-form"
           className="fb-form"
           onSubmit={(event) => {
             void submit(event)
           }}
         >
           <fieldset disabled={!areaId || create.isPending}>
+            <DateRangePicker start={dateDraft.start} end={dateDraft.end} onStartChange={changeStart} onEndChange={changeEnd} disabled={!areaId || create.isPending} triggerLabel="Open analysis date picker">
             <div className="fb-field-pair">
               <label>
                 Start date (UTC)
-                <input name="start" type="date" required onChange={() => setFormError(null)} />
+                <input name="start" type="date" required value={dateDraft.start} onChange={event => changeStart(event.target.value)} />
               </label>
               <label>
                 End date, exclusive (UTC)
@@ -109,13 +122,14 @@ export function AnalysisPanel({
                   aria-label="End date, exclusive (UTC)"
                   type="date"
                   required
+                  value={dateDraft.end}
                   aria-invalid={formError instanceof UserInputError && formError.field === 'end'}
                   aria-describedby={
                     formError instanceof UserInputError && formError.field === 'end'
                       ? 'analysis-date-error'
                       : undefined
                   }
-                  onChange={() => setFormError(null)}
+                  onChange={event => changeEnd(event.target.value)}
                 />
                 {formError instanceof UserInputError && formError.field === 'end' && (
                   <span className="fb-field-error" id="analysis-date-error">
@@ -124,13 +138,14 @@ export function AnalysisPanel({
                 )}
               </label>
             </div>
+            </DateRangePicker>
             <p className="fb-muted">
               Native detections v1 · Standard data only · No grid. The end date is excluded from the
               interval.
             </p>
-            <button type="submit" className="button button-primary">
+            <Button type="submit" variant="primary" className="fw-primary-submit" disabled={!!disabledReason} disabledReason={disabledReason} loading={create.isPending}>
               {create.isPending ? 'Submitting analysis…' : 'Request analysis'}
-            </button>
+            </Button>
           </fieldset>
         </form>
       </details>
@@ -140,10 +155,10 @@ export function AnalysisPanel({
         <div className="fb-feedback" role="status">
           <strong>Analysis request accepted: {create.data.status}</strong>
           <span>
-            Analysis <code>{create.data.id}</code>
+            Analysis <CopyableId value={create.data.id} label="accepted analysis ID" />
           </span>
           <span>
-            Job <code>{create.data.job_id ?? 'No job returned'}</code>
+            Job {create.data.job_id ? <CopyableId value={create.data.job_id} label="accepted job ID" /> : 'No job returned'}
           </span>
         </div>
       )}
@@ -184,19 +199,19 @@ export function AnalysisPanel({
             <div>
               <dt>Analysis ID</dt>
               <dd>
-                <code>{analysis.id}</code>
+                <CopyableId value={analysis.id} label="analysis ID" />
               </dd>
             </div>
             <div>
               <dt>Release ID</dt>
               <dd>
-                <code>{analysis.release_id}</code>
+                <CopyableId value={analysis.release_id} label="release ID" />
               </dd>
             </div>
             <div>
               <dt>Interval</dt>
               <dd>
-                {analysis.start_date} → {analysis.end_date_exclusive} (exclusive)
+                {analysis.start_date} → {analysis.end_date_exclusive} · end excluded · UTC
               </dd>
             </div>
           </dl>
@@ -215,7 +230,7 @@ export function AnalysisPanel({
           )}
           {analysis.components.length ? (
             <div className="fb-table-scroll">
-              <table>
+              <table className="fw-component-table">
                 <caption>Component availability</caption>
                 <thead>
                   <tr>
@@ -227,11 +242,11 @@ export function AnalysisPanel({
                 <tbody>
                   {analysis.components.map((component) => (
                     <tr key={component.component}>
-                      <th scope="row">{component.component}</th>
-                      <td>
+                      <th scope="row" data-label="Component">{component.component}</th>
+                      <td data-label="Status">
                         <Status value={component.status} />
                       </td>
-                      <td>{reasonText(component.reasons)}</td>
+                      <td data-label="Reason">{reasonText(component.reasons)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -246,7 +261,7 @@ export function AnalysisPanel({
               open={['queued', 'running'].includes(analysis.job.status)}
             >
               <summary>
-                Processing history <Status value={analysis.job.status} />
+                Processing status <Status value={analysis.job.status} />
               </summary>
               <JobPanel key={analysis.job.id} id={analysis.job.id} />
             </details>

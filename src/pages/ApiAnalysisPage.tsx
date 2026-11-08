@@ -21,6 +21,9 @@ import {
 import { ExplanationRequestPanel } from '../components/api/ExplanationRequestPanel'
 import { validDateRange } from '../features/analyses/validation'
 import { UserInputError } from '../lib/userFeedback'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ArrowUpRight, Database } from 'lucide-react'
+import { PageHeader } from '../components/workspace/PageHeader'
 
 const panels = {
   summary: { label: 'Résumé', component: SummaryPanel },
@@ -37,18 +40,13 @@ const panels = {
 type ResultTab = keyof typeof panels
 const resultTabs = Object.keys(panels) as ResultTab[]
 export default function ApiAnalysisPage() {
-  const [id, setId] = useState('')
+  const [params, setParams] = useSearchParams()
+  const id = params.get('analysis') ?? ''
+  const setId = (value: string) => setParams({ analysis: value })
   return (
-    <div className="page-content api-workspace">
-      <header className="page-heading">
-        <p className="eyebrow">FIREBRIDGE / RESULTS EXPLORER</p>
-        <h1>Results explorer</h1>
-        <p>
-          Résultats servis par le backend. La base choisie côté serveur détermine les données : en
-          local, elle peut contenir des jeux de test synthétiques.
-        </p>
-      </header>
-      <section className="panel api-section">
+    <div className="page-content api-workspace platform-results-page">
+      <PageHeader eyebrow="RESEARCH / STRUCTURED RESULTS" title="Results explorer" description="Inspect saved observations, prepared scientific results and source metadata. Test datasets retain their synthetic labels." action={id ? <Link className="button button-secondary" to={`/analyses?analysis=${encodeURIComponent(id)}`}>Open map workspace<ArrowUpRight size={14} /></Link> : undefined} />
+      <section className="panel api-section platform-analysis-loader">
         <h2>Choisir une analyse enregistrée</h2>
         <form
           className="api-form"
@@ -68,7 +66,7 @@ export default function ApiAnalysisPage() {
       {id ? (
         <AnalysisResults key={id} id={id} />
       ) : (
-        <p>Ouvrir une analyse existante ou en créer une sur une zone déjà enregistrée.</p>
+        <div className="platform-empty-register"><Database size={30} /><h2>Open a saved analysis</h2><p>Ouvrir une analyse existante ou en créer une sur une zone déjà enregistrée.</p><small>Records, calendar, coverage and context are loaded only as you open their tabs.</small></div>
       )}
     </div>
   )

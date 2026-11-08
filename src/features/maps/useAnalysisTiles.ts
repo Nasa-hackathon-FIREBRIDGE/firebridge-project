@@ -7,6 +7,7 @@ export function useAnalysisTiles(
   styleLoaded: boolean,
   analysisId: string | undefined,
   visible: boolean,
+  styleRevision = 0,
 ) {
   const [state, setState] = useState<'loading' | 'empty' | 'ready' | 'error'>('loading')
   useEffect(() => {
@@ -68,6 +69,6 @@ export function useAnalysisTiles(
         map.removeLayer('firebridge-detections-points')
       if (map.getSource('firebridge-detections')) map.removeSource('firebridge-detections')
     }
-  }, [mapRef, analysisId, visible, styleLoaded])
+  }, [mapRef, analysisId, visible, styleLoaded, styleRevision])
   return state
 }

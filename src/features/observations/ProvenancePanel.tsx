@@ -4,6 +4,8 @@ import { SectionHeading } from '../../components/workspace/SectionHeading'
 import { ApiClientError } from '../../lib/axios'
 import { ApiError, Empty, Status } from '../analyses/Feedback'
 import { useCatalogue, useProvenance, useSourceAvailability } from './useResults'
+import { CopyableId } from '../../components/ui/CopyableId'
+import { Skeleton } from '../../components/ui/Skeleton'
 
 export function ProvenancePanel({ analysisId, initiallyExpanded = false }: { analysisId?: string; initiallyExpanded?: boolean }) {
   const [expanded, setExpanded] = useState(initiallyExpanded)
@@ -51,7 +53,7 @@ export function ProvenancePanel({ analysisId, initiallyExpanded = false }: { ana
               void catalogue.refetch()
             }}
           />
-          {catalogue.isPending && <p role="status">Loading published catalogue…</p>}
+          {catalogue.isPending && <Skeleton height={96} label="Loading published catalogue…" />}
           {catalogue.data && (
             <div className="fb-catalogue">
               <div className="fb-catalogue-heading">
@@ -107,7 +109,7 @@ export function ProvenancePanel({ analysisId, initiallyExpanded = false }: { ana
                   void provenance.refetch()
                 }}
               />
-              {provenance.isPending && <p role="status">Loading pinned asset records…</p>}
+              {provenance.isPending && <Skeleton height={160} label="Loading pinned asset records…" />}
               {assets.length > 0 && (
                 <div className="fb-table-scroll">
                   <table className="fb-provenance-table">
@@ -123,17 +125,18 @@ export function ProvenancePanel({ analysisId, initiallyExpanded = false }: { ana
                     <tbody>
                       {assets.map((asset) => (
                         <tr key={`${asset.asset_id}-${asset.role}`}>
-                          <th scope="row">
+                          <th scope="row" data-label="Product / role">
                             {asset.product}
                             <small>{asset.role.replaceAll('_', ' ')}</small>
                           </th>
-                          <td>
+                          <td data-label="Verification">
                             <Status value={asset.validation_status} />
                           </td>
-                          <td>
+                          <td data-label="SHA-256 fingerprint">
+                            <CopyableId value={asset.sha256} label="asset SHA-256" shortLength={12} />
                             <code className="fb-hash">{asset.sha256}</code>
                           </td>
-                          <td>
+                          <td data-label="Provenance / licence">
                             {asset.citation}
                             <small>{asset.license_info}</small>
                           </td>

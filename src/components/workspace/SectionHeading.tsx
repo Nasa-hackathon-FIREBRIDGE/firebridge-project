@@ -13,7 +13,7 @@ export function SectionHeading({
   action?: ReactNode
 }) {
   return (
-    <div className="fb-section-heading">
+    <div className="fb-section-heading ui-section-heading">
       <div>
         {eyebrow && <span className="fb-eyebrow">{eyebrow}</span>}
         <h2 id={id}>{title}</h2>

@@ -14,11 +14,12 @@ export function CatalogTools({ scopeKey, releases, sources }: { scopeKey: string
   const updatesQuery = useUpdates(updates)
   const selectedRelease = releaseId || releases[0]?.id || ''
   return <div className="api-stack">
-    <section className="panel api-section"><h2>Versions publiées</h2><p>Une version identifie les entrées figées d’une analyse. Sa composition est consultable par pages.</p>
+    <nav className="platform-section-nav" aria-label="Catalogue tools"><a href="#catalogue-releases">01 · Published releases</a><a href="#catalogue-updates">02 · Release changes</a><a href="#catalogue-availability">03 · Source availability</a></nav>
+    <section className="panel api-section" id="catalogue-releases"><span className="platform-eyebrow">01 / RELEASE MEMBERSHIP</span><h2>Versions publiées</h2><p>Une version identifie les entrées figées d’une analyse. Sa composition est consultable par pages.</p>
       <label className="api-field">Version du catalogue<select value={selectedRelease} onChange={(e) => setReleaseId(e.target.value)}>{releases.map((release) => <option key={release.id} value={release.id}>{release.name} — {release.id}</option>)}</select></label>
       {selectedRelease ? <ReleaseDetails key={selectedRelease} id={selectedRelease} /> : <p>Aucune version publiée.</p>}
     </section>
-    <ResourcePanel title="Mises à jour disponibles" query={updatesQuery}>
+    <div id="catalogue-updates"><ResourcePanel title="Mises à jour disponibles" query={updatesQuery}>
       {(data) => <><Facts values={{ 'Comparaison': data.comparison, 'Nouvelles versions': data.comparison === 'baseline_not_provided' ? 'Choisir une version de référence pour comparer' : data.has_updates, 'Historique complet': data.history_complete, 'Vérifié à': data.checked_at }} /><Records rows={data.current} /><Records rows={data.changes} empty="Aucun changement signalé pour cette comparaison." /></>}
     </ResourcePanel>
     <form className="api-form" onSubmit={(e) => {
@@ -29,8 +30,8 @@ export function CatalogTools({ scopeKey, releases, sources }: { scopeKey: string
       <label>Version de référence (facultative)<input name="baseline" pattern={uuidPattern} placeholder="UUID d’une ancienne version" /></label>
       <label>Composant<select name="component"><option value="">Tous</option><option>satellite</option><option>weather</option><option>reports</option></select></label>
       <button className="button button-primary">Comparer les versions</button>
-    </form>
-    <section className="panel api-section"><h2>Disponibilité d’une source</h2><p>La complétude d’import et la couverture d’observation sont deux informations différentes.</p>
+    </form></div>
+    <section className="panel api-section" id="catalogue-availability"><span className="platform-eyebrow">03 / SOURCE READINESS</span><h2>Disponibilité d’une source</h2><p>La complétude d’import et la couverture d’observation sont deux informations différentes.</p>
       <label className="api-field">Source<select value={sourceId} onChange={(e) => setSourceId(e.target.value)}><option value="">Choisir une source</option>{sources.map((source) => <option key={source.source_id} value={source.source_id}>{source.platform ?? source.source_id}</option>)}</select></label>
       {sourceId && <SourceAvailability key={sourceId} sourceId={sourceId} scopeKey={scopeKey} />}
     </section>

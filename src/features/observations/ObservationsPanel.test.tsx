@@ -16,7 +16,7 @@ afterEach(() => {
   api.defaults.adapter = original
   requests.length = 0
 })
-function mount() {
+function mount(filters?: import('./filters').ObservationFilters) {
   api.defaults.adapter = async (config) => {
     requests.push({ url: config.url!, params: config.params })
     let data: unknown
@@ -54,7 +54,7 @@ function mount() {
   return render(
     <StrictMode>
       <QueryClientProvider client={client}>
-        <ObservationsPanel analysisId="analysis" />
+        <ObservationsPanel analysisId="analysis" filters={filters} />
       </QueryClientProvider>
     </StrictMode>,
   )
@@ -79,4 +79,31 @@ it('renders a genuine zero daily count with a zero-height bar', async () => {
   mount()
   await screen.findByRole('img', { name: /0 records/ })
   expect((document.querySelector('.fb-activity-track i') as HTMLElement).style.height).toBe('0%')
+})
+it('keeps raw precision and null measurements in keyboard-accessible record details', async () => {
+  mount()
+  const opener = await screen.findByRole('button', { name: 'Inspect detection first' })
+  opener.focus()
+  fireEvent.click(opener)
+  const details = screen.getByRole('region', { name: 'Selected detection details' })
+  expect(details.textContent).toContain(fixtures.detections.features[0].properties.acquired_at)
+  expect(details.textContent).toContain('Not measured')
+  expect(details.textContent).toContain('synthetic_not_measured')
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close detection details' }))
+  fireEvent.keyDown(details, { key: 'Escape' })
+  expect(screen.queryByRole('region', { name: 'Selected detection details' })).toBeNull()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Inspect detection first' }))
+})
+it('applies search only to loaded records and preserves temporal constraints across pages', async () => {
+  mount({ sourceId: '', start: '2024-07-15', endExclusive: '2024-07-16' })
+  await screen.findByText('#first')
+  fireEvent.click(screen.getByRole('button', { name: 'Load more records' }))
+  await screen.findByText('#second')
+  const later = requests.find((request) => request.params?.cursor)
+  expect(later?.params).toMatchObject({ start: '2024-07-15T00:00:00Z', end_exclusive: '2024-07-16T00:00:00Z' })
+  const before = requests.length
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search loaded records' }), { target: { value: 'second' } })
+  expect(screen.queryByText('#first')).toBeNull()
+  expect(screen.getByText('#second')).toBeTruthy()
+  expect(requests.length).toBe(before)
 })

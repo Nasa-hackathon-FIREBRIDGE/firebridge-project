@@ -1,20 +1,21 @@
 import { useHealthLive, useHealthReady } from '../../hooks/useFirebridge'
 import { ApiError, Status } from './Feedback'
 import { Activity } from 'lucide-react'
+import { Button } from '../../components/ui/Button'
 
 export function HealthStatus() {
   const live = useHealthLive()
   const ready = useHealthReady()
   return (
-    <section className="fb-health" aria-label="API health">
+    <section className="fb-health ui-health" aria-label="API health">
       <div className="fb-health-heading">
         <h2>
-          <Activity size={15} />
+          <Activity size={15} aria-hidden="true" />
           System status
         </h2>
-        <button
+        <Button
           type="button"
-          className="button button-secondary"
+          variant="secondary"
           disabled={live.isFetching || ready.isFetching}
           onClick={() => {
             void live.refetch()
@@ -22,7 +23,7 @@ export function HealthStatus() {
           }}
         >
           Refresh status
-        </button>
+        </Button>
       </div>
       <div className="fb-health-probes" aria-live="polite">
         <p>

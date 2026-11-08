@@ -1,13 +1,17 @@
 import { useCatalog } from '../hooks/useCatalog'
 import { CatalogTools } from './api/CatalogTools'
 import { FeedbackMessage } from './FeedbackMessage'
+import { useState } from 'react'
+import { Database, Search, X } from 'lucide-react'
 
 export function CatalogPanel() {
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState('')
   const { data, isPending, isError, error, refetch } = useCatalog()
 
   if (isPending) {
     return (
-      <p className="astra-table-loading" role="status">
+      <p className="astra-table-loading geo-skeleton" role="status">
         Loading the published catalogue…
       </p>
     )
@@ -25,15 +29,19 @@ export function CatalogPanel() {
     )
   }
 
+  const sources = data.sources.filter((source) => [source.platform, source.instrument, source.product, source.source_id].some((value) => value?.toLowerCase().includes(search.toLowerCase())))
+  const active = data.sources.find((source) => source.source_id === selected)
+
   return (
     <div className="api-stack">
-      <section className="panel api-section">
+      <div className="platform-catalogue-summary"><span><Database size={18} /><strong>{data.sources.length}</strong>source streams</span><span><strong>{data.releases.length}</strong>published releases</span><span>Catalogue scope<strong>{data.scope_key}</strong></span></div>
+      <section className="panel api-section" id="catalogue-sources">
         <div className="astra-section-title">
           <div>
             <span className="astra-eyebrow">PUBLISHED INVENTORY</span>
             <h2>Source streams</h2>
           </div>
-          <span className="astra-muted">Scope / {data.scope_key}</span>
+          <label className="platform-search"><Search size={14} /><input type="search" aria-label="Search catalogue sources" placeholder="Platform, product or source…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
         </div>
 
         {data.sources.length === 0 ? (
@@ -51,10 +59,10 @@ export function CatalogPanel() {
                 </tr>
               </thead>
               <tbody>
-                {data.sources.map((source) => (
+                {sources.map((source) => (
                   <tr key={source.source_id}>
                     <td>
-                      <strong>{source.platform ?? source.source_id}</strong>
+                      <button type="button" className="geo-record-link" onClick={() => setSelected(source.source_id)} aria-label={`Inspect source ${source.source_id}`}><strong>{source.platform ?? source.source_id}</strong></button>
                     </td>
                     <td>{source.instrument ?? 'Not supplied'}</td>
                     <td>
@@ -69,6 +77,8 @@ export function CatalogPanel() {
           </div>
         )}
       </section>
+      {data.sources.length > 0 && sources.length === 0 && <p className="platform-empty-message">No published sources match this search. Clear the search to see the catalogue.</p>}
+      {active && <aside className="platform-source-detail" aria-label="Selected catalogue source"><header><div><span className="platform-eyebrow">SOURCE / PUBLISHED METADATA</span><h3>{active.platform ?? active.product}</h3></div><button className="icon-button" type="button" aria-label="Close source details" onClick={() => setSelected('')}><X size={17} /></button></header><dl className="api-facts"><div><dt>Source identifier</dt><dd><code>{active.source_id}</code></dd></div><div><dt>Product / collection</dt><dd>{active.product} / {active.collection}</dd></div><div><dt>Instrument</dt><dd>{active.instrument ?? 'Not supplied'}</dd></div><div><dt>Processing stream</dt><dd>{active.processing_stream}</dd></div><div><dt>Availability</dt><dd>{active.availability_status ?? 'Not supplied'}</dd></div></dl><p>Source availability and observation coverage are different. Inspect release membership and provenance before interpreting the records.</p></aside>}
       <CatalogTools
         key={data.scope_key}
         scopeKey={data.scope_key}

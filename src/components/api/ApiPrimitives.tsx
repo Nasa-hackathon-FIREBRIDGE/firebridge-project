@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import { displayValue } from './format'
 import type { useCursorPage } from '../../hooks/useCursorPage'
 import type { UseQueryResult } from '@tanstack/react-query'
@@ -97,24 +97,45 @@ export function Records({
   rows: object[]
   empty?: string
 }) {
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<{ key: string; descending: boolean } | null>(null)
+  const [dense, setDense] = useState(true)
+  const [hidden, setHidden] = useState<string[]>([])
+  const keys = useMemo(() => [...new Set(rows.flatMap(Object.keys))], [rows])
+  const visible = keys.filter((key) => !hidden.includes(key))
+  const displayed = useMemo(() => {
+    const records = rows.filter((row) => !search || Object.values(row).some((value) => value != null && (typeof value === 'object' ? JSON.stringify(value) : String(value)).toLowerCase().includes(search.toLowerCase())))
+    if (sort) records.sort((a, b) => {
+      const left = (a as Record<string, unknown>)[sort.key], right = (b as Record<string, unknown>)[sort.key]
+      if (left == null) return right == null ? 0 : 1
+      if (right == null) return -1
+      const comparison = typeof left === 'number' && typeof right === 'number' ? left - right : String(left).localeCompare(String(right), undefined, { numeric: true })
+      return comparison * (sort.descending ? -1 : 1)
+    })
+    return records
+  }, [rows, search, sort])
   if (!rows.length) return <p>{empty}</p>
-  const keys = [...new Set(rows.flatMap(Object.keys))]
   return (
-    <div className="api-table-wrap">
+    <div className="platform-records">
+      <div className="platform-table-tools"><label><span className="sr-only">Search this loaded table</span><input type="search" aria-label="Search this loaded table" placeholder="Search loaded records…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <span>{displayed.length} / {rows.length} loaded</span><button type="button" className="button button-secondary" aria-pressed={dense} onClick={() => setDense(!dense)}>{dense ? 'Compact rows' : 'Comfortable rows'}</button>
+        <details><summary>Columns</summary><div className="platform-column-picker">{keys.map((key) => <label key={key}><input type="checkbox" checked={!hidden.includes(key)} disabled={!hidden.includes(key) && visible.length === 1} onChange={() => setHidden((value) => value.includes(key) ? value.filter((item) => item !== key) : [...value, key])} />{key.replaceAll('_', ' ')}</label>)}</div></details>
+      </div>
+    <div className={`api-table-wrap ${dense ? 'platform-table-dense' : ''}`}>
       <table className="api-table">
         <thead>
           <tr>
-            {keys.map((key) => (
-              <th key={key} scope="col">
-                {key.replaceAll('_', ' ')}
+            {visible.map((key) => (
+              <th key={key} scope="col" aria-sort={sort?.key === key ? sort.descending ? 'descending' : 'ascending' : 'none'}>
+                <button type="button" className="platform-sort-column" onClick={() => setSort({ key, descending: sort?.key === key ? !sort.descending : false })}>{key.replaceAll('_', ' ')} <span aria-hidden="true">{sort?.key === key ? sort.descending ? '↓' : '↑' : '↕'}</span></button>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
+          {displayed.map((row, index) => (
             <tr key={index}>
-              {keys.map((key) => {
+              {visible.map((key) => {
                 const value = (row as Record<string, unknown>)[key]
                 return (
                   <td key={key}>
@@ -123,6 +144,8 @@ export function Records({
                         <summary>Voir les détails</summary>
                         <StructuredValue value={value} />
                       </details>
+                    ) : typeof value === 'string' && value.length > 120 ? (
+                      <details className="platform-cell-details"><summary title={value}>{value.slice(0, 65)}… <span>Full value</span></summary><p>{value}</p></details>
                     ) : (
                       displayValue(value)
                     )}
@@ -133,6 +156,9 @@ export function Records({
           ))}
         </tbody>
       </table>
+    </div>
+    {displayed.length === 0 && <p role="status">No loaded records match this search.</p>}
+    <p className="platform-table-scope">Search, sort and density apply to this loaded table. Use server pagination to inspect more records.</p>
     </div>
   )
 }

@@ -3,6 +3,9 @@ import { useDownloadExport, useJob } from '../../hooks/useFirebridge'
 import { isRecord } from '../../lib/api.validation'
 import { ApiError, Status } from './Feedback'
 import { ApiClientError } from '../../lib/axios'
+import { Button } from '../../components/ui/Button'
+import { CopyableId } from '../../components/ui/CopyableId'
+import { Skeleton } from '../../components/ui/Skeleton'
 
 export function JobPanel({ id, allowDownload = false }: { id: string; allowDownload?: boolean }) {
   const query = useJob(id)
@@ -50,19 +53,19 @@ export function JobPanel({ id, allowDownload = false }: { id: string; allowDownl
     <div className="fb-job" aria-label={allowDownload ? 'Export job' : 'Analysis job'}>
       <div className="fb-health-heading">
         <h3>{allowDownload ? 'Export job' : 'Processing job'}</h3>
-        <button
+        <Button
           type="button"
-          className="button button-secondary"
+          variant="secondary"
           disabled={query.isFetching}
           onClick={() => {
             void query.refetch()
           }}
         >
           Refresh job
-        </button>
+        </Button>
       </div>
-      <code>{id}</code>
-      {query.isPending && <p role="status">Loading job…</p>}
+      <CopyableId value={id} label="job ID" />
+      {query.isPending && <Skeleton height={100} label="Loading job…" />}
       <ApiError
         context="job"
         error={query.error}
@@ -77,7 +80,7 @@ export function JobPanel({ id, allowDownload = false }: { id: string; allowDownl
             <span>{stageLabel(job.current_stage, job.status)}</span>
           </div>
           <label className="fb-progress">
-            Reported progress {percent === undefined ? 'not supplied' : `${percent}%`}
+            {percent === undefined ? 'Progress not supplied' : `Reported progress ${percent}%`}
             {percent !== undefined && <progress max={100} value={percent} />}
           </label>
           <p className="fb-muted">

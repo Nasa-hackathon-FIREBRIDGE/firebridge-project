@@ -4,11 +4,13 @@ import type { Map as MapLibreMap } from 'maplibre-gl'
 import maplibreWorker from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { TerraDraw, TerraDrawPolygonMode, TerraDrawRenderMode } from 'terra-draw'
 import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter'
-import { Crosshair, Layers2, MapPinned, Minus, Plus, SquareDashedMousePointer, Trash2, X } from 'lucide-react'
+import { MapPinned } from 'lucide-react'
 import type { Detection, AreaOfInterest } from '../types'
 import { validatePolygon } from '../geometry'
-import { ESRI_SOURCE_ID, envBasemapConfig, resolveBasemap } from '../basemap'
+import { envBasemapConfig, resolveBasemap, selectBasemap, type BasemapChoice, type BasemapSelection } from '../basemap'
+import { MapWorkspaceControls } from './MapWorkspaceControls'
 import { useAnalysisTiles } from '../features/maps/useAnalysisTiles'
+import type { DetectionFeature } from '../features/observations/types'
 
 export type BasemapMode = 'real' | 'schematic'
 
@@ -55,13 +57,22 @@ interface MapViewProps {
   fullHeight?: boolean
   apiMode?: boolean
   apiAnalysisId?: string
+  nativeRecords?: DetectionFeature[]
+  onShowArea?: (visible: boolean) => void
+  onShowDetections?: (visible: boolean) => void
 }
 
-export function MapView({ records, selectedId, onSelect, area, showDetections, showArea, clearDrawingToken, onAreaDrawn, onAreaRejected, onClearArea, styleUrl, basemapProvider, styleTimeoutMs = STYLE_LOAD_TIMEOUT_MS, fullHeight = false, apiMode = false, apiAnalysisId }: MapViewProps) {
+export function MapView({ records, nativeRecords, selectedId, onSelect, area, showDetections, showArea, onShowArea, onShowDetections, clearDrawingToken, onAreaDrawn, onAreaRejected, onClearArea, styleUrl, basemapProvider, styleTimeoutMs = STYLE_LOAD_TIMEOUT_MS, fullHeight = false, apiMode = false, apiAnalysisId }: MapViewProps) {
   const env = envBasemapConfig()
-  const selection = useMemo(() => resolveBasemap(styleUrl ?? env.styleUrl, basemapProvider ?? env.provider), [styleUrl, basemapProvider, env.styleUrl, env.provider])
+  const configured = useMemo(() => resolveBasemap(styleUrl ?? env.styleUrl, basemapProvider ?? env.provider), [styleUrl, basemapProvider, env.styleUrl, env.provider])
+  const [choice, setChoice] = useState<BasemapChoice>(() => configured.key === 'nasa-satellite' ? 'satellite' : 'configured')
+  const selection = useMemo(() => selectBasemap(choice, configured), [choice, configured])
   const selectionRef = useRef(selection)
   const containerRef = useRef<HTMLDivElement>(null)
+  const frameRef = useRef<HTMLDivElement>(null)
+  const switchStyle = useRef<((selection: BasemapSelection) => void) | null>(null)
+  const appliedStyle = useRef(selection.key)
+  const basemapLayerIds = useRef<string[]>([])
   const mapRef = useRef<MapLibreMap | null>(null)
   const drawRef = useRef<TerraDraw | null>(null)
   const callbacks = useRef({ onSelect, onAreaDrawn, onAreaRejected })
@@ -69,22 +80,31 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
   const [tileIssue, setTileIssue] = useState(false)
   const [vertexCount, setVertexCount] = useState(0)
   const [styleLoaded, setStyleLoaded] = useState(false)
-  const apiTileState = useAnalysisTiles(mapRef, styleLoaded, apiMode ? apiAnalysisId : undefined, showDetections)
+  const [styleRevision, setStyleRevision] = useState(0)
+  const [imageryReady, setImageryReady] = useState(false)
+  const [showBasemap, setShowBasemap] = useState(true)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [controlError, setControlError] = useState('')
+  const apiTileState = useAnalysisTiles(mapRef, styleLoaded, apiMode ? apiAnalysisId : undefined, showDetections, styleRevision)
   const [drawControl, setDrawControl] = useState({ clearToken: clearDrawingToken, active: false })
   const drawActive = drawControl.clearToken === clearDrawingToken && drawControl.active
-  const [layersOpen, setLayersOpen] = useState(false)
+  const [panel, setPanel] = useState<'layers' | 'basemap' | 'legend' | null>(null)
   const basemap: BasemapMode = fallbackReason ? 'schematic' : 'real'
   const basemapRef = useRef<BasemapMode>(basemap)
   const drawActiveRef = useRef(drawActive)
 
   const featureCollection = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point, { id: string; selected: boolean; sensor: string }>>(() => ({
     type: 'FeatureCollection',
-    features: records.map((record) => ({
+    features: nativeRecords ? nativeRecords.map((record) => ({
+      type: 'Feature' as const,
+      geometry: record.geometry,
+      properties: { id: record.properties.detection_id, selected: record.properties.detection_id === selectedId, sensor: 'native' },
+    })) : records.map((record) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [record.longitude, record.latitude] },
       properties: { id: record.id, selected: record.id === selectedId, sensor: record.sensor },
     })),
-  }), [records, selectedId])
+  }), [records, nativeRecords, selectedId])
 
   const areaFeature = useMemo<GeoJSON.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>>(() => ({
     type: 'FeatureCollection',
@@ -109,20 +129,19 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
     let timeoutId: number | undefined
     let tilesLoaded = false
     let tileErrors = 0
-    const current = selectionRef.current
+    let current = selectionRef.current
 
     const map = new maplibregl.Map({
       container,
-      style: current.kind === 'style-url' ? current.url : current.kind === 'esri' ? current.style : schematicStyle,
+      style: current.kind === 'style-url' ? current.url : current.kind === 'schematic' ? schematicStyle : current.style,
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
       attributionControl: false,
       cooperativeGestures: true,
       maxZoom: 15,
     })
-    if (!apiMode) map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
     // Compact control shows the style provider's own attribution when a real style is used.
-    map.addControl(new maplibregl.AttributionControl({ compact: current.kind !== 'esri' }), 'bottom-right')
+    map.addControl(new maplibregl.AttributionControl({ compact: false }), 'bottom-right')
     mapRef.current = map
 
     const switchToFallback = (reason: string) => {
@@ -131,6 +150,7 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
       basemapRef.current = 'schematic'
       loaded = false
       setStyleLoaded(false)
+      setImageryReady(false)
       setFallbackReason(reason)
       drawRef.current?.stop()
       drawRef.current = null
@@ -140,8 +160,11 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
     const ensureLayers = () => {
       if (disposed) return
       loaded = true
-      window.clearTimeout(timeoutId)
+      basemapLayerIds.current = basemapRef.current === 'schematic' ? ['background', 'astra-graticule'] : current.kind === 'style-url' ? (map.getStyle?.().layers ?? []).map((layer) => layer.id) : current.kind === 'schematic' ? [] : current.style.layers.map((layer) => layer.id)
+      if (current.kind === 'schematic' || !current.sourceId || tilesLoaded) window.clearTimeout(timeoutId)
       setStyleLoaded(true)
+      setStyleRevision((value) => value + 1)
+      if (current.kind === 'style-url') setImageryReady(true)
       if (basemapRef.current === 'schematic' && !map.getSource('astra-graticule')) {
         map.addSource('astra-graticule', { type: 'geojson', data: graticule(apiMode) })
         map.addLayer({ id: 'astra-graticule', type: 'line', source: 'astra-graticule', paint: { 'line-color': '#2a3e4d', 'line-width': 0.8 } })
@@ -197,14 +220,18 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
     map.on('style.load', ensureLayers)
     map.on('data', (event) => {
       const data = event as { sourceId?: string; dataType?: string; tile?: unknown }
-      if (data.sourceId === ESRI_SOURCE_ID && data.dataType === 'source' && data.tile) { tilesLoaded = true; setTileIssue(false) }
+      if (data.sourceId === current.sourceId && data.dataType === 'source' && data.tile) { tilesLoaded = true; setTileIssue(false); setImageryReady(true); window.clearTimeout(timeoutId) }
     })
     map.on('error', (event) => {
       if (disposed) return
       if ((event as { sourceId?: string }).sourceId === 'firebridge-detections') return
-      if ((event as { sourceId?: string }).sourceId === ESRI_SOURCE_ID) {
+      if (current.kind === 'style-url' && [401, 403].includes((event.error as { status?: number })?.status ?? 0)) {
+        switchToFallback('Configured basemap access was denied. Check its browser-safe API token and allowed origins, or choose another background map.')
+        return
+      }
+      if (current.sourceId && (event as { sourceId?: string }).sourceId === current.sourceId) {
         tileErrors += 1
-        if (!tilesLoaded && tileErrors >= 3) switchToFallback('Esri World Imagery tiles could not be loaded (network unavailable or blocked).')
+        if (!tilesLoaded && tileErrors >= 3) switchToFallback(`${current.label} tiles could not be loaded (network unavailable or blocked).`)
         else if (tilesLoaded) setTileIssue(true)
         return
       }
@@ -212,8 +239,27 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
         switchToFallback('The configured basemap style could not be loaded. Check your connection or use the schematic view.')
       }
     })
-    if (current.kind === 'style-url') {
-      timeoutId = window.setTimeout(() => { if (!loaded) switchToFallback('The configured basemap style did not load in time.') }, styleTimeoutMs)
+    const armTimeout = () => {
+      window.clearTimeout(timeoutId)
+      if (current.kind !== 'schematic') timeoutId = window.setTimeout(() => {
+        if (!loaded || (current.sourceId && !tilesLoaded)) switchToFallback('The selected basemap did not load in time. Choose another background map or retry.')
+      }, styleTimeoutMs)
+    }
+    armTimeout()
+    switchStyle.current = (next) => {
+      current = next
+      loaded = false
+      tilesLoaded = false
+      tileErrors = 0
+      setStyleLoaded(false)
+      setImageryReady(false)
+      setTileIssue(false)
+      setFallbackReason(next.kind === 'schematic' ? next.reason : null)
+      basemapRef.current = next.kind === 'schematic' ? 'schematic' : 'real'
+      drawRef.current?.stop()
+      drawRef.current = null
+      armTimeout()
+      map.setStyle(next.kind === 'style-url' ? next.url : next.kind === 'schematic' ? schematicStyle : next.style)
     }
 
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { if (!disposed) map.resize() })
@@ -222,13 +268,32 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
     return () => {
       disposed = true
       window.clearTimeout(timeoutId)
+      switchStyle.current = null
       observer?.disconnect()
       drawRef.current?.stop()
       drawRef.current = null
       map.remove()
       mapRef.current = null
     }
-  }, [selection.key, styleTimeoutMs, apiMode])
+  }, [styleTimeoutMs, apiMode])
+
+  useEffect(() => {
+    if (appliedStyle.current === selection.key) return
+    appliedStyle.current = selection.key
+    switchStyle.current?.(selection)
+  }, [selection])
+
+  useEffect(() => {
+    const changed = () => { setFullscreen(document.fullscreenElement === frameRef.current); mapRef.current?.resize() }
+    document.addEventListener('fullscreenchange', changed)
+    return () => document.removeEventListener('fullscreenchange', changed)
+  }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !styleLoaded) return
+    for (const id of basemapLayerIds.current) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', showBasemap ? 'visible' : 'none')
+  }, [selection, showBasemap, styleLoaded, styleRevision])
 
   useEffect(() => {
     if (!apiMode || !area || !styleLoaded) return
@@ -238,7 +303,42 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
   useEffect(() => {
     const source = mapRef.current?.getSource('astra-demo-points') as maplibregl.GeoJSONSource | undefined
     source?.setData(featureCollection)
-  }, [featureCollection, styleLoaded])
+  }, [featureCollection, styleLoaded, styleRevision])
+
+  const nativeRecordsEnabled = nativeRecords !== undefined
+  useEffect(() => {
+    const map = mapRef.current
+    if (!apiMode || !nativeRecordsEnabled || !styleLoaded || !map) return
+    map.addSource('firebridge-native-records', { type: 'geojson', data: sourceData.current.featureCollection })
+    map.addLayer({ id: 'firebridge-native-record-points', source: 'firebridge-native-records', type: 'circle', paint: {
+      'circle-radius': ['case', ['get', 'selected'], 8, 4], 'circle-color': '#f08a4b',
+      'circle-stroke-color': '#e3ebf7', 'circle-stroke-width': ['case', ['get', 'selected'], 2, 1],
+    } })
+    const select = (event: maplibregl.MapLayerMouseEvent) => {
+      const id = event.features?.[0]?.properties?.id
+      if (typeof id === 'string') callbacks.current.onSelect(id)
+    }
+    const enter = () => { map.getCanvas().style.cursor = 'pointer' }
+    const leave = () => { map.getCanvas().style.cursor = '' }
+    map.on('click', 'firebridge-native-record-points', select)
+    map.on('mouseenter', 'firebridge-native-record-points', enter)
+    map.on('mouseleave', 'firebridge-native-record-points', leave)
+    return () => {
+      map.off('click', 'firebridge-native-record-points', select)
+      map.off('mouseenter', 'firebridge-native-record-points', enter)
+      map.off('mouseleave', 'firebridge-native-record-points', leave)
+      if (!mapRef.current) return
+      if (map.getLayer('firebridge-native-record-points')) map.removeLayer('firebridge-native-record-points')
+      if (map.getSource('firebridge-native-records')) map.removeSource('firebridge-native-records')
+    }
+  }, [apiMode, nativeRecordsEnabled, styleLoaded, styleRevision])
+
+  useEffect(() => {
+    const map = mapRef.current
+    const source = map?.getSource('firebridge-native-records') as maplibregl.GeoJSONSource | undefined
+    source?.setData(featureCollection)
+    if (map?.getLayer('firebridge-native-record-points')) map.setLayoutProperty('firebridge-native-record-points', 'visibility', showDetections ? 'visible' : 'none')
+  }, [featureCollection, showDetections, nativeRecordsEnabled, styleLoaded, styleRevision])
 
   useEffect(() => {
     const map = mapRef.current
@@ -246,12 +346,12 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
     source?.setData(areaFeature)
     if (map?.getLayer('astra-study-area-fill')) map.setLayoutProperty('astra-study-area-fill', 'visibility', showArea ? 'visible' : 'none')
     if (map?.getLayer('astra-study-area-outline')) map.setLayoutProperty('astra-study-area-outline', 'visibility', showArea ? 'visible' : 'none')
-  }, [areaFeature, showArea, styleLoaded])
+  }, [areaFeature, showArea, styleLoaded, styleRevision])
 
   useEffect(() => {
     const map = mapRef.current
     if (map?.getLayer('astra-demo-points-ring')) map.setLayoutProperty('astra-demo-points-ring', 'visibility', showDetections ? 'visible' : 'none')
-  }, [showDetections, styleLoaded])
+  }, [showDetections, styleLoaded, styleRevision])
 
   useEffect(() => {
     // Leaving polygon mode discards any unfinished drawing, which is how cancel works.
@@ -269,36 +369,44 @@ export function MapView({ records, selectedId, onSelect, area, showDetections, s
     }
   }, [clearDrawingToken])
 
-  const zoom = (amount: number) => mapRef.current?.zoomTo((mapRef.current.getZoom() ?? 7) + amount, { duration: 250 })
-  const resetView = () => { if (apiMode && area && mapRef.current) fitStudyArea(mapRef.current, area); else mapRef.current?.flyTo({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, duration: 450 }) }
+  const reducedMotion = () => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const zoom = (amount: number) => mapRef.current?.zoomTo((mapRef.current.getZoom() ?? 7) + amount, { duration: reducedMotion() ? 0 : 250 })
+  const resetView = () => { if (apiMode && area && mapRef.current) fitStudyArea(mapRef.current, area); else mapRef.current?.flyTo({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, duration: reducedMotion() ? 0 : 450 }) }
   const finishDrawing = () => {
     // Terra Draw finishes on its Enter key handler, which listens on the map canvas.
     mapRef.current?.getCanvas().dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }))
   }
-  const loading = basemap === 'real' && !styleLoaded
+  const loading = basemap === 'real' && (!styleLoaded || !imageryReady) && showBasemap
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement === frameRef.current) await document.exitFullscreen()
+      else if (frameRef.current?.requestFullscreen) await frameRef.current.requestFullscreen()
+      else setControlError('Fullscreen is unavailable in this browser.')
+    } catch { setControlError('Fullscreen could not open. Try your browser’s fullscreen command.') }
+  }
 
   return (
-    <div className={`map-frame ${fullHeight ? 'map-frame-full' : ''}`} data-basemap={basemap}>
+    <div ref={frameRef} className={`map-frame ${fullHeight ? 'map-frame-full' : ''}`} data-basemap={basemap}>
       <div ref={containerRef} className="map-canvas" aria-label={apiMode ? 'Interactive map of the selected analysis and study area' : basemap === 'real' ? 'Interactive map of synthetic demonstration detections' : 'Interactive schematic map of synthetic demonstration detections (no real basemap)'} />
       {basemap === 'schematic' && (
         <div className="map-basemap-banner" role="status">
           <strong>SCHEMATIC VIEW — not satellite imagery</strong>
-          <span>{fallbackReason} Real basemap unavailable; grid = {apiMode ? '10°' : '1°'} lines. Drawn areas are unverified.</span>
+          <span>{fallbackReason} Grid = {apiMode ? '10°' : '1°'} lines; drawn areas are unverified.</span>
+          <div className="map-recovery-actions"><button type="button" onClick={() => { appliedStyle.current = selection.key; switchStyle.current?.(selection) }}>Retry background</button><button type="button" onClick={() => setChoice(selection.key.startsWith('nasa-') ? 'streets' : 'satellite')}>Try {selection.key.startsWith('nasa-') ? 'streets' : 'NASA satellite'}</button></div>
         </div>
       )}
       {loading && <div className="map-loading" role="status">Loading basemap…</div>}
+      {controlError && <div className="map-control-error" role="status">{controlError}<button type="button" onClick={() => setControlError('')} aria-label="Dismiss map control message">×</button></div>}
       {tileIssue && basemap === 'real' && <div className="map-basemap-banner map-tile-issue" role="status"><strong>Some imagery tiles failed to load</strong><span>Detections remain usable; check your network connection.</span></div>}
       {!apiMode && records.length === 0 && <div className="map-empty" role="status"><strong>No demo records match the current filters</strong><span>Adjust the date range, platforms, search, FRP minimum or area.</span></div>}
       {apiMode && apiAnalysisId && showDetections && apiTileState !== 'ready' && <div className="map-empty" role={apiTileState === 'error' ? 'alert' : 'status'}><strong>{apiTileState === 'error' ? 'Analysis tiles could not be loaded' : apiTileState === 'empty' ? 'No detections in the visible tiles' : 'Loading analysis tiles…'}</strong><span>{apiTileState === 'error' ? 'Check analysis availability or request limits. Hide and re-enable the layer to retry.' : 'Tile counts are aggregated records, not observation coverage.'}</span></div>}
-      <div className="map-actions" aria-label="Map controls">
-        <button type="button" className={`map-icon-button ${drawActive ? 'is-selected' : ''}`} aria-label={drawActive ? 'Cancel area drawing' : 'Draw area of interest'} title={drawActive ? 'Cancel drawing' : 'Draw area of interest'} onClick={() => setDrawControl({ clearToken: clearDrawingToken, active: !drawActive })}>{drawActive ? <X size={16} /> : <SquareDashedMousePointer size={16} />}</button>
-        <button type="button" className="map-icon-button" aria-label="Clear selected area" title="Clear selected area" onClick={() => { setDrawControl({ clearToken: clearDrawingToken, active: false }); onClearArea?.() }}><Trash2 size={16} /></button>
-        <button type="button" className="map-icon-button" aria-label="Zoom in" onClick={() => zoom(1)}><Plus size={16} /></button>
-        <button type="button" className="map-icon-button" aria-label="Zoom out" onClick={() => zoom(-1)}><Minus size={16} /></button>
-        <button type="button" className="map-icon-button" aria-label={apiMode ? 'Fit study area' : 'Return to northern Morocco'} onClick={resetView}><Crosshair size={16} /></button>
-        <button type="button" className={`map-icon-button ${layersOpen ? 'is-selected' : ''}`} aria-label="Map layer legend" aria-expanded={layersOpen} onClick={() => setLayersOpen((value) => !value)}><Layers2 size={16} /></button>
-      </div>
-      {layersOpen && <div className="map-legend"><strong>Map legend</strong>{apiMode ? <span><i className="legend-dot legend-viirs" />Aggregated native detections</span> : <><span><i className="legend-dot legend-modis" />MODIS demo record</span><span><i className="legend-dot legend-viirs" />VIIRS demo record</span><span><i className="legend-dot legend-selected" />Selected record (larger)</span></>}<span><i className="legend-line" />Study area</span></div>}
+      <MapWorkspaceControls panel={panel} onPanel={setPanel} choice={choice} onChoice={setChoice} selection={selection} configured={configured.key !== 'nasa-satellite'}
+        drawActive={drawActive} onDraw={() => setDrawControl({ clearToken: clearDrawingToken, active: !drawActive })}
+        onClear={() => { setDrawControl({ clearToken: clearDrawingToken, active: false }); onClearArea?.() }}
+        onZoom={zoom} onFit={resetView} onNorth={() => mapRef.current?.easeTo({ bearing: 0, pitch: 0, duration: reducedMotion() ? 0 : 250 })}
+        onFullscreen={() => { void toggleFullscreen() }} fullscreen={fullscreen}
+        showArea={showArea} onShowArea={onShowArea} showDetections={showDetections} onShowDetections={onShowDetections}
+        showBasemap={showBasemap} onShowBasemap={setShowBasemap} apiMode={apiMode} recordMode={nativeRecords !== undefined} />
       {drawActive && (
         <div className="map-draw-bar" role="group" aria-label="Area drawing">
           <span className="map-draw-hint" role="status">{vertexCount < 3 ? `Click the map to add vertices (${vertexCount}/3 minimum).` : `${vertexCount} vertices added. Finish when ready.`} Enter finishes, Esc cancels.</span>

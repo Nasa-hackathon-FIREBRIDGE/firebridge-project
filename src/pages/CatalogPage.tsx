@@ -1,19 +1,9 @@
 import { CatalogPanel } from '../components/CatalogPanel'
+import { PageHeader } from '../components/workspace/PageHeader'
 export default function CatalogPage() {
   return (
-    <div className="astra-page api-workspace">
-      <header className="astra-page-heading">
-        <div>
-          <span className="astra-eyebrow">RESEARCH / DATA LIBRARY</span>
-          <h1>
-            Data catalogue<span>.</span>
-          </h1>
-          <p>
-            Inspect published releases, source streams and their availability before starting an
-            analysis.
-          </p>
-        </div>
-      </header>
+    <div className="astra-page api-workspace platform-catalogue">
+      <PageHeader eyebrow="RESEARCH / DATA LIBRARY" title="Data catalogue" description="Discover source streams, trace published releases and check availability before starting an analysis." />
       <CatalogPanel />
     </div>
   )

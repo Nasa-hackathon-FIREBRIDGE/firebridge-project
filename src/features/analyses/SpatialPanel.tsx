@@ -1,9 +1,14 @@
-import { Component, lazy, Suspense, type ReactNode } from 'react'
-import { Layers2, Maximize2 } from 'lucide-react'
+import { Component, lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
+import { Layers2, Maximize2, MapPinned } from 'lucide-react'
 import type { AreaOfInterest } from '../../types'
 import { SectionHeading } from '../../components/workspace/SectionHeading'
 import { ApiError } from './Feedback'
 import { logDiagnostic } from '../../lib/userFeedback'
+import { useDetections } from '../observations/useResults'
+import { DetectionDetails } from '../observations/DetectionDetails'
+import { emptyObservationFilters, validObservationInterval, type ObservationFilters } from '../observations/filters'
+import { Button } from '../../components/ui/Button'
+import { Skeleton } from '../../components/ui/Skeleton'
 
 const MapView = lazy(() =>
   import('../../components/MapView').then((module) => ({ default: module.MapView })),
@@ -19,6 +24,8 @@ export function SpatialPanel({
   onReject,
   onClear,
   error,
+  filters = emptyObservationFilters,
+  onSetup,
 }: {
   area: AreaOfInterest | null
   analysisId?: string
@@ -29,7 +36,21 @@ export function SpatialPanel({
   onReject: (reason: string) => void
   onClear: () => void
   error: unknown
+  filters?: ObservationFilters
+  onSetup?: () => void
 }) {
+  const [recordMode, setRecordMode] = useState(false)
+  const [showArea, setShowArea] = useState(true)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const filtered = !!(filters.sourceId || filters.start || filters.endExclusive)
+  const inspectRecords = recordMode || filtered
+  const intervalValid = validObservationInterval(filters)
+  const detections = useDetections(analysisId, filters.sourceId || undefined, {
+    start: filters.start ? filters.start + 'T00:00:00Z' : undefined,
+    end_exclusive: filters.endExclusive ? filters.endExclusive + 'T00:00:00Z' : undefined,
+  }, inspectRecords && intervalValid && showLayer)
+  const features = useMemo(() => detections.data?.pages.flatMap((page) => page.features) ?? [], [detections.data])
+  const selected = features.find((feature) => feature.properties.detection_id === selectedId)
   return (
     <section
       className="fb-section fb-map-panel"
@@ -59,25 +80,30 @@ export function SpatialPanel({
           />
           Native detections
         </label>
-        <span>{analysisId ? 'Aggregated vector tiles' : 'Awaiting satellite results'}</span>
+        <div className="geo-map-modes" aria-label="Detection display">
+          <button type="button" aria-pressed={!inspectRecords} disabled={filtered} onClick={() => setRecordMode(false)}>Aggregate tiles</button>
+          <button type="button" aria-pressed={inspectRecords} onClick={() => setRecordMode(true)}>Inspect records</button>
+        </div>
       </div>
+      <div className="geo-spatial-body">
       <MapBoundary>
         <Suspense
           fallback={
-            <div className="fb-map-loading" role="status">
-              Loading spatial tools…
-            </div>
+            <div className="fb-map-loading"><Skeleton height={480} label="Loading spatial tools…" /></div>
           }
         >
           <MapView
             apiMode
             records={noRecords}
-            selectedId={null}
-            onSelect={() => {}}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            nativeRecords={inspectRecords ? intervalValid ? features : [] : undefined}
             area={area}
-            showArea
+            showArea={showArea}
+            onShowArea={setShowArea}
+            onShowDetections={onShowLayer}
             showDetections={showLayer}
-            apiAnalysisId={analysisId}
+            apiAnalysisId={inspectRecords ? undefined : analysisId}
             clearDrawingToken={clearToken}
             onAreaDrawn={onDraw}
             onAreaRejected={onReject}
@@ -85,17 +111,25 @@ export function SpatialPanel({
           />
         </Suspense>
       </MapBoundary>
+      {!area && !analysisId && onSetup && <div className="fw-map-empty"><MapPinned size={24} aria-hidden="true" /><strong>Start with a study boundary</strong><p>Define an area, set a UTC interval, then request an analysis.</p><Button variant="primary" onClick={onSetup}>Open analysis workflow</Button></div>}
+      {selected && inspectRecords && intervalValid && showLayer && <DetectionDetails feature={selected} onClose={() => setSelectedId(null)} />}
+      </div>
+      {inspectRecords && <div className="geo-loaded-notice" role="status">
+        <span>{!intervalValid ? 'Correct the date interval to load records.' : !analysisId ? 'Select an analysis to inspect its records.' : detections.isPending ? 'Loading matching observation records…' : `${features.length} matching records loaded${detections.hasNextPage ? ' · More available' : ''}. Only loaded records appear on the map.`}</span>
+        {detections.hasNextPage && intervalValid && <button className="button button-secondary" type="button" disabled={detections.isFetchingNextPage} onClick={() => { void detections.fetchNextPage() }}>{detections.isFetchingNextPage ? 'Loading…' : 'Load more records'}</button>}
+      </div>}
+      {inspectRecords && <ApiError error={detections.error} retry={() => { void detections.refetch() }} />}
       <ApiError error={error} />
       <div className="fb-map-caption">
         <div>
           <span className="fb-legend-record" />
           Native records
           <span className="fb-legend-boundary" />
-          Study boundary
+          Study boundary · WGS 84
         </div>
         <p>
           {analysisId
-            ? 'Marker size reflects aggregated record count. Empty tiles do not establish an absence of fire.'
+            ? inspectRecords ? 'Equal-size points represent loaded records. Select a point to inspect its raw values.' : 'Marker size reflects aggregated record count for the full saved interval. Empty tiles do not establish an absence of fire.'
             : 'Your boundary is a draft until saved. Background imagery, when configured, is contextual.'}
         </p>
       </div>

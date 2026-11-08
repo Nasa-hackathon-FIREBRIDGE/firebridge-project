@@ -182,7 +182,7 @@ export function ApplicationShell({
             </span>
             <div>
               <strong>FIREBRIDGE</strong>
-              <span>EARTH OBSERVATION</span>
+              <span>GEOSPATIAL INTELLIGENCE</span>
             </div>
           </Link>
           <button
@@ -237,7 +237,7 @@ export function ApplicationShell({
         </div>
       </aside>
       <main id="main-content" tabIndex={-1} className="main-panel" inert={open || undefined}>
-        <header className="topbar">
+        <header className={`topbar ${demo ? 'topbar-demo' : ''}`}>
           <div className="topbar-title">
             <button
               ref={menu}

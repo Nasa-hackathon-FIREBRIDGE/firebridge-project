@@ -30,13 +30,13 @@ export function useNativeCalendar(id?: string) {
     enabled: !!id,
   })
 }
-export function useDetections(id: string | undefined, sourceId?: string) {
+export function useDetections(id: string | undefined, sourceId?: string, interval?: { start?: string; end_exclusive?: string }, enabled = true) {
   return useInfiniteQuery({
-    queryKey: [...key(id, 'detections'), sourceId ?? 'all'],
-    queryFn: ({ signal, pageParam }) => results.detections(id!, sourceId, pageParam, signal),
+    queryKey: [...key(id, 'detections'), sourceId ?? 'all', interval?.start ?? '', interval?.end_exclusive ?? ''],
+    queryFn: ({ signal, pageParam }) => results.detections(id!, sourceId, pageParam, signal, interval),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
-    enabled: !!id,
+    enabled: !!id && enabled,
   })
 }
 export function useProvenance(id?: string) {
