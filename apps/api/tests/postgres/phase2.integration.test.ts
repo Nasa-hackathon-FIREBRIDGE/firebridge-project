@@ -15,6 +15,7 @@ dotenv.config({ path: resolve(process.cwd(), '../../.env') });
 import { prisma } from '@firebridge/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
+import { env } from '../../src/config/env.js';
 
 type App = Awaited<ReturnType<typeof createApp>>;
 
@@ -232,6 +233,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
         manifest_uri,
         dataset_kind,
         scope_key,
+        published_at,
         observation_cutoff
       ) VALUES (
         ${createdSatelliteReleaseId}::uuid,
@@ -243,7 +245,8 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
         '0000000000000000000000000000000000000000000000000000000000000000',
         's3://bucket/manifest.json',
         'satellite',
-        'global',
+        ${env.DEFAULT_SCOPE_KEY},
+        CURRENT_TIMESTAMP,
         '2030-01-01T00:00:00Z'::timestamptz
       );
     `;
@@ -258,12 +261,13 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       }
     });
 
-    expect(response.statusCode).toBe(202);
+    expect(response.statusCode, response.body).toBe(202);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.message).toBe('Analysis queued.');
     expect(json.data.id).toBeDefined();
     expect(json.data.job_id).toBeDefined();
+    expect(json.data.release_id).toBe(createdSatelliteReleaseId);
     expect(json.data.metric_key).toBe('native_detections_v1');
     expect(json.data.grid_id).toBeNull();
     expect(json.data.data_mode).toBe('standard_only');
@@ -311,7 +315,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       }
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.message).toBe('Existing analysis reused.');
@@ -325,7 +329,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       url: `/api/v1/analyses/${createdAnalysisId}`
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.data.id).toBe(createdAnalysisId);
@@ -342,7 +346,7 @@ describe('Phase 2 — Real PostGIS & PostgreSQL Integration', () => {
       url: `/api/v1/jobs/${createdJobId}`
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     const json = response.json();
     expect(json.status).toBe('ok');
     expect(json.data.id).toBe(createdJobId);
