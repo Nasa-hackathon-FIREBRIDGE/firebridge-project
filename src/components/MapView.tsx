@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import maplibreWorker from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
-import { TerraDraw, TerraDrawPolygonMode, TerraDrawRenderMode } from 'terra-draw'
+import { TerraDraw, TerraDrawPolygonMode, TerraDrawRectangleMode, TerraDrawRenderMode } from 'terra-draw'
 import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter'
 import { MapPinned } from 'lucide-react'
 import type { Detection, AreaOfInterest } from '../types'
 import { validatePolygon } from '../geometry'
 import { envBasemapConfig, resolveBasemap, selectBasemap, type BasemapChoice, type BasemapSelection } from '../basemap'
-import { MapWorkspaceControls } from './MapWorkspaceControls'
+import { MapWorkspaceControls, type DrawShape } from './MapWorkspaceControls'
 import { useAnalysisTiles } from '../features/maps/useAnalysisTiles'
 import type { DetectionFeature } from '../features/observations/types'
 
@@ -38,6 +38,20 @@ function fitStudyArea(map: MapLibreMap, area: AreaOfInterest) {
   map.fitBounds(bounds, { padding: 48, maxZoom: 12, duration: 0 })
 }
 
+const DRAW_STYLE = {
+  fillColor: '#ff7c40', fillOpacity: 0.16, outlineColor: '#ffb547', outlineWidth: 2,
+  coordinatePointColor: '#fff5ee', coordinatePointWidth: 4, coordinatePointOutlineColor: '#ff5f1f', coordinatePointOutlineWidth: 2,
+} as const
+const POLYGON_STYLE = { ...DRAW_STYLE, closingPointColor: '#ffb547', closingPointWidth: 6, closingPointOutlineColor: '#06070b', closingPointOutlineWidth: 2 } as const
+
+function formatLngLat(lng: number, lat: number) {
+  const wrapped = ((((lng + 180) % 360) + 360) % 360) - 180
+  return `${Math.abs(lat).toFixed(3)}° ${lat >= 0 ? 'N' : 'S'} · ${Math.abs(wrapped).toFixed(3)}° ${wrapped >= 0 ? 'E' : 'W'}`
+}
+
+/** Touch devices keep two-finger panning so the page can still scroll; mice get direct wheel zoom. */
+const coarsePointer = () => typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+
 maplibregl.setWorkerUrl(maplibreWorker)
 
 interface MapViewProps {
@@ -60,9 +74,11 @@ interface MapViewProps {
   nativeRecords?: DetectionFeature[]
   onShowArea?: (visible: boolean) => void
   onShowDetections?: (visible: boolean) => void
+  /** Highlights the drawing toolbar when no study area exists yet. */
+  promptDraw?: boolean
 }
 
-export function MapView({ records, nativeRecords, selectedId, onSelect, area, showDetections, showArea, onShowArea, onShowDetections, clearDrawingToken, onAreaDrawn, onAreaRejected, onClearArea, styleUrl, basemapProvider, styleTimeoutMs = STYLE_LOAD_TIMEOUT_MS, fullHeight = false, apiMode = false, apiAnalysisId }: MapViewProps) {
+export function MapView({ records, nativeRecords, selectedId, onSelect, area, showDetections, showArea, onShowArea, onShowDetections, clearDrawingToken, onAreaDrawn, onAreaRejected, onClearArea, styleUrl, basemapProvider, styleTimeoutMs = STYLE_LOAD_TIMEOUT_MS, fullHeight = false, apiMode = false, apiAnalysisId, promptDraw = false }: MapViewProps) {
   const env = envBasemapConfig()
   const configured = useMemo(() => resolveBasemap(styleUrl ?? env.styleUrl, basemapProvider ?? env.provider), [styleUrl, basemapProvider, env.styleUrl, env.provider])
   const [choice, setChoice] = useState<BasemapChoice>(() => configured.key === 'nasa-satellite' ? 'satellite' : 'configured')
@@ -86,12 +102,15 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
   const [fullscreen, setFullscreen] = useState(false)
   const [controlError, setControlError] = useState('')
   const apiTileState = useAnalysisTiles(mapRef, styleLoaded, apiMode ? apiAnalysisId : undefined, showDetections, styleRevision)
-  const [drawControl, setDrawControl] = useState({ clearToken: clearDrawingToken, active: false })
+  const [drawControl, setDrawControl] = useState<{ clearToken: number; active: boolean; shape: DrawShape }>({ clearToken: clearDrawingToken, active: false, shape: 'rectangle' })
   const drawActive = drawControl.clearToken === clearDrawingToken && drawControl.active
+  const drawShape = drawControl.shape
+  const coordinatesRef = useRef<HTMLSpanElement>(null)
   const [panel, setPanel] = useState<'layers' | 'basemap' | 'legend' | null>(null)
   const basemap: BasemapMode = fallbackReason ? 'schematic' : 'real'
   const basemapRef = useRef<BasemapMode>(basemap)
   const drawActiveRef = useRef(drawActive)
+  const drawShapeRef = useRef<DrawShape>(drawShape)
 
   const featureCollection = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point, { id: string; selected: boolean; sensor: string }>>(() => ({
     type: 'FeatureCollection',
@@ -118,7 +137,8 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
     sourceData.current = { featureCollection, areaFeature }
     basemapRef.current = basemap
     drawActiveRef.current = drawActive
-  }, [selection, onSelect, onAreaDrawn, onAreaRejected, featureCollection, areaFeature, basemap, drawActive])
+    drawShapeRef.current = drawShape
+  }, [selection, onSelect, onAreaDrawn, onAreaRejected, featureCollection, areaFeature, basemap, drawActive, drawShape])
 
   useEffect(() => {
     const container = containerRef.current
@@ -137,9 +157,19 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
       attributionControl: false,
-      cooperativeGestures: true,
+      cooperativeGestures: coarsePointer(),
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
       maxZoom: 15,
     })
+    // A 2D analysis map: accidental rotation only disorients, so gestures never rotate it.
+    map.touchZoomRotate?.disableRotation?.()
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-left')
+    map.on('mousemove', (event: maplibregl.MapMouseEvent) => {
+      if (coordinatesRef.current && event.lngLat) coordinatesRef.current.textContent = formatLngLat(event.lngLat.lng, event.lngLat.lat)
+    })
+    map.on('mouseout', () => { if (coordinatesRef.current) coordinatesRef.current.textContent = '' })
     // Compact control shows the style provider's own attribution when a real style is used.
     map.addControl(new maplibregl.AttributionControl({ compact: false }), 'bottom-right')
     mapRef.current = map
@@ -171,12 +201,12 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
       }
       if (!map.getSource('astra-study-area')) {
         map.addSource('astra-study-area', { type: 'geojson', data: sourceData.current.areaFeature })
-        map.addLayer({ id: 'astra-study-area-fill', type: 'fill', source: 'astra-study-area', paint: { 'fill-color': '#44bac1', 'fill-opacity': 0.05 } })
-        map.addLayer({ id: 'astra-study-area-outline', type: 'line', source: 'astra-study-area', paint: { 'line-color': '#69d1d1', 'line-width': 1.5, 'line-dasharray': [2, 2] } })
+        map.addLayer({ id: 'astra-study-area-fill', type: 'fill', source: 'astra-study-area', paint: { 'fill-color': '#ff7c40', 'fill-opacity': 0.06 } })
+        map.addLayer({ id: 'astra-study-area-outline', type: 'line', source: 'astra-study-area', paint: { 'line-color': '#ffb547', 'line-width': 1.6, 'line-dasharray': [2, 1.5] } })
       }
       if (!apiMode && !map.getSource('astra-demo-points')) {
         map.addSource('astra-demo-points', { type: 'geojson', data: sourceData.current.featureCollection })
-        map.addLayer({ id: 'astra-demo-points-ring', type: 'circle', source: 'astra-demo-points', paint: { 'circle-radius': ['case', ['get', 'selected'], 9, 6], 'circle-color': ['case', ['==', ['get', 'sensor'], 'MODIS'], '#35c9cf', '#f09455'], 'circle-stroke-color': '#f3f7fa', 'circle-stroke-width': ['case', ['get', 'selected'], 2, 1], 'circle-opacity': 0.96 } })
+        map.addLayer({ id: 'astra-demo-points-ring', type: 'circle', source: 'astra-demo-points', paint: { 'circle-radius': ['case', ['get', 'selected'], 9, 6], 'circle-color': ['case', ['==', ['get', 'sensor'], 'MODIS'], '#38c6f4', '#ff7c40'], 'circle-stroke-color': '#f3f7fa', 'circle-stroke-width': ['case', ['get', 'selected'], 2, 1], 'circle-opacity': 0.96 } })
       }
       if (!apiMode && !listenersBound) {
         listenersBound = true
@@ -191,12 +221,13 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
         const draw = new TerraDraw({
           adapter: new TerraDrawMapLibreGLAdapter({ map }),
           modes: [
-            new TerraDrawPolygonMode({ keyEvents: { cancel: 'Escape', finish: 'Enter' } }),
+            new TerraDrawPolygonMode({ keyEvents: { cancel: 'Escape', finish: 'Enter' }, styles: POLYGON_STYLE }),
+            new TerraDrawRectangleMode({ keyEvents: { cancel: 'Escape', finish: 'Enter' }, styles: DRAW_STYLE }),
             new TerraDrawRenderMode({ modeName: 'view', styles: {} }),
           ],
         })
         draw.start()
-        draw.setMode(drawActiveRef.current ? 'polygon' : 'view')
+        draw.setMode(drawActiveRef.current ? drawShapeRef.current : 'view')
         draw.on('finish', (id, context) => {
           if (context.action !== 'draw') return
           const feature = draw.getSnapshotFeature(id)
@@ -311,8 +342,8 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
     if (!apiMode || !nativeRecordsEnabled || !styleLoaded || !map) return
     map.addSource('firebridge-native-records', { type: 'geojson', data: sourceData.current.featureCollection })
     map.addLayer({ id: 'firebridge-native-record-points', source: 'firebridge-native-records', type: 'circle', paint: {
-      'circle-radius': ['case', ['get', 'selected'], 8, 4], 'circle-color': '#f08a4b',
-      'circle-stroke-color': '#e3ebf7', 'circle-stroke-width': ['case', ['get', 'selected'], 2, 1],
+      'circle-radius': ['case', ['get', 'selected'], 8, 4.5], 'circle-color': '#ff7c40',
+      'circle-stroke-color': '#fff5ee', 'circle-stroke-width': ['case', ['get', 'selected'], 2, 1],
     } })
     const select = (event: maplibregl.MapLayerMouseEvent) => {
       const id = event.features?.[0]?.properties?.id
@@ -354,9 +385,13 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
   }, [showDetections, styleLoaded, styleRevision])
 
   useEffect(() => {
-    // Leaving polygon mode discards any unfinished drawing, which is how cancel works.
-    drawRef.current?.setMode(drawActive ? 'polygon' : 'view')
-  }, [drawActive, styleLoaded])
+    // Leaving a drawing mode discards any unfinished shape, which is how cancel works.
+    drawRef.current?.setMode(drawActive ? drawShape : 'view')
+    // Double-click would zoom in the middle of placing vertices.
+    const doubleClick = mapRef.current?.doubleClickZoom
+    if (drawActive) doubleClick?.disable?.()
+    else doubleClick?.enable?.()
+  }, [drawActive, drawShape, styleLoaded])
 
   useEffect(() => {
     if (clearDrawingToken > 0) {
@@ -401,20 +436,24 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
       {!apiMode && records.length === 0 && <div className="map-empty" role="status"><strong>No demo records match the current filters</strong><span>Adjust the date range, platforms, search, FRP minimum or area.</span></div>}
       {apiMode && apiAnalysisId && showDetections && apiTileState !== 'ready' && <div className="map-empty" role={apiTileState === 'error' ? 'alert' : 'status'}><strong>{apiTileState === 'error' ? 'Analysis tiles could not be loaded' : apiTileState === 'empty' ? 'No detections in the visible tiles' : 'Loading analysis tiles…'}</strong><span>{apiTileState === 'error' ? 'Check analysis availability or request limits. Hide and re-enable the layer to retry.' : 'Tile counts are aggregated records, not observation coverage.'}</span></div>}
       <MapWorkspaceControls panel={panel} onPanel={setPanel} choice={choice} onChoice={setChoice} selection={selection} configured={configured.key !== 'nasa-satellite'}
-        drawActive={drawActive} onDraw={() => setDrawControl({ clearToken: clearDrawingToken, active: !drawActive })}
-        onClear={() => { setDrawControl({ clearToken: clearDrawingToken, active: false }); onClearArea?.() }}
+        drawActive={drawActive} onDraw={(shape) => setDrawControl({ clearToken: clearDrawingToken, active: true, shape })} promptDraw={promptDraw}
+        onClear={() => { setDrawControl({ clearToken: clearDrawingToken, active: false, shape: drawShape }); onClearArea?.() }}
         onZoom={zoom} onFit={resetView} onNorth={() => mapRef.current?.easeTo({ bearing: 0, pitch: 0, duration: reducedMotion() ? 0 : 250 })}
         onFullscreen={() => { void toggleFullscreen() }} fullscreen={fullscreen}
         showArea={showArea} onShowArea={onShowArea} showDetections={showDetections} onShowDetections={onShowDetections}
         showBasemap={showBasemap} onShowBasemap={setShowBasemap} apiMode={apiMode} recordMode={nativeRecords !== undefined} />
       {drawActive && (
         <div className="map-draw-bar" role="group" aria-label="Area drawing">
-          <span className="map-draw-hint" role="status">{vertexCount < 3 ? `Click the map to add vertices (${vertexCount}/3 minimum).` : `${vertexCount} vertices added. Finish when ready.`} Enter finishes, Esc cancels.</span>
-          <button type="button" className="map-draw-button map-draw-finish" onClick={finishDrawing} disabled={vertexCount < 3} title={vertexCount < 3 ? 'Add at least 3 vertices to finish' : 'Finish drawing'}>Finish drawing</button>
-          <button type="button" className="map-draw-button" onClick={() => { setVertexCount(0); setDrawControl({ clearToken: clearDrawingToken, active: false }) }}>Cancel</button>
+          <span className="map-draw-hint" role="status">
+            {drawShape === 'rectangle'
+              ? 'Click one corner, then click the opposite corner. Esc cancels.'
+              : `${vertexCount < 3 ? `Click the map to add vertices (${vertexCount}/3 minimum).` : `${vertexCount} vertices added. Finish when ready.`} Click the first point or press Enter to finish. Esc cancels.`}
+          </span>
+          {drawShape === 'polygon' && <button type="button" className="map-draw-button map-draw-finish" onClick={finishDrawing} disabled={vertexCount < 3} title={vertexCount < 3 ? 'Add at least 3 vertices to finish' : 'Finish drawing'}>Finish drawing</button>}
+          <button type="button" className="map-draw-button" data-draw-cancel onClick={() => { setVertexCount(0); setDrawControl({ clearToken: clearDrawingToken, active: false, shape: drawShape }) }}>Cancel</button>
         </div>
       )}
-      <div className="map-scale"><MapPinned size={12} /> {apiMode ? 'Study area' : 'Northern Morocco'} · WGS 84{basemap === 'real' && selection.kind === 'esri' ? ' · Esri World Imagery' : ''}</div>
+      <div className="map-scale"><MapPinned size={12} /> {apiMode ? 'Study area' : 'Northern Morocco'} · WGS 84{basemap === 'real' && selection.kind === 'esri' ? ' · Esri World Imagery' : ''}<span ref={coordinatesRef} className="map-coordinates" aria-hidden="true" /></div>
     </div>
   )
 }
