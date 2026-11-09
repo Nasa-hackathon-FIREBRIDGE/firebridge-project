@@ -1,24 +1,26 @@
-import { Crosshair, Layers2, Map, Maximize, Minimize, Minus, Plus, RotateCcw, SquareDashedMousePointer, Trash2, X, ListFilter } from 'lucide-react'
+import { Crosshair, Layers2, Map, Maximize, Minimize, Minus, Pentagon, Plus, RectangleHorizontal, RotateCcw, Trash2, X, ListFilter } from 'lucide-react'
 import type { BasemapChoice, BasemapSelection } from '../basemap'
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
+
+export type DrawShape = 'rectangle' | 'polygon'
 
 export function MapWorkspaceControls({ panel, onPanel, choice, onChoice, selection, configured,
   drawActive, onDraw, onClear, onZoom, onFit, onNorth, onFullscreen, fullscreen,
   showArea, onShowArea, showDetections, onShowDetections, showBasemap, onShowBasemap,
-  apiMode, recordMode,
+  apiMode, recordMode, promptDraw = false,
 }: {
   panel: 'layers' | 'basemap' | 'legend' | null; onPanel: (panel: 'layers' | 'basemap' | 'legend' | null) => void
   choice: BasemapChoice; onChoice: (choice: BasemapChoice) => void; selection: BasemapSelection; configured: boolean
-  drawActive: boolean; onDraw: () => void; onClear: () => void; onZoom: (amount: number) => void
+  drawActive: boolean; onDraw: (shape: DrawShape) => void; onClear: () => void; onZoom: (amount: number) => void
   onFit: () => void; onNorth: () => void; onFullscreen: () => void; fullscreen: boolean
   showArea: boolean; onShowArea?: (visible: boolean) => void; showDetections: boolean; onShowDetections?: (visible: boolean) => void
   showBasemap: boolean; onShowBasemap: (visible: boolean) => void; apiMode: boolean; recordMode: boolean
+  promptDraw?: boolean
 }) {
   const basemapButton = useRef<HTMLButtonElement>(null)
   const layersButton = useRef<HTMLButtonElement>(null)
   const legendButton = useRef<HTMLButtonElement>(null)
-  const [toolsExpanded, setToolsExpanded] = useState(false)
-  const toggle = (value: 'layers' | 'basemap' | 'legend') => { onPanel(panel === value ? null : value); if (apiMode) setToolsExpanded(false) }
+  const toggle = (value: 'layers' | 'basemap' | 'legend') => onPanel(panel === value ? null : value)
   const close = () => {
     const target = panel === 'layers' ? layersButton : panel === 'legend' ? legendButton : basemapButton
     onPanel(null)
@@ -43,19 +45,26 @@ export function MapWorkspaceControls({ panel, onPanel, choice, onChoice, selecti
         <label className="map-layer-row"><input type="checkbox" checked={showArea} disabled={!onShowArea} onChange={(event) => onShowArea?.(event.target.checked)} /><span><strong>Study area boundary</strong><small>WGS 84 · user-provided geometry</small></span></label>
       </> : <div className="map-context-legend"><span><i className="legend-dot legend-viirs" />{apiMode ? recordMode ? 'Loaded native record' : 'Aggregated records · size = count' : 'VIIRS synthetic record'}</span>{!apiMode && <span><i className="legend-dot legend-modis" />MODIS synthetic record</span>}<span><i className="legend-dot legend-selected" />Selected record</span><span><i className="legend-line" />Study area boundary</span><p>Detection records do not identify unique confirmed fire incidents.</p></div>}
     </aside>}
-    <div className={`map-actions ${apiMode ? `fw-map-actions ${toolsExpanded ? 'fw-tools-expanded' : ''}` : ''}`} aria-label="Map controls">
-      {apiMode && <button type="button" className="map-icon-button fw-tools-toggle" aria-label="Map tools" aria-expanded={toolsExpanded} onClick={() => { setToolsExpanded(value => !value); onPanel(null) }}><ListFilter size={16} aria-hidden="true" /></button>}
-      <button type="button" className={`map-icon-button ${drawActive ? 'is-selected' : ''}`} aria-label={drawActive ? 'Cancel area drawing' : 'Draw area of interest'} title="Draw a study boundary" onClick={() => { if (apiMode) { onPanel(null); setToolsExpanded(false) } onDraw() }}>{drawActive ? <X size={16} /> : <SquareDashedMousePointer size={16} />}</button>
-      <button type="button" className="map-icon-button" aria-label="Clear selected area" title="Clear study boundary" onClick={onClear}><Trash2 size={16} /></button>
-      <div className={apiMode ? 'fw-extra-tools' : undefined} style={apiMode ? undefined : { display: 'contents' }}>
+
+    {/* Navigation: top-right, icon buttons with hover labels */}
+    <div className="map-actions map-nav" aria-label="Map controls">
+      <button type="button" className="map-icon-button" aria-label="Zoom in" data-tip="Zoom in" onClick={() => onZoom(1)}><Plus size={16} /></button>
+      <button type="button" className="map-icon-button" aria-label="Zoom out" data-tip="Zoom out" onClick={() => onZoom(-1)}><Minus size={16} /></button>
       <span className="map-control-separator" />
-      <button type="button" className="map-icon-button" aria-label="Zoom in" title="Zoom in" onClick={() => onZoom(1)}><Plus size={16} /></button>
-      <button type="button" className="map-icon-button" aria-label="Zoom out" title="Zoom out" onClick={() => onZoom(-1)}><Minus size={16} /></button>
-      <button type="button" className="map-icon-button" aria-label="Reset map orientation" title="Reset north and pitch" onClick={onNorth}><RotateCcw size={16} /></button>
-      <button type="button" className="map-icon-button" aria-label={apiMode ? 'Fit study area' : 'Return to northern Morocco'} title="Return to study area" onClick={onFit}><Crosshair size={16} /></button>
-      <span className="map-control-separator" />
-      <button type="button" className="map-icon-button" aria-label={fullscreen ? 'Exit fullscreen map' : 'Fullscreen map'} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen map'} onClick={onFullscreen}>{fullscreen ? <Minimize size={16} /> : <Maximize size={16} />}</button>
-      </div>
+      <button type="button" className="map-icon-button" aria-label={apiMode ? 'Fit study area' : 'Return to northern Morocco'} data-tip={apiMode ? 'Fit study area' : 'Back to study area'} onClick={onFit}><Crosshair size={16} /></button>
+      <button type="button" className="map-icon-button" aria-label="Reset map orientation" data-tip="Reset north" onClick={onNorth}><RotateCcw size={16} /></button>
+      <button type="button" className="map-icon-button" aria-label={fullscreen ? 'Exit fullscreen map' : 'Fullscreen map'} data-tip={fullscreen ? 'Exit fullscreen' : 'Fullscreen'} onClick={onFullscreen}>{fullscreen ? <Minimize size={16} /> : <Maximize size={16} />}</button>
     </div>
+
+    {/* Drawing: bottom-centre, labelled. Replaced by the drawing bar while a shape is in progress. */}
+    {!drawActive && (
+      <div className="map-draw-toolbar" role="group" aria-label="Draw a study area" data-prompt={promptDraw || undefined}>
+        {promptDraw && <span className="map-draw-prompt">Start here · draw your study area</span>}
+        <button type="button" className="map-draw-tool" aria-label="Draw rectangle" onClick={() => { onPanel(null); onDraw('rectangle') }}><RectangleHorizontal size={16} aria-hidden="true" />Rectangle</button>
+        <button type="button" className="map-draw-tool" aria-label="Draw polygon" onClick={() => { onPanel(null); onDraw('polygon') }}><Pentagon size={16} aria-hidden="true" />Polygon</button>
+        <span className="map-control-separator" aria-hidden="true" />
+        <button type="button" className="map-draw-tool map-draw-tool--icon" aria-label="Clear selected area" data-tip="Clear area" onClick={onClear}><Trash2 size={16} aria-hidden="true" /></button>
+      </div>
+    )}
   </>
 }
