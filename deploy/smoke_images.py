@@ -21,6 +21,8 @@ password=secrets.token_hex(24)
 sql=f"""DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='firebridge_webapp') THEN CREATE ROLE firebridge_webapp LOGIN; END IF; END $$;
 ALTER ROLE firebridge_webapp PASSWORD '{password}';
 """+(root/'deploy/runtime_grants.sql').read_text()+"""
+INSERT INTO firebridge.areas(id,name,version,geom,geometry_sha256,display_timezone,provenance)
+VALUES('facade00-0000-4000-8000-000000000002','world pipeline scope fixture','container-smoke',ST_Multi(ST_MakeEnvelope(-180,-90,180,90,4326)),repeat('a',64),'UTC','synthetic smoke fixture only') ON CONFLICT(id) DO NOTHING;
 INSERT INTO firebridge.data_releases(id,name,status,stream,code_version,config,config_sha256,manifest_uri,dataset_kind,scope_key,observation_cutoff,published_at)
 VALUES('facade00-0000-4000-8000-000000000001','synthetic-container-smoke-only','published','experiment','fixture','{}',repeat('0',64),'fixture-only','satellite','container-smoke',now(),now()) ON CONFLICT(id) DO NOTHING;
 INSERT INTO firebridge.release_aliases(alias,scope_key,release_id,generation,updated_at)
@@ -36,8 +38,8 @@ with tempfile.TemporaryDirectory(prefix='firebridge-image-smoke-') as temporary:
     # The temp parent is private; the individual bind mount must be readable by redis.
     (directory/'redis.conf').chmod(0o644)
     env={
-      'DATABASE_URL':f'postgresql://firebridge_webapp:{password}@db:5432/firebridge_phase1_test?schema=firebridge&connection_limit=4',
-      'REDIS_URL':f'redis://:{redis_password}@redis:6379/0','NODE_ENV':'production','PORT':'3000','API_HOST':'0.0.0.0',
+      'DATABASE_URL':f'postgresql://firebridge_webapp:{password}@db:5432/firebridge_phase1_test?schema=public&connection_limit=4',
+      'REDIS_URL':f'redis://:{redis_password}@firebridge-webapp-redis:6379/0','NODE_ENV':'production','PORT':'3000','API_HOST':'0.0.0.0',
       'CURSOR_SECRET':secrets.token_hex(32),'PAGINATION_SECRET':secrets.token_hex(32),'DEFAULT_SCOPE_KEY':'container-smoke',
       'CORS_ORIGINS':'https://astramind.solutions','EXPORT_STORAGE_DIR':'/app/.data/exports','ANALYSIS_WORKER_CONCURRENCY':'1',
       'EXPORT_WORKER_CONCURRENCY':'1','RECOVERY_ENABLED':'false'}
@@ -58,6 +60,7 @@ networks:
         'redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b','-c','chown 999:999 /data'])
       execute(stack+['up','-d','--wait','--wait-timeout','150','api','worker','frontend','redis'],timeout=200)
       execute(stack+['exec','-T','api','node','-e',"fetch('http://127.0.0.1:3000/api/v1/catalog').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"])
+      execute(stack+['exec','-T','api','node','-e',"fetch('http://127.0.0.1:3000/api/v1/areas?limit=100').then(async r=>{if(!r.ok)throw Error('Area list failed');const b=await r.json();const a=b.data.areas.find(a=>a.id==='facade00-0000-4000-8000-000000000002');if(!a||a.surface_km2<510000000||a.surface_km2>511000000)throw Error('World surface invalid')}).catch(()=>process.exit(1))"])
       verify="""const {Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL,max:1});p.query(\"SELECT has_table_privilege(current_user,'firebridge.detections','INSERT') AS can_write_raw,has_table_privilege(current_user,'firebridge.areas','INSERT') AS can_create_area\").then(r=>{if(r.rows[0].can_write_raw||!r.rows[0].can_create_area)process.exitCode=1}).finally(()=>p.end());"""
       execute(stack+['exec','-T','api','node','-e',verify])
       print(json.dumps({'containers':'healthy','catalogue':'servable','runtime_role':'limited','synthetic_data':'isolated test database only'}))

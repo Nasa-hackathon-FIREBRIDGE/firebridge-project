@@ -31,8 +31,8 @@ ALTER ROLE firebridge_webapp PASSWORD '{password}';
 run('sh','/opt/firebridge/current/scripts/stack.sh','exec','-T','db','psql','-X','-U','firebridge','-d','firebridge','-v','ON_ERROR_STOP=1',text=sql)
 runtime={
  'NODE_ENV':'production','PORT':'3000','API_HOST':'0.0.0.0','LOG_LEVEL':'info',
- 'DATABASE_URL':f'postgresql://firebridge_webapp:{password}@db:5432/firebridge?schema=firebridge&connection_limit=4',
- 'REDIS_URL':f"redis://:{config['redis_password']}@redis:6379/0",
+ 'DATABASE_URL':f'postgresql://firebridge_webapp:{password}@db:5432/firebridge?schema=public&connection_limit=4',
+ 'REDIS_URL':f"redis://:{config['redis_password']}@firebridge-webapp-redis:6379/0",
  'CURSOR_SECRET':config['cursor_secret'],'PAGINATION_SECRET':config['pagination_secret'],
  'CORS_ORIGINS':'https://astramind.solutions','DEFAULT_SCOPE_KEY':'global',
  'INGESTION_ADMIN_TOKEN':'','ANALYSIS_WORKER_CONCURRENCY':'1','EXPORT_WORKER_CONCURRENCY':'1',

@@ -67,7 +67,9 @@ services:
     # Run directly as redis; no root entrypoint/chown capability is needed.
     user: '999:999'
     entrypoint: [redis-server, /etc/redis/redis.conf]
-    networks: [jobs]
+    networks:
+      jobs:
+        aliases: [firebridge-webapp-redis]
     volumes: [redis_data:/data, './redis.conf:/etc/redis/redis.conf:ro']
     mem_limit: 160m
     cpus: 0.5

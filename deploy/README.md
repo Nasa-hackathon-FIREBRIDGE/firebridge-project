@@ -69,7 +69,8 @@ Credentials live in root-only `runtime.env` and `private-config.json`; Redis's
 separate config is readable only by UID 999. Never send these files in chat,
 commit them, expose PostgreSQL publicly, or put DATABASE_URL into Vite variables.
 The API and worker connect to `db:5432/firebridge` over `firebridge_default`, using
-`firebridge_webapp`. The browser calls `/api/v1` through the HTTPS proxy and
+`firebridge_webapp`. Prisma uses `schema=public` in the connection URL so PostGIS
+functions resolve; all application tables are explicitly mapped to `firebridge`. The browser calls `/api/v1` through the HTTPS proxy and
 never connects to PostgreSQL. The backend pool is capped at five connections
 per process; the runtime role has a total connection limit of twenty.
 
@@ -106,3 +107,6 @@ Schema additions are deliberately not reversed by image rollback.
 Infrastructure configuration changes require administrator review/copy to the
 server. Routine CD updates images only. Do not attach the frontend or Redis to
 the database network, grant the backend owner credentials, or prune shared volumes.
+
+Redis uses the explicit jobs-network alias `firebridge-webapp-redis`, avoiding
+collisions with any `redis` service on an attached external data/test network.
