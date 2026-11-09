@@ -34,7 +34,7 @@ export function ActivityChart({ data }: { data: TemporalSummary[] }) {
     } },
     xAxis: { type: 'category', data: data.map((item) => item.period.slice(5)), axisLabel: { color: theme.text, fontSize: 10 }, axisLine: { lineStyle: { color: theme.line } }, axisTick: { show: false } },
     yAxis: { type: 'value', name: 'Records', nameTextStyle: { color: theme.text, fontSize: 10 }, minInterval: 1, axisLabel: { color: theme.text, fontSize: 10 }, splitLine: { lineStyle: { color: theme.line } } },
-    series: [{ type: 'bar', data: data.map((item) => item.detections), barWidth: 12, itemStyle: { color: theme.blue, borderRadius: [4, 4, 0, 0] }, emphasis: { itemStyle: { color: theme.accent } } }],
+    series: [{ type: 'bar', data: data.map((item) => item.detections), barWidth: 12, itemStyle: { color: theme.accent, borderRadius: [4, 4, 0, 0] }, emphasis: { itemStyle: { color: theme.orange } } }],
   }
   return <ReactEChartsCore echarts={echarts} option={option} notMerge lazyUpdate style={{ height: 280, width: '100%' }} opts={{ renderer: 'canvas' }} />
 }
@@ -50,7 +50,7 @@ export function SensorBars({ data }: { data: SensorComparison['sourceCounts'] })
     } },
     xAxis: { type: 'value', minInterval: 1, axisLabel: { color: theme.text, fontSize: 10 }, splitLine: { lineStyle: { color: theme.line } } },
     yAxis: { type: 'category', data: data.map((item) => `${item.sensor} · ${item.platform}`), axisLabel: { color: theme.text, fontSize: 10 }, axisLine: { show: false }, axisTick: { show: false } },
-    series: [{ type: 'bar', data: data.map((item) => item.detections), barWidth: 13, itemStyle: { color: theme.blue, borderRadius: [0, 4, 4, 0] }, label: { show: true, position: 'right', color: theme.text, fontSize: 10 } }],
+    series: [{ type: 'bar', data: data.map((item) => item.detections), barWidth: 13, itemStyle: { color: theme.accent, borderRadius: [0, 4, 4, 0] }, label: { show: true, position: 'right', color: theme.text, fontSize: 10 } }],
   }
   return <ReactEChartsCore echarts={echarts} option={option} notMerge lazyUpdate style={{ height: Math.max(100, data.length * 38), width: '100%' }} opts={{ renderer: 'canvas' }} />
 }
@@ -67,7 +67,7 @@ export function CalendarChart({ data, onSelect }: { data: TemporalSummary[]; onS
     grid: { left: 48, right: 24, top: 22, bottom: 30 },
     xAxis: { type: 'category', data: data.map((item) => item.period.slice(5)), splitArea: { show: true, areaStyle: { color: [theme.panel, theme.page] } }, axisLabel: { color: theme.text }, axisLine: { lineStyle: { color: theme.line } } },
     yAxis: { type: 'category', data: ['2024 · July'], axisLabel: { color: theme.text }, axisLine: { show: false } },
-    visualMap: { min: 0, max, show: false, inRange: { color: [theme.panel, theme.blue, theme.accent, theme.orange] } },
+    visualMap: { min: 0, max, show: false, inRange: { color: [theme.panel, '#6e2610', '#e84a10', '#ffb547'] } },
     series: [{ type: 'heatmap', data: data.map((item, index) => [index, 0, item.detections]), label: { show: false }, itemStyle: { borderWidth: 3, borderColor: theme.page, borderRadius: 3 }, emphasis: { itemStyle: { borderColor: theme.foreground, borderWidth: 2 } } }],
   }
   const onEvents = { click: (params: { dataIndex?: number }) => { const row = data[params.dataIndex ?? -1]; if (row) onSelect(row.period) } }
