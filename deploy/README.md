@@ -116,3 +116,11 @@ Native reads, tiles and exports accept the canonical Python publisher's single
 with explicit `source_ids` arrays. Existing publications are not rewritten. A
 provider `query_complete` flag does not establish complete observation inventory
 for an arbitrary user AOI; positive counts can remain labelled as lower bounds.
+
+After a first bulk publication, the data-platform owner should refresh PostgreSQL
+planner statistics (`ANALYZE`) for detections, membership, publication and AOI tables.
+The tile SQL exposes XYZ bounds directly to the planner and uses custom planning
+inside the tile transaction, retaining the five-second statement limit and 8 MB
+work-memory cap. On the real 11,815-record verification area, this removed an
+approximately eight-second world-scan plan; six optimized Prisma executions took
+159–314 ms. See the [PostgreSQL prepared-plan documentation](https://www.postgresql.org/docs/16/sql-prepare.html).

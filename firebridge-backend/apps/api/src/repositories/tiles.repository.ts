@@ -14,13 +14,17 @@ export function detectionTileSql({ id, z, x, y }: TileParams, context?: ResultCo
   // Points need no line/polygon simplification. Quantize/aggregate on a fixed
   // world grid (64x64 cells per tile), so even dense high-zoom tiles stay bounded.
   const cellSize = 40075016.68557849 / 2 ** z / 64;
+  // Keep the tile envelope visible to the planner. A scalar CTE subquery hides
+  // its selectivity and can make a world tile scan every detection before AOI clipping.
+  const envelope = Prisma.sql`ST_TileEnvelope(${z}::int, ${x}::int, ${y}::int)`;
+  const envelopeWgs84 = Prisma.sql`ST_Transform(${envelope}, 4326)`;
   return Prisma.sql`
-    WITH bounds AS (SELECT ST_TileEnvelope(${z}::int, ${x}::int, ${y}::int) AS geom),
+    WITH bounds AS (SELECT ${envelope} AS geom),
     selected AS (
       SELECT ST_Transform(d.geom, 3857) AS geom, d.frp_mw
       ${detectionSelection(id, {}, context)}
-      AND d.geom && (SELECT ST_Transform(geom, 4326) FROM bounds)
-      AND ST_Intersects(d.geom, (SELECT ST_Transform(geom, 4326) FROM bounds))
+      AND d.geom && ${envelopeWgs84}
+      AND ST_Intersects(d.geom, ${envelopeWgs84})
       AND ST_Y(d.geom) BETWEEN -85.0511287798066 AND 85.0511287798066
     ), aggregated AS (
       SELECT ST_SnapToGrid(geom, ${cellSize}) AS point, count(*)::double precision AS count,
@@ -41,6 +45,9 @@ export const tilesRepository = {
         await tx.$executeRaw`SET LOCAL search_path = firebridge, public`;
         await tx.$executeRaw`SELECT set_config('statement_timeout', ${String(resultsConfig.TILE_QUERY_TIMEOUT_MS)}, true)`;
         await tx.$executeRaw`SET LOCAL work_mem = '8MB'`;
+        // Tile selectivity varies greatly with XYZ; a cached generic plan can
+        // choose a world scan for a small AOI. Preserve parameter-aware planning.
+        await tx.$executeRaw`SET LOCAL plan_cache_mode = force_custom_plan`;
         const context = await findResultContext(params.id, tx);
         if (!context || resultAvailability(context) !== 'ready')
           throw new ConflictError('Analysis snapshot is not fully servable.');
