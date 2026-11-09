@@ -1,10 +1,12 @@
 import { useCatalog } from '../hooks/useCatalog'
 import { CatalogTools } from './api/CatalogTools'
+import { SourceAvailabilityPanel } from './api/SourceAvailabilityPanel'
 import { FeedbackMessage } from './FeedbackMessage'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Database, Search, X } from 'lucide-react'
 
 export function CatalogPanel() {
+  const sourceDetailsId = useId()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState('')
   const { data, isPending, isError, error, refetch } = useCatalog()
@@ -62,7 +64,7 @@ export function CatalogPanel() {
                 {sources.map((source) => (
                   <tr key={source.source_id}>
                     <td>
-                      <button type="button" className="geo-record-link" onClick={() => setSelected(source.source_id)} aria-label={`Inspect source ${source.source_id}`}><strong>{source.platform ?? source.source_id}</strong></button>
+                      <button type="button" className="geo-record-link" onClick={() => setSelected(source.source_id)} aria-label={`Inspect source ${source.source_id}`} aria-expanded={selected === source.source_id} aria-controls={selected === source.source_id ? sourceDetailsId : undefined}><strong>{source.platform ?? source.source_id}</strong></button>
                     </td>
                     <td>{source.instrument ?? 'Not supplied'}</td>
                     <td>
@@ -78,7 +80,7 @@ export function CatalogPanel() {
         )}
       </section>
       {data.sources.length > 0 && sources.length === 0 && <p className="platform-empty-message">No published sources match this search. Clear the search to see the catalogue.</p>}
-      {active && <aside className="platform-source-detail" aria-label="Selected catalogue source"><header><div><span className="platform-eyebrow">SOURCE / PUBLISHED METADATA</span><h3>{active.platform ?? active.product}</h3></div><button className="icon-button" type="button" aria-label="Close source details" onClick={() => setSelected('')}><X size={17} /></button></header><dl className="api-facts"><div><dt>Source identifier</dt><dd><code>{active.source_id}</code></dd></div><div><dt>Product / collection</dt><dd>{active.product} / {active.collection}</dd></div><div><dt>Instrument</dt><dd>{active.instrument ?? 'Not supplied'}</dd></div><div><dt>Processing stream</dt><dd>{active.processing_stream}</dd></div><div><dt>Availability</dt><dd>{active.availability_status ?? 'Not supplied'}</dd></div></dl><p>Source availability and observation coverage are different. Inspect release membership and provenance before interpreting the records.</p></aside>}
+      {active && <aside id={sourceDetailsId} className="platform-source-detail" aria-label="Selected catalogue source"><header><div><span className="platform-eyebrow">SOURCE / PUBLISHED METADATA</span><h3>{active.platform ?? active.product}</h3></div><button className="icon-button" type="button" aria-label="Close source details" onClick={() => setSelected('')}><X size={17} /></button></header><dl className="api-facts"><div><dt>Source identifier</dt><dd><code>{active.source_id}</code></dd></div><div><dt>Product / collection</dt><dd>{active.product} / {active.collection}</dd></div><div><dt>Instrument</dt><dd>{active.instrument ?? 'Not supplied'}</dd></div><div><dt>Processing stream</dt><dd>{active.processing_stream}</dd></div><div><dt>Availability</dt><dd>{active.availability_status ?? 'Not supplied'}</dd></div></dl><p>Source availability and observation coverage are different. Inspect release membership and provenance before interpreting the records.</p><SourceAvailabilityPanel key={active.source_id} sourceId={active.source_id} scopeKey={data.scope_key} /></aside>}
       <CatalogTools
         key={data.scope_key}
         scopeKey={data.scope_key}

@@ -98,6 +98,9 @@ export interface ReportsView extends AnalysisData, Page {
 export interface AvailabilityQuery extends TimeQuery { scope_key: string }
 export interface AvailabilityView extends DataStatus {
   source_id: string; scope_key: string; provider_status: string
+  last_attempt_at?: string | null; last_success_at?: string | null
+  queried_through?: string | null; latest_observation_at?: string | null
+  published_at?: string | null; next_check_at?: string | null
   ingestion_completeness: string; observation_coverage: unknown
   stale: boolean; stale_reason: string | null; gaps: Detail[]; gaps_truncated: boolean
   feeds: Detail[]
