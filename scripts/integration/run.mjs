@@ -48,7 +48,7 @@ try {
     await new Promise((r) => setTimeout(r, 200));
   }
   start('apps/worker/dist/worker.js', 'worker');
-  const frontend = resolve(root, '../front_firebridge-project');
+  const frontend = resolve(root, '../firebridge-frontend');
   await run(process.execPath, [resolve(frontend, 'node_modules/vitest/vitest.mjs'), 'run', '--root', frontend, 'src/services/firebridge.integration.test.ts'], {
     env: { ...env, FIREBRIDGE_INTEGRATION_URL: 'http://127.0.0.1:3301/api/v1' }, log: 'http-frontend-' + stamp + '.log',
   });

@@ -139,12 +139,12 @@ services:
         VITE_BASEMAP_PROVIDER: "${FRONTEND_BASEMAP_PROVIDER:-}"
     container_name: firebridge-frontend
     ports:
-      - '127.0.0.1:5173:80'
+      - '127.0.0.1:5173:8080'
     depends_on:
       api:
         condition: service_started
     healthcheck:
-      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1/']
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/healthz']
       interval: 10s
       timeout: 5s
       retries: 3

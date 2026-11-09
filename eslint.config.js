@@ -11,6 +11,8 @@ module.exports = [
       '**/coverage/**',
       '**/.cache/**',
       '**/.turbo/**',
+      '.data/**',
+      'documents/**',
       '**/*.tsbuildinfo'
     ]
   },
