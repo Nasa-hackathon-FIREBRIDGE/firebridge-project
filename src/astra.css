@@ -74,7 +74,7 @@ select {
 .astra-workspace-context strong {
   font-size: 12px;
   font-weight: 600;
-  color: #e3ebf7;
+  color: #eaecf0;
 }
 .astra-workspace-context small {
   font-size: 11px;
@@ -87,8 +87,8 @@ select {
   height: 35px;
   flex-shrink: 0;
   color: var(--accent);
-  background: #0c2237;
-  border: 1px solid #1f6a96;
+  background: #2d1d16;
+  border: 1px solid #a7410e;
   border-radius: 8px;
 }
 .astra-shell .primary-nav {
@@ -135,8 +135,8 @@ select {
 .astra-demo-navigation > summary > span {
   font: 8px var(--mono);
   letter-spacing: 0.3px;
-  color: #9fd8f7;
-  border: 1px solid #25406a;
+  color: #f7c79f;
+  border: 1px solid #3d4252;
   padding: 2px 4px;
   border-radius: 3px;
 }
@@ -160,14 +160,14 @@ select {
 }
 .astra-sidebar-foot strong {
   font-weight: 500;
-  color: #c3d3ea;
+  color: #d1d4dc;
 }
 .astra-sidebar-foot small {
   color: var(--text-secondary);
   font-size: 10px;
 }
 .astra-orbit {
-  color: #8a9bb5;
+  color: #999ca6;
 }
 .astra-shell .topbar {
   height: 68px;
@@ -218,7 +218,7 @@ select {
   border-bottom: 1px solid var(--line-soft);
   font-size: 11px;
   color: var(--muted);
-  background: #0a1425;
+  background: #12151d;
 }
 .astra-data-notice > svg {
   flex-shrink: 0;
@@ -228,7 +228,7 @@ select {
   flex: 1;
 }
 .astra-data-notice strong {
-  color: #7dd3fc;
+  color: #fcb37d;
   font-weight: 500;
   margin-right: 7px;
 }
@@ -406,7 +406,7 @@ select {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  color: #9aabc6;
+  color: #a9adb7;
   font-size: 12px;
 }
 .astra-metric svg {
@@ -479,7 +479,7 @@ select {
 .astra-table th {
   padding: 11px 22px;
   color: var(--muted);
-  background: #0a1425;
+  background: #12151d;
   border-block: 1px solid var(--line-soft);
   font-size: 10px;
   font-weight: 500;
@@ -496,7 +496,7 @@ select {
   border: 0;
 }
 .astra-table tbody tr:hover {
-  background: #112442;
+  background: #24272f;
 }
 .astra-record-link {
   color: var(--text);
@@ -522,8 +522,8 @@ select {
 }
 .astra-next-step {
   padding: 25px;
-  border-top: 2px solid #38bdf8;
-  background: #0b1526;
+  border-top: 2px solid #f87c38;
+  background: #13161e;
 }
 .astra-next-step h2 {
   margin-top: 14px;
@@ -531,7 +531,7 @@ select {
   letter-spacing: -0.6px;
 }
 .astra-next-step p {
-  color: #9aabc6;
+  color: #a9adb7;
   font-size: 12px;
   line-height: 1.9;
   margin: 12px 0 19px;
@@ -542,17 +542,17 @@ select {
   list-style: none;
   padding: 17px 0;
   margin: 0 0 17px;
-  border-block: 1px solid #1b2a44;
+  border-block: 1px solid #292c36;
 }
 .astra-next-step li {
   display: flex;
   align-items: center;
   gap: 13px;
-  color: #d4e0f2;
+  color: #dfe1e7;
   font-size: 11px;
 }
 .astra-next-step li > span {
-  color: #7dd3fc;
+  color: #fcb37d;
   font: 10px var(--mono);
 }
 .astra-catalog-preview {
@@ -580,9 +580,9 @@ select {
 .astra-release-names > li {
   padding: 8px 10px;
   margin-top: 6px;
-  border-left: 2px solid #38bdf8;
-  background: #0a172b;
-  color: #cfe8ff;
+  border-left: 2px solid #f87c38;
+  background: #151820;
+  color: #ffe8cf;
   font-size: 10px;
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -590,7 +590,7 @@ select {
 .astra-table td .astra-dataset-label {
   max-width: 290px;
   white-space: normal;
-  color: #9fd8f7;
+  color: #f7c79f;
   font-size: 9px;
   line-height: 1.6;
 }
@@ -602,7 +602,7 @@ select {
 }
 .astra-source-tags > span {
   border: 1px solid var(--line);
-  color: #c3d3ea;
+  color: #d1d4dc;
   border-radius: 4px;
   padding: 4px 7px;
   font-size: 10px;
@@ -700,7 +700,7 @@ select {
   padding: 47px 25px;
 }
 .astra-empty-icon {
-  color: #9aabc6;
+  color: #a9adb7;
   margin-bottom: 15px;
 }
 .astra-empty h3 {
@@ -905,7 +905,7 @@ select {
 }
 .astra-analysis-tabs > button[aria-selected='true'] {
   color: var(--accent);
-  background: #0c2237;
+  background: #2d1d16;
 }
 .astra-analysis-tabs > button:hover {
   color: var(--text);
@@ -971,8 +971,8 @@ select {
   color: var(--accent);
 }
 .astra-analysis-steps li[data-complete='true'] > span {
-  border-color: #1f5f86;
-  background: #0c2237;
+  border-color: #993b0c;
+  background: #2d1d16;
 }
 .astra-shell .fb-field-error {
   font-size: 11px;
@@ -999,7 +999,7 @@ select {
   z-index: 100;
   padding: 10px 16px;
   background: var(--accent);
-  color: #04121f;
+  color: #16100d;
   border-radius: 5px;
 }
 .astra-skip-link:focus {
@@ -1319,30 +1319,30 @@ select {
 }
 /* Exact legacy counterparts: native section, data strip, navigation, inputs and badges. */
 .astra-surface, .astra-next-step {
-  background: linear-gradient(180deg, #0e1a2e, #0b1526);
+  background: linear-gradient(180deg, #181b24, #13161e);
   box-shadow: inset 0 1px 0 #ffffff03, 0 6px 22px #02060f20;
 }
-.astra-metrics { background: linear-gradient(120deg, #0e1a2e, #0b1526); }
+.astra-metrics { background: linear-gradient(120deg, #181b24, #13161e); }
 .astra-metric strong, .astra-page-heading h1 { color: #f1f6ff; }
-.astra-filter select { color: #d4e0f2; border-color: #26405f; background: #08111f; }
-.astra-source-tags > span { color: #9fd8f7; border-color: #25406a; background: #0e1c33; }
+.astra-filter select { color: #dfe1e7; border-color: #3a3e4b; background: #0f1118; }
+.astra-source-tags > span { color: #f7c79f; border-color: #3d4252; background: #1c1e25; }
 .astra-analysis-tabs > button[aria-selected='true'] {
-  color: #bce8ff;
-  background: linear-gradient(90deg, #0f2a47, #0c1c33);
+  color: #ffddbc;
+  background: linear-gradient(90deg, #3d2419, #1b1d24);
 }
-.astra-analysis-tabs > button:hover { background: #0f1c32; }
+.astra-analysis-tabs > button:hover { background: #1c1e25; }
 .astra-analysis-tabs > button[aria-selected='true']:hover {
-  background: linear-gradient(90deg, #0f2a47, #0c1c33);
+  background: linear-gradient(90deg, #3d2419, #1b1d24);
 }
-.astra-data-notice { color: #a1b4d1; border-color: #1b2a44; }
-.astra-data-notice a { color: #7dd3fc; }
+.astra-data-notice { color: #b2b5c0; border-color: #292c36; }
+.astra-data-notice a { color: #fcb37d; }
 .astra-feedback-content > p { color: inherit !important; }
 .astra-feedback-content details { color: inherit; }
 .astra-shell [aria-invalid='true'] { border-color: #f3a6a6 !important; }
 .astra-shell .astra-brand-link { text-decoration: none; height: auto; }
 .astra-shell .astra-brand-link > .fb-brand-symbol { display: grid; place-items: center; flex-shrink: 0; }
 .astra-page .button { box-shadow: 0 5px 20px #02060f20; }
-.astra-page .button-primary { color: #04121f; border-color: #38bdf8; background: #38bdf8; box-shadow: 0 2px 12px #38bdf80d; }
-.astra-page .button-primary:hover:not(:disabled) { color: #04121f; border-color: #7dd3fc; background: #7dd3fc; }
-.astra-page .button-secondary:hover:not(:disabled) { color: #e3ebf7; }
+.astra-page .button-primary { color: #16100d; border-color: #f87c38; background: #f87c38; box-shadow: 0 2px 12px #38bdf80d; }
+.astra-page .button-primary:hover:not(:disabled) { color: #16100d; border-color: #fcb37d; background: #fcb37d; }
+.astra-page .button-secondary:hover:not(:disabled) { color: #eaecf0; }
 .astra-shell .astra-activity-unknown { border: 1px dashed var(--dim); }
