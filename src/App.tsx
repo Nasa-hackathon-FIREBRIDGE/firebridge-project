@@ -10,12 +10,11 @@ import { demoRepository, downloadCsv } from './data'
 import { AppStateProvider } from './state'
 import { useAppState } from './useAppState'
 import type { ActivitySummary, AnalysisSelection, Detection, ReportEvidence, SensorComparison, TemporalSummary } from './types'
-import './App.css'
-import './components/api/api-workspace.css'
-import './features/analyses/workspace.css'
 import { ApplicationShell } from './components/ApplicationShell'
+import { SystemStatus } from './components/SystemStatus'
 import { PageHeader } from './components/workspace/PageHeader'
 
+const HomePage = lazy(() => import('./pages/HomePage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const CatalogPage = lazy(() => import('./pages/CatalogPage'))
 const ApiAnalysisPage = lazy(() => import('./pages/ApiAnalysisPage'))
@@ -44,7 +43,7 @@ function App() {
 }
 
 function AppLayout() {
-  return <ApplicationShell demoControls={<GlobalControls />}><AppPages /></ApplicationShell>
+  return <ApplicationShell demoControls={<GlobalControls />} sidebarFooter={<SystemStatus />}><AppPages /></ApplicationShell>
 }
 
 function GlobalControls() {
@@ -75,7 +74,7 @@ function AppPages() {
       <Route path="/analyses" element={<AnalysisWorkspace />} />
       <Route path="/api-analysis" element={<Suspense fallback={<p role="status">Chargement…</p>}><ApiAnalysisPage /></Suspense>} />
       <Route path="/ingestion" element={<Suspense fallback={<p role="status">Chargement…</p>}><IngestionPage /></Suspense>} />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<HomePage />} />
       <Route path="/demo" element={<WorkspacePage page="overview" />} />
       <Route path="/explore" element={<WorkspacePage page="explore" />} />
       <Route path="/compare" element={<WorkspacePage page="compare" />} />
