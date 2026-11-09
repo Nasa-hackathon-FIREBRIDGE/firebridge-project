@@ -27,6 +27,18 @@ export function normalizedAreaGeometry(wkt: string): Prisma.Sql {
 // Normalize historical unsplit dateline areas in responses without rewriting stored data.
 const areaReadGeometry = Prisma.sql`ST_Multi(ST_CollectionExtract(${Prisma.raw(nativeAreaSql('areas'))},3))`;
 
+// Pipeline scope areas can cover the whole world. Their pole-to-pole edges are
+// antipodal and cannot be cast to geography. The global cylindrical equal-area
+// projection measures that world rectangle without a geography edge ambiguity.
+// Ordinary user AOIs retain the existing ellipsoidal/geodesic measurement.
+const areaReadSurface = Prisma.sql`ROUND(((CASE
+  WHEN ST_XMax(Box3D(geom)) - ST_XMin(Box3D(geom)) >= 359.999
+   AND ST_YMax(Box3D(geom)) - ST_YMin(Box3D(geom)) >= 179.999
+  THEN ST_Area(ST_Transform(geom,6933))
+  ELSE ST_Area(geom::geography)
+END) / 1e6)::numeric, 4)::float8`;
+
+
 export interface AreaRecord {
   id: string;
   name: string;
@@ -101,7 +113,7 @@ export const areasRepository = {
           provenance,
           created_at,
           ST_AsGeoJSON(${areaReadGeometry})::text AS geom_geojson,
-          ROUND((ST_Area(geom::geography) / 1e6)::numeric, 4)::float8 AS surface_km2
+          ${areaReadSurface} AS surface_km2
         FROM firebridge.areas
         WHERE geometry_sha256 = ${geometry_sha256}
           AND version         = ${version}
@@ -140,7 +152,7 @@ export const areasRepository = {
           provenance,
           created_at,
           ST_AsGeoJSON(${areaReadGeometry})::text AS geom_geojson,
-          ROUND((ST_Area(geom::geography) / 1e6)::numeric, 4)::float8 AS surface_km2
+          ${areaReadSurface} AS surface_km2
       `;
 
       if (insertedRows.length > 0 && insertedRows[0]) {
@@ -182,7 +194,7 @@ export const areasRepository = {
           provenance,
           created_at,
           ST_AsGeoJSON(${areaReadGeometry})::text AS geom_geojson,
-          ROUND((ST_Area(geom::geography) / 1e6)::numeric, 4)::float8 AS surface_km2
+          ${areaReadSurface} AS surface_km2
         FROM firebridge.areas
         WHERE id = ${areaId}::uuid
         LIMIT 1
@@ -319,7 +331,7 @@ export const areasRepository = {
             provenance,
             created_at,
             ST_AsGeoJSON(geom)::text AS geom_geojson,
-            ROUND((ST_Area(geom::geography) / 1e6)::numeric, 4)::float8 AS surface_km2
+            ${areaReadSurface} AS surface_km2
           FROM firebridge.areas
           WHERE id > ${cursorId}::uuid
           ORDER BY id ASC
@@ -337,7 +349,7 @@ export const areasRepository = {
           provenance,
           created_at,
           ST_AsGeoJSON(geom)::text AS geom_geojson,
-          ROUND((ST_Area(geom::geography) / 1e6)::numeric, 4)::float8 AS surface_km2
+          ${areaReadSurface} AS surface_km2
         FROM firebridge.areas
         ORDER BY id ASC
         LIMIT ${limit + 1};
