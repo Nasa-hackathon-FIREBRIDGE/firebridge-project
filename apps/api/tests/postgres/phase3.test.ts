@@ -145,6 +145,21 @@ describe('Phase 3 native results on PostgreSQL/PostGIS', () => {
       data.periods[0].counts_by_source.find((s: { source_id: string }) => s.source_id === 'terra')
     ).toMatchObject({ count: '2', count_status: 'lower_bound' });
   });
+  it('keeps dates beyond the pinned cutoff unknown while retaining available observations', async () => {
+    await pool.query(`UPDATE firebridge.analyses SET end_date_exclusive='2024-01-22' WHERE id=$1`, [nativeIds.analysis]);
+    const summary = (await get('summary')).json().data;
+    expect(summary.status).toBe('partial');
+    expect(summary.native_detections_by_source).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source_id: 'terra', count: '3', count_status: 'lower_bound', inventory_status: 'partial' }),
+      expect.objectContaining({ source_id: 'aqua', count: '1', count_status: 'lower_bound', inventory_status: 'partial' })
+    ]));
+    const calendar = (await get('calendar')).json().data;
+    expect(calendar.status).toBe('partial');
+    const tail = calendar.periods.find((period: { start: string }) => period.start.startsWith('2024-01-21'));
+    expect(tail.counts_by_source.every((source: { count: unknown; count_status: string }) =>
+      source.count === null && source.count_status === 'unknown')).toBe(true);
+    expect((await get('detections')).json().data.returned).toBe(4);
+  });
   it('groups weeks and months and clips periods to the requested analysis window', async () => {
     for (const resolution of ['week', 'month']) {
       const data = (await get('calendar?resolution=' + resolution)).json().data;
