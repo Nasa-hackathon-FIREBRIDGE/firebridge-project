@@ -30,7 +30,7 @@ export async function prepareHistoricalAnalysis(payload: AnalysisJobPayload, cla
       await workerAnalysesRepository.attachHistoricalResult(payload, claim, job.job_id, job.result.release_id);
       return;
     }
-    await delay(1000);
+    await delay(250);
     job = await request('/jobs/' + job.job_id);
   }
   throw new InvalidAnalysisTask('Historical preparation exceeded its time budget.');
