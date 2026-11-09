@@ -14,7 +14,7 @@ function level(value: number, max: number) {
 
 function describe(cell: DayCell) {
   if (cell.total === null) return `${formatDay(cell.date)} · inventory unknown`
-  const parts = (Object.entries(cell.bySensor) as [SensorKey, number][]).filter(([, v]) => v > 0).map(([key, v]) => `${SENSORS[key].label} ${v}`)
+  const parts = (Object.entries(cell.bySensor) as [SensorKey, number | null][]).filter(([, v]) => v !== null && v > 0).map(([key, v]) => `${SENSORS[key].label} ${v}`)
   return `${formatDay(cell.date)} · ${cell.total.toLocaleString('en-US')} detection${cell.total === 1 ? '' : 's'}${parts.length ? ` (${parts.join(' · ')})` : ''}`
 }
 

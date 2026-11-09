@@ -22,6 +22,7 @@ function useInsights(analysisId?: string) {
 
 function findings(insights: Insights): { icon: ReactNode; text: ReactNode }[] {
   const out: { icon: ReactNode; text: ReactNode }[] = []
+  if (insights.lowerBound) return out
   const { total, peakMonth, peakPeriod, ratio, activePeriods, knownPeriods, bothInstrumentPeriods, topMonthsShare, months, resolution } = insights
   if (peakMonth && total && months.length > 1)
     out.push({
@@ -29,7 +30,7 @@ function findings(insights: Insights): { icon: ReactNode; text: ReactNode }[] {
       text: <>Activity peaked in <strong>{formatMonth(peakMonth.month)}</strong> with {fmt(peakMonth.total)} detections, {pct(peakMonth.total, total)} of the period.</>,
     })
   if (topMonthsShare !== null && topMonthsShare >= 0.5)
-    out.push({ icon: <Flame size={16} />, text: <>The three busiest months hold <strong>{Math.round(topMonthsShare * 100)}%</strong> of all detections, a strongly seasonal pattern.</> })
+    out.push({ icon: <Flame size={16} />, text: <>The three busiest months hold <strong>{Math.round(topMonthsShare * 100)}%</strong> of the recorded detections in this selected interval.</> })
   if (peakPeriod && resolution === 'day')
     out.push({ icon: <CalendarCheck2 size={16} />, text: <>The busiest single day was <strong>{formatDay(peakPeriod.date)}</strong>, with {fmt(peakPeriod.total ?? 0)} detections.</> })
   if (ratio !== null)
@@ -37,12 +38,12 @@ function findings(insights: Insights): { icon: ReactNode; text: ReactNode }[] {
       icon: <ScanSearch size={16} />,
       text: (
         <>
-          VIIRS recorded <strong>{ratio >= 10 ? Math.round(ratio) : ratio.toFixed(1)}×</strong> as many detections as MODIS over the same area and dates. That is expected from its finer 375 m pixels and is not evidence of more burning.
+          VIIRS recorded <strong>{ratio >= 10 ? Math.round(ratio) : ratio.toFixed(1)}×</strong> as many native detections as MODIS over the same area and dates. This difference alone does not establish its cause or the amount of burning.
         </>
       ),
     })
   if (bothInstrumentPeriods > 0 && resolution === 'day')
-    out.push({ icon: <Layers2 size={16} />, text: <><strong>{fmt(bothInstrumentPeriods)} days</strong> have detections from both MODIS and VIIRS, the overlap that supports sensor comparison.</> })
+    out.push({ icon: <Layers2 size={16} />, text: <><strong>{fmt(bothInstrumentPeriods)} days</strong> have detections from both MODIS and VIIRS. Common observation support and acquisition-time matching still need separate validation.</> })
   if (knownPeriods > 0 && resolution === 'day')
     out.push({ icon: <Info size={16} />, text: <>Detections were recorded on {fmt(activePeriods)} of {fmt(knownPeriods)} days. Days without detections are not confirmed fire-free.</> })
   return out
@@ -143,8 +144,8 @@ export function AnalysisInsights({ analysisId, onSelectDay }: { analysisId?: str
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Kpi index={0} accent="#ff7c40" label="Native detections" value={total === null ? 'Unknown' : <>{insights.lowerBound ? '≥ ' : ''}<CountUp value={total} /></>} sub={`across ${insights.sensors.length} satellite record${insights.sensors.length === 1 ? '' : 's'}`} />
           <Kpi index={1} label={insights.resolution === 'day' ? 'Active days' : 'Active periods'} value={<><CountUp value={insights.activePeriods} /><span className="text-[18px] text-fg-3"> / {fmt(insights.knownPeriods)}</span></>} sub="with at least one detection" />
-          <Kpi index={2} label="Peak day" value={insights.peakPeriod ? <CountUp value={insights.peakPeriod.total ?? 0} /> : '—'} sub={insights.peakPeriod ? formatDay(insights.peakPeriod.date) : 'No detections returned'} />
-          <Kpi index={3} accent="#34d399" label="VIIRS per MODIS detection" value={insights.ratio === null ? '—' : <><CountUp value={insights.ratio} format={(v) => v.toFixed(1)} />×</>} sub={insights.ratio === null ? 'Needs both instruments' : 'resolution effect, not more fire'} />
+          <Kpi index={2} label={insights.resolution === 'day' ? 'Peak day' : 'Peak period'} value={insights.peakPeriod ? <CountUp value={insights.peakPeriod.total ?? 0} /> : '—'} sub={insights.peakPeriod ? formatDay(insights.peakPeriod.date) : 'No exact peak established'} />
+          <Kpi index={3} accent="#34d399" label="VIIRS per MODIS detection" value={insights.ratio === null ? '—' : <><CountUp value={insights.ratio} format={(v) => v.toFixed(1)} />×</>} sub={insights.ratio === null ? 'Needs exact counts for both instruments' : 'Separate native inventories'} />
         </div>
       )}
 

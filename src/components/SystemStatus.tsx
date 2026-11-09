@@ -13,7 +13,7 @@ export function SystemStatus() {
   })
   const status = ready.isPending ? 'checking' : ready.isError ? 'offline' : ready.data.status === 'ok' ? 'ok' : 'degraded'
   const tone = { checking: 'bg-fg-3', ok: 'bg-ok', degraded: 'bg-warn', offline: 'bg-bad' }[status]
-  const title = { checking: 'Checking services…', ok: 'All systems operational', degraded: 'Some services degraded', offline: 'API unreachable' }[status]
+  const title = { checking: 'Checking services…', ok: 'API ready · worker unverified', degraded: 'Some services degraded', offline: 'API unreachable' }[status]
   const checks = ready.data ? Object.entries(ready.data.checks) : []
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3" aria-live="polite">

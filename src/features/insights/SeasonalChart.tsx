@@ -34,6 +34,8 @@ export default function SeasonalChart({ months, sensors, height = 280 }: { month
         const list = Array.isArray(items) ? items : [items]
         const month = months[Number(list[0]?.dataIndex)]
         if (!month) return ''
+        if (month.total === null)
+          return formatMonth(month.month) + ': Unknown / incomplete inventory'
         const rows = list
           .filter((item) => Number(item.value) > 0)
           .map((item) => `<div style="display:flex;justify-content:space-between;gap:18px"><span>${item.marker}${item.seriesName}</span><b>${Number(item.value).toLocaleString('en-US')}</b></div>`)
@@ -59,7 +61,7 @@ export default function SeasonalChart({ months, sensors, height = 280 }: { month
       type: 'bar',
       stack: 'detections',
       barMaxWidth: 34,
-      data: months.map((bucket) => bucket.bySensor[key] ?? 0),
+      data: months.map((bucket) => bucket.bySensor[key] ?? null),
       itemStyle: {
         color: SENSORS[key].color,
         borderRadius: index === keys.length - 1 ? [5, 5, 0, 0] : 0,

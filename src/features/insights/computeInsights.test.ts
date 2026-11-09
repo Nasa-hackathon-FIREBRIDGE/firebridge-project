@@ -66,6 +66,28 @@ describe('computeInsights', () => {
     expect(insights.periods[0].total).toBeNull()
     expect(insights.knownPeriods).toBe(0)
     expect(insights.ratio).toBeNull()
+    expect(insights.modis).toBeNull()
+    expect(insights.months[0].total).toBeNull()
+    expect(insights.months[0].bySensor.aqua).toBeNull()
+    expect(insights.peakMonth).toBeNull()
+  })
+
+  it('does not treat an omitted source or an unsafe integer as an exact chart value', () => {
+    const missing = { ...calendar, periods: [period('2020-08-01', [['modis-aqua-c6-standard', '3']])] } as unknown as NativeCalendar
+    expect(computeInsights(summary, missing).periods[0].total).toBeNull()
+    expect(computeInsights(summary, missing).months[0].bySensor.noaa20).toBeNull()
+    const huge = { ...summary, native_detections_by_source: [source('aqua', 'Aqua', 'MODIS', '9007199254740993')] } as unknown as NativeSummary
+    expect(computeInsights(huge).total).toBeNull()
+    const overflow = { ...summary, native_detections_by_source: [source('aqua', 'Aqua', 'MODIS', '9007199254740991'), source('terra', 'Terra', 'MODIS', '2')] } as unknown as NativeSummary
+    expect(computeInsights(overflow).total).toBeNull()
+    expect(computeInsights(overflow).modis).toBeNull()
+  })
+
+  it('does not calculate an exact ratio from lower bounds or monthly totals from weekly bins', () => {
+    const bounded = { ...summary, native_detections_by_source: [source('aqua', 'Aqua', 'MODIS', '4', 'lower_bound'), source('noaa20', 'N20', 'VIIRS', '40')] } as unknown as NativeSummary
+    expect(computeInsights(bounded).ratio).toBeNull()
+    expect(computeInsights(bounded).lowerBound).toBe(true)
+    expect(computeInsights(summary, { ...calendar, resolution: 'week' }).months).toEqual([])
   })
 
   it('returns an empty, honest result before data loads', () => {
