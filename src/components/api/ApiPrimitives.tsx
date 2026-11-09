@@ -91,14 +91,15 @@ export function Facts({ values }: { values: Record<string, unknown> }) {
   )
 }
 export function Records<T extends object>({
-  rows,
+  rows: suppliedRows,
   empty = 'Aucun enregistrement pour cette sélection.',
   rowActions,
 }: {
-  rows: T[]
+  rows: T[] | null | undefined
   empty?: string
   rowActions?: (row: T) => ReactNode
 }) {
+  const rows = useMemo(() => suppliedRows ?? [], [suppliedRows])
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<{ key: string; descending: boolean } | null>(null)
   const [dense, setDense] = useState(true)
@@ -116,6 +117,7 @@ export function Records<T extends object>({
     })
     return records
   }, [rows, search, sort])
+  if (suppliedRows == null) return <p>Inconnu / non disponible</p>
   if (!rows.length) return <p>{empty}</p>
   return (
     <div className="platform-records">

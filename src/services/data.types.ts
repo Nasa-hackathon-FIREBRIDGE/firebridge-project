@@ -56,7 +56,7 @@ export interface CalendarView extends AnalysisData {
   periods: { start: string; end_exclusive: string; counts_by_source: SourceCount[] }[]
 }
 export interface ProvenanceView extends AnalysisData, Page {
-  assets: Detail[]; data_versions: Detail[]; model_versions: Detail[]
+  assets: Detail[]; data_versions: Detail[]; model_versions: Detail[] | null
 }
 export interface CoverageQuery extends DateQuery { cell_id?: string }
 export interface CoverageView extends AnalysisData {

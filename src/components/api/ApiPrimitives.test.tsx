@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Records } from './ApiPrimitives'
 
 afterEach(cleanup)
+
 it('sorts loaded numeric values while keeping unknown values distinct and last', () => {
   render(<Records rows={[{ id: 'unknown', frp_mw: null }, { id: 'measured', frp_mw: 12 }, { id: 'zero', frp_mw: 0 }]} />)
   fireEvent.click(screen.getByRole('button', { name: /frp mw/ }))
@@ -27,4 +28,17 @@ it('keeps full scientific provenance available when long values are collapsed', 
   fireEvent.click(screen.getByText('Full value'))
   expect(screen.getByText(citation.trim(), { exact: false })).toBeTruthy()
   expect(document.querySelector('.platform-cell-details')?.hasAttribute('open')).toBe(true)
+})
+
+describe('Records nullable API collections', () => {
+  it('keeps missing model metadata distinct from a confirmed empty collection', () => {
+    const view = render(<Records rows={null} empty="No associated model." />)
+    expect(screen.getByText('Inconnu / non disponible')).toBeTruthy()
+    expect(screen.queryByText('No associated model.')).toBeNull()
+    view.rerender(<Records rows={[]} empty="No associated model." />)
+    expect(screen.getByText('No associated model.')).toBeTruthy()
+    expect(screen.queryByText('Inconnu / non disponible')).toBeNull()
+    view.rerender(<Records rows={[{ model: 'validated-model' }]} />)
+    expect(screen.getByRole('cell', { name: 'validated-model' })).toBeTruthy()
+  })
 })
