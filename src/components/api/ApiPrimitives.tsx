@@ -90,12 +90,14 @@ export function Facts({ values }: { values: Record<string, unknown> }) {
     </dl>
   )
 }
-export function Records({
+export function Records<T extends object>({
   rows,
   empty = 'Aucun enregistrement pour cette sélection.',
+  rowActions,
 }: {
-  rows: object[]
+  rows: T[]
   empty?: string
+  rowActions?: (row: T) => ReactNode
 }) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<{ key: string; descending: boolean } | null>(null)
@@ -130,6 +132,7 @@ export function Records({
                 <button type="button" className="platform-sort-column" onClick={() => setSort({ key, descending: sort?.key === key ? !sort.descending : false })}>{key.replaceAll('_', ' ')} <span aria-hidden="true">{sort?.key === key ? sort.descending ? '↓' : '↑' : '↕'}</span></button>
               </th>
             ))}
+            {rowActions && <th scope="col">Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -152,6 +155,7 @@ export function Records({
                   </td>
                 )
               })}
+              {rowActions && <td>{rowActions(row)}</td>}
             </tr>
           ))}
         </tbody>

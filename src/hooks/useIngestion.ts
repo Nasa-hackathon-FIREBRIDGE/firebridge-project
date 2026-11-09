@@ -3,8 +3,19 @@ import { apiKeys } from '../services/api.keys'
 import { ingestion } from '../services/ingestion.service'
 import type { BackfillInput, GapsQuery, RefreshInput, SubscriptionsQuery } from '../services/data.types'
 import { workspaceKeys } from './useWorkspace'
+import { jobs } from '../services/jobs.service'
 
 export interface AdminSession { id: string; token: string; controller: AbortController }
+export function useIngestionJob(session: AdminSession, id: string) {
+  return useQuery({
+    queryKey: apiKeys.admin(session.id, 'plan-job', { id }),
+    queryFn: ({ signal }) => jobs.get(id, signal),
+    enabled: !!id, gcTime: 0, retry: false,
+    refetchInterval: (query) => query.state.status !== 'error' && query.state.data &&
+      ['queued', 'running'].includes(query.state.data.status) &&
+      query.state.data.current_stage !== 'awaiting_fetch_executor' ? 3000 : false,
+  })
+}
 export function useSubscriptions(session: AdminSession, params: SubscriptionsQuery) {
   return useQuery({ queryKey: apiKeys.admin(session.id, 'subscriptions', params),
     queryFn: ({ signal }) => ingestion.subscriptions(session.token, params, signal), gcTime: 0, retry: false })

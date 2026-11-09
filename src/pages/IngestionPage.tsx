@@ -10,6 +10,9 @@ import { uuidPattern } from '../components/api/format'
 import { useCursorPage } from '../hooks/useCursorPage'
 import { PageHeader } from '../components/workspace/PageHeader'
 import { ShieldCheck } from 'lucide-react'
+import { validateIngestionPlan } from '../features/ingestion/validation'
+import { IngestionJobStatus } from '../features/ingestion/IngestionJobStatus'
+import type { UserInputError } from '../lib/userFeedback'
 
 export default function IngestionPage() {
   const [session, setSession] = useState<AdminSession | null>(null)
@@ -47,6 +50,9 @@ function AdminWorkspace({ session }: { session: AdminSession }) {
   const [subscriptions, setSubscriptions] = useState<SubscriptionsQuery>({ limit: 20 })
   const [gaps, setGaps] = useState<GapsQuery>({ limit: 20 })
   const [runId, setRunId] = useState('')
+  const [refreshId, setRefreshId] = useState('')
+  const [backfillError, setBackfillError] = useState<UserInputError | null>(null)
+  const [refreshError, setRefreshError] = useState<UserInputError | null>(null)
   const run = useFetchRun(session, runId)
   const actions = useIngestionActions(session)
   const keyForBackfill = useIntentKey()
@@ -54,7 +60,10 @@ function AdminWorkspace({ session }: { session: AdminSession }) {
   return <div className="platform-admin-workspace"><nav className="platform-admin-nav" aria-label="Ingestion sections"><span className="platform-eyebrow">OPERATIONS</span><a href="#ingestion-subscriptions">Subscriptions</a><a href="#ingestion-gaps">Import gaps</a><a href="#ingestion-run">Collection attempt</a><a href="#ingestion-backfill">Historical import</a><a href="#ingestion-refresh">Refresh subscription</a></nav><div className="api-stack">
     <section className="panel api-section" id="ingestion-subscriptions"><span className="platform-eyebrow">01 / REGISTERED FEEDS</span><h2>Souscriptions</h2>
       <Filters<SubscriptionsQuery> fields={[{ name: 'scope_key', label: 'Périmètre' }, { name: 'feed_id', label: 'Flux' }, { name: 'mode', label: 'Mode', options: ['backfill', 'incremental', 'reconciliation'] }, { name: 'state', label: 'État du flux', options: ['active', 'paused', 'retired', 'unverified'] }, { name: 'enabled', label: 'Activée', options: ['true', 'false'] }, { name: 'limit', label: 'Par page', type: 'number', min: 1, max: 100, value: 20 }]} onApply={setSubscriptions} />
-      <SubscriptionsPage key={JSON.stringify(subscriptions)} session={session} params={subscriptions} />
+      <SubscriptionsPage key={JSON.stringify(subscriptions)} session={session} params={subscriptions} onSelect={(id) => {
+        setRefreshId(id); setRefreshError(null); actions.refresh.reset()
+        document.getElementById('ingestion-refresh')?.scrollIntoView?.({ block: 'start' })
+      }} />
     </section>
     <section className="panel api-section" id="ingestion-gaps"><span className="platform-eyebrow">02 / IMPORT COMPLETENESS</span><h2>Lacunes d’import</h2>
       <p>Un nuage est une condition d’observation, pas une lacune de téléchargement.</p>
@@ -77,7 +86,9 @@ function AdminWorkspace({ session }: { session: AdminSession }) {
           source_ids: csv(text(values, 'sources')), products: csv(text(values, 'products')),
           collection: text(values, 'collection'), resource_budget: budget(values),
         }
-        actions.backfill.mutate({ input, key: keyForBackfill(input) })
+        const error = validateIngestionPlan(input.start, input.end_exclusive, input.resource_budget)
+        setBackfillError(error)
+        if (!error) actions.backfill.mutate({ input, key: keyForBackfill(input) })
       }}>
         <label>Flux<input name="feed" required /></label><label>Zone (UUID)<input name="area" pattern={uuidPattern} required /></label>
         <label>Périmètre<input name="scope" required /></label><TimeFields required />
@@ -85,7 +96,7 @@ function AdminWorkspace({ session }: { session: AdminSession }) {
         <label>Produits (séparés par des virgules)<input name="products" required /></label>
         <label>Collection<input name="collection" required /></label><BudgetFields />
         <button className="button button-primary" disabled={actions.backfill.isPending}>Planifier l’import</button>
-      </form><ApiErrorMessage operation="write" error={actions.backfill.error} /><PlanResult result={actions.backfill.data} />
+      </form><ApiErrorMessage operation="write" error={backfillError} /><ApiErrorMessage operation="write" error={actions.backfill.error} /><PlanResult result={actions.backfill.data} session={session} />
     </section>
     <section className="panel api-section" id="ingestion-refresh"><span className="platform-eyebrow">05 / REFRESH PLAN</span><h2>Actualiser une souscription</h2>
       <form className="api-form" onSubmit={(e) => {
@@ -99,13 +110,15 @@ function AdminWorkspace({ session }: { session: AdminSession }) {
           resource_budget: budget(values),
         }
         const id = text(values, 'subscription')
-        actions.refresh.mutate({ id, input, key: keyForRefresh({ id, input }) })
+        const error = validateIngestionPlan(input.start ?? '', input.end_exclusive ?? '', input.resource_budget, true)
+        setRefreshError(error)
+        if (!error) actions.refresh.mutate({ id, input, key: keyForRefresh({ id, input }) })
       }}>
-        <label>Souscription (UUID)<input name="subscription" pattern={uuidPattern} required /></label>
+        <label>Souscription (UUID)<input name="subscription" pattern={uuidPattern} required value={refreshId} onChange={(event) => setRefreshId(event.target.value)} /></label>
         <label>Mode<select name="mode"><option value="poll">poll — vérifier les arrivées</option><option value="repair">repair — réparer une lacune</option><option value="reconcile">reconcile — rechercher des révisions</option></select></label>
         <label>Motif<select name="reason"><option value="manual">manual</option><option value="gap_repair">gap_repair</option><option value="provider_revision">provider_revision</option></select></label>
         <TimeFields /><BudgetFields /><button className="button button-primary" disabled={actions.refresh.isPending}>Planifier l’actualisation</button>
-      </form><ApiErrorMessage operation="write" error={actions.refresh.error} /><PlanResult result={actions.refresh.data} />
+      </form><ApiErrorMessage operation="write" error={refreshError} /><ApiErrorMessage operation="write" error={actions.refresh.error} /><PlanResult result={actions.refresh.data} session={session} />
     </section>
   </div></div>
 }
@@ -120,19 +133,20 @@ function TimeFields({ required = false }: { required?: boolean }) {
   return <><label>Début UTC (ISO 8601)<input name="start" placeholder="2024-01-17T00:00:00Z" required={required} /></label>
     <label>Fin exclusive UTC (ISO 8601)<input name="end" placeholder="2024-01-20T00:00:00Z" required={required} /></label></>
 }
-function PlanResult({ result }: { result?: Resource<IngestionPlan> }) {
+function PlanResult({ result, session }: { result?: Resource<IngestionPlan>; session: AdminSession }) {
   if (!result) return null
   const data = result.data
-  return <div role="status"><Facts values={{ Tâche: data.job_id, État: data.status, 'Blocs planifiés': data.planned_chunks, 'Estimation en octets': data.estimated_bytes, 'Demande réutilisée': data.reused }} />
+  return <div><h3>Résultat de la dernière demande</h3><Facts values={{ Tâche: data.job_id, État: data.status, 'Blocs planifiés': data.planned_chunks, 'Estimation en octets': data.estimated_bytes, 'Demande réutilisée': data.reused }} />
     <p>Planification uniquement. L’exécution du téléchargement nécessite un adaptateur d’ingestion. Le budget est enregistré ; la consommation réelle n’est pas encore mesurée.</p>
     {data.missing_access_requirements.length > 0 && <p>Accès à configurer : {data.missing_access_requirements.join(', ')}</p>}
     {result.warnings.map((warning) => <p key={warning}>{warning}</p>)}<Limitations data={data} />
+    <IngestionJobStatus key={data.job_id} id={data.job_id} session={session} />
   </div>
 }
-function SubscriptionsPage({ session, params }: { session: AdminSession; params: SubscriptionsQuery }) {
+function SubscriptionsPage({ session, params, onSelect }: { session: AdminSession; params: SubscriptionsQuery; onSelect: (id: string) => void }) {
   const page = useCursorPage()
   const query = useSubscriptions(session, { ...params, cursor: page.cursor })
-  return <ResourcePanel title="Souscriptions enregistrées" query={query}>{(data) => <><Records rows={data.subscriptions} /><Pager page={page} next={data.next_cursor} /></>}</ResourcePanel>
+  return <ResourcePanel title="Souscriptions enregistrées" query={query}>{(data) => <><p>Choisir une souscription prépare le formulaire d’actualisation. Aucune demande n’est envoyée avant sa validation.</p><Records rows={data.subscriptions} rowActions={(row) => <button type="button" className="button button-secondary" onClick={() => onSelect(row.id)}>Préparer l’actualisation</button>} /><Pager page={page} next={data.next_cursor} /></>}</ResourcePanel>
 }
 function GapsPage({ session, params }: { session: AdminSession; params: GapsQuery }) {
   const page = useCursorPage()

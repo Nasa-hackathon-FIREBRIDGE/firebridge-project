@@ -14,8 +14,8 @@
 .api-facts dt { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
 .api-facts dd { margin: 0; overflow-wrap: anywhere; line-height: 1.5; }
 .api-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }
-.api-form label, .api-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px; color: var(--muted); font-size: 13px; }
-.api-form input, .api-form select, .api-form textarea, .api-field select { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: var(--panel-soft); color: var(--text); font: inherit; }
+.api-form label, .api-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px; min-width: 0; color: var(--muted); font-size: 13px; }
+.api-form input, .api-form select, .api-form textarea, .api-field select { width: 100%; min-width: 0; max-width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: var(--panel-soft); color: var(--text); font: inherit; }
 .api-form textarea { min-height: 80px; resize: vertical; }
 .api-form button { min-height: 40px; }
 .api-table-wrap { max-width: 100%; overflow: auto; margin: 16px 0; }
