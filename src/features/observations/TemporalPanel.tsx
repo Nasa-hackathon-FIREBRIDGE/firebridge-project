@@ -13,7 +13,8 @@ import { Banner } from '../../components/ui/Banner'
 export function TemporalPanel({ analysisId, filters, onChange, compact = false }: {
   analysisId?: string; filters: ObservationFilters; onChange: (value: ObservationFilters) => void; compact?: boolean
 }) {
-  const calendar = useNativeCalendar(analysisId)
+  const [resolution, setResolution] = useState<'day' | 'week' | 'month'>('day')
+  const calendar = useNativeCalendar(analysisId, resolution)
   const periods = calendar.data?.periods ?? []
   const rows = periods.map((period) => ({ ...period, ...summarizeCounts(period.counts_by_source.filter((source) => !filters.sourceId || source.source_id === filters.sourceId)) }))
   const max = rows.reduce((value, row) => row.value !== null && row.value > value ? row.value : value, 1n)
@@ -21,6 +22,13 @@ export function TemporalPanel({ analysisId, filters, onChange, compact = false }
     <header><div><span className="fb-eyebrow"><CalendarDays size={13} />TEMPORAL INVENTORY</span><h3>Detections over time</h3></div>
       <span className="geo-metadata-note">{filters.start || filters.endExclusive ? `${filters.start || 'Saved start'} → ${filters.endExclusive || 'Saved end'} · end excluded` : 'Full saved interval'} · UTC</span></header>
     <p>Choose a period to inspect matching records on the map and in the table. Unknown inventory is marked with a dash.</p>
+    <label className="api-field">Regroupement du calendrier
+      <select aria-label="Regroupement du calendrier" value={resolution} disabled={!analysisId}
+        onChange={(event) => setResolution(event.target.value as 'day' | 'week' | 'month')}>
+        <option value="day">Jour</option><option value="week">Semaine</option><option value="month">Mois</option>
+      </select>
+    </label>
+    <p>Le regroupement porte sur la période enregistrée de l’analyse. Une période sélectionnée restreint l’inspection de la carte et du tableau, sans modifier les données enregistrées.</p>
     <ApiError error={calendar.error} retry={() => { void calendar.refetch() }} />
     {calendar.isError && calendar.data && <Banner tone="warning">Previously loaded temporal inventory is shown; the latest refresh failed.</Banner>}
     {!analysisId ? <Empty>Select an analysis to load its observation timeline.</Empty>
@@ -32,7 +40,7 @@ export function TemporalPanel({ analysisId, filters, onChange, compact = false }
           const monthStart = dense && (start.endsWith('-01') || index === 0)
           const selected = filters.start === start && filters.endExclusive === end
           const label = row.value === null ? 'Unknown' : `${row.lowerBound ? '≥ ' : ''}${row.value.toLocaleString()}`
-          return <button key={row.start} type="button" aria-pressed={selected} className={monthStart ? 'geo-month-start' : undefined} title={`${start}: ${label} records (UTC day)`}
+          return <button key={row.start} type="button" aria-pressed={selected} className={monthStart ? 'geo-month-start' : undefined} title={`${start} → ${end} (end excluded, UTC): ${label} records`}
             onClick={() => onChange({ ...filters, start: selected ? '' : start, endExclusive: selected ? '' : end })}>
             <strong>{label}</strong><span className={`geo-timeline-track ${row.value === null ? 'geo-unknown' : ''}`}><i style={{ height: `${row.value === null || row.value === 0n ? 0 : Math.max(2, Number(row.value * 10000n / max) / 100)}%` }} /></span>
             <time dateTime={row.start}>{dense ? new Date(row.start).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }) : start.slice(5)}</time><span className="sr-only">{start} until {end} exclusive</span>

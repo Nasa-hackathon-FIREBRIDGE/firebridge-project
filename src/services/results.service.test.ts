@@ -119,4 +119,15 @@ describe('public results service with isolated responses', () => {
     expect(requests[0].headers.get('Idempotency-Key')).toBe('stable-key')
     expect(JSON.parse(requests[0].data)).toEqual({ language: 'en', question: '' })
   })
+  it('sends the chosen factual-note language without changing the retry key', async () => {
+    respond({ ...fixtures.explanation, language: 'fr' })
+    await results.createExplanation('analysis', 'stable-french-intent', 'fr')
+    expect(requests[0].headers.get('Idempotency-Key')).toBe('stable-french-intent')
+    expect(JSON.parse(requests[0].data)).toEqual({ language: 'fr', question: '' })
+  })
+  it.each(['day', 'week', 'month'] as const)('requests the selected %s calendar grouping', async (resolution) => {
+    respond({ ...fixtures.calendar, resolution })
+    await results.calendar('analysis', undefined, resolution)
+    expect(requests[0].params).toEqual({ resolution })
+  })
 })

@@ -131,7 +131,7 @@ export const results = {
       signal,
       { limit: 20, source_ids: sourceId, cursor, ...interval },
     ),
-  calendar: (id: string, signal?: AbortSignal) =>
+  calendar: (id: string, signal?: AbortSignal, resolution: 'day' | 'week' | 'month' = 'day') =>
     read<NativeCalendar>(
       analysisPath(id) + '/calendar',
       (v) =>
@@ -147,6 +147,7 @@ export const results = {
             p.counts_by_source.every((s) => isRecord(s) && (count(s.count) || (s.count === null && s.count_status === 'unknown')) && text(s.source_id)),
         ),
       signal,
+      { resolution },
     ),
   provenance: (id: string, cursor?: string, signal?: AbortSignal) =>
     read<ProvenancePage>(
@@ -195,13 +196,13 @@ export const results = {
       signal,
       { scope_key: scope },
     ),
-  async createExplanation(id: string, key: string): Promise<Explanation> {
+  async createExplanation(id: string, key: string, language: 'fr' | 'en' = 'en'): Promise<Explanation> {
     return checked(
       unwrap(
         (
           await api.post<ApiEnvelope<Explanation>>(
             analysisPath(id) + '/explanations',
-            { language: 'en', question: '' },
+            { language, question: '' },
             { headers: { 'Idempotency-Key': key } },
           )
         ).data,

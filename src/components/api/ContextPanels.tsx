@@ -3,6 +3,7 @@ import { useCell, useComparison, useCoverage, useReports, useWeather } from '../
 import type { ComparisonQuery, CoverageQuery, DateQuery, PageQuery, ReportsQuery, WeatherQuery } from '../../services/data.types'
 import { Facts, Filters, Limitations, Pager, Records, ResourcePanel, StructuredValue } from './ApiPrimitives'
 import { useCursorPage } from '../../hooks/useCursorPage'
+import { externalReportUrl } from './format'
 
 export function CoveragePanel({ id }: { id: string }) {
   const [params, setParams] = useState<CoverageQuery>({})
@@ -63,6 +64,14 @@ function ReportsPage({ id, params }: { id: string; params: ReportsQuery }) {
   const query = useReports(id, { ...params, cursor: page.cursor })
   return <ResourcePanel title="Rapports et événements" query={query}>{(data) => <>
     <Records rows={data.reports.map((row) => ({ titre: row.title, éditeur: row.publisher, début: row.event_start, fin_exclusive: row.event_end_exclusive, relation: row.relation, révision_du_rapport: row.report_review_status, révision_de_la_déclaration: row.claim_review_status, déclaration: row.claim_summary, report_id: row.report_id }))} />
+    {data.reports.length > 0 && <section aria-label="Articles associés"><h3>Consulter les articles</h3>
+      <ul>{[...new Map(data.reports.map((row) => [row.report_id, row])).values()].map((row) => {
+        const url = externalReportUrl(row.url)
+        return <li key={row.report_id}>{url
+          ? <a href={url} target="_blank" rel="noopener noreferrer">{row.title} — ouvrir l’article</a>
+          : <span>{row.title} — lien non disponible</span>}</li>
+      })}</ul>
+    </section>}
     <p>Un rapport candidat ou non révisé ne confirme pas un incendie.</p>
     <Pager page={page} next={data.next_cursor} /><Limitations data={data} />
   </>}</ResourcePanel>

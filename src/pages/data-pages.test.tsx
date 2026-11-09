@@ -243,7 +243,7 @@ describe('Connected data screens', () => {
     await screen.findByRole('alert')
     fireEvent.click(screen.getByRole('button', { name: 'Demander la synthèse' }))
     await screen.findByText('explanation-id')
-    await screen.findByText('Synthèse de test')
+    await screen.findByRole('heading', { name: 'Synthèse de test' })
     expect(reads).toEqual(['/explanations/explanation-id'])
     expect(keys).toHaveLength(2)
     expect(keys[1]).toBe(keys[0])

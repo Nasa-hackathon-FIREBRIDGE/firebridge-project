@@ -23,10 +23,10 @@ export function useNativeSummary(id?: string) {
     enabled: !!id,
   })
 }
-export function useNativeCalendar(id?: string) {
+export function useNativeCalendar(id?: string, resolution: 'day' | 'week' | 'month' = 'day') {
   return useQuery({
-    queryKey: key(id, 'calendar'),
-    queryFn: ({ signal }) => results.calendar(id!, signal),
+    queryKey: [...key(id, 'calendar'), resolution],
+    queryFn: ({ signal }) => results.calendar(id!, signal, resolution),
     enabled: !!id,
   })
 }
@@ -62,7 +62,7 @@ export function useContextRead(
 export function useCreateExplanation() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, key }: { id: string; key: string }) => results.createExplanation(id, key),
+    mutationFn: ({ id, key, language }: { id: string; key: string; language?: 'fr' | 'en' }) => results.createExplanation(id, key, language),
     onSuccess: async (value) => {
       client.setQueryData(key(value.explanation_id, 'explanation'), value)
       await client.invalidateQueries({ queryKey: workspaceKeys.jobs })

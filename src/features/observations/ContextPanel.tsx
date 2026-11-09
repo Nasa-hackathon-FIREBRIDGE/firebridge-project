@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react'
 import { ChevronDown, FileText } from 'lucide-react'
 import { SectionHeading } from '../../components/workspace/SectionHeading'
-import { isRecord } from '../../lib/api.validation'
-import { createIdempotencyKey } from '../../services/analyses.service'
+import { useIntentKey } from '../../hooks/useIntentKey'
 import { ApiError, Empty, Status } from '../analyses/Feedback'
 import { JobPanel } from '../analyses/JobPanel'
 import { useContextRead, useCreateExplanation, useExplanation } from './useResults'
 import { CopyableId } from '../../components/ui/CopyableId'
+import { ContextDetails } from './ContextDetails'
+import { FactualExplanation } from '../../components/api/FactualExplanation'
 
 export function ContextPanel({ analysisId, initiallyExpanded = false }: { analysisId?: string; initiallyExpanded?: boolean }) {
   const [expanded, setExpanded] = useState(initiallyExpanded)
@@ -16,17 +17,15 @@ export function ContextPanel({ analysisId, initiallyExpanded = false }: { analys
   const reports = useContextRead(analysisId, 'reports', expanded)
   const create = useCreateExplanation()
   const explanation = useExplanation(create.data?.explanation_id)
-  const key = useRef<string | null>(null)
+  const keyForIntent = useIntentKey()
+  const [language, setLanguage] = useState<'fr' | 'en'>('fr')
   const locked = useRef(false)
   const output = explanation.data?.output
-  const findings =
-    isRecord(output) && Array.isArray(output.findings) ? output.findings.filter(isRecord) : []
   async function generate() {
     if (!analysisId || locked.current) return
     locked.current = true
-    key.current ??= createIdempotencyKey()
     try {
-      await create.mutateAsync({ id: analysisId, key: key.current })
+      await create.mutateAsync({ id: analysisId, language, key: keyForIntent({ analysisId, language }) })
     } catch {
       /* Render the real mutation error. */
     } finally {
@@ -108,6 +107,7 @@ export function ContextPanel({ analysisId, initiallyExpanded = false }: { analys
                 </article>
               ))}
             </div>
+            <ContextDetails key={analysisId} analysisId={analysisId} />
             <div className="fb-factual-note">
               <div>
                 <span className="fb-eyebrow">REPRODUCIBLE NOTE</span>
@@ -117,6 +117,12 @@ export function ContextPanel({ analysisId, initiallyExpanded = false }: { analys
                   model or causal inference.
                 </p>
               </div>
+              <label className="api-field">Langue de la synthèse
+                <select value={language} disabled={create.isPending}
+                  onChange={(event) => { setLanguage(event.target.value as 'fr' | 'en'); create.reset() }}>
+                  <option value="fr">Français</option><option value="en">English</option>
+                </select>
+              </label>
               <button
                 type="button"
                 className="button button-primary"
@@ -140,23 +146,7 @@ export function ContextPanel({ analysisId, initiallyExpanded = false }: { analys
               <div className="fb-note-output">
                 <Status value={explanation.data.status} />
                 <CopyableId value={explanation.data.explanation_id} label="explanation ID" />
-                {isRecord(output) && typeof output.summary === 'string' && (
-                  <h3>{output.summary}</h3>
-                )}
-                {findings.length > 0 && (
-                  <ul>
-                    {findings.map((finding, index) => (
-                      <li key={typeof finding.fact_id === 'string' ? finding.fact_id : index}>
-                        {typeof finding.text === 'string'
-                          ? finding.text
-                          : 'No textual finding supplied.'}
-                        <small>
-                          {typeof finding.source_id === 'string' ? finding.source_id : ''}
-                        </small>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <FactualExplanation status={explanation.data.status} output={output} />
                 {explanation.data.job_id && (
                   <JobPanel key={explanation.data.job_id} id={explanation.data.job_id} />
                 )}
