@@ -42,6 +42,7 @@ import { CopyableId } from '../../components/ui/CopyableId'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { Stepper } from '../../components/ui/Stepper'
 import { analysisPreparationStage, requestDisabledReason, workflowSteps, type WorkflowPresentation } from './workspace.presentation'
+import { useAnalysisLaunch } from './useAnalysisLaunch'
 import { TabIndicator } from '../../components/ui/TabIndicator'
 import { AnalysisPreparation } from './AnalysisPreparation'
 
@@ -91,7 +92,11 @@ export default function AnalysisWorkspace() {
   const changeFilters = (value: ObservationFilters) => setFilterState({ id: analysisId, value })
   const analysis = useAnalysis(analysisId)
   const release = useRelease(analysis.data?.release_id)
-  const areaId = analysis.data?.area_id ?? (params.get('area') || undefined)
+  // Until the new analysis is first read, its acceptance describes it (status, area); the previous selection
+  // the URL may still show during the router transition is ignored.
+  const { accepted, awaitingRoute, accept } = useAnalysisLaunch(analysisId)
+  const selectedAnalysis = awaitingRoute ? undefined : analysis.data
+  const areaId = selectedAnalysis?.area_id ?? accepted?.areaId ?? (params.get('area') || undefined)
   const area = useArea(areaId)
   const [geometryText, setGeometryText] = useState('')
   const [drawingError, setDrawingError] = useState<unknown>(null)
@@ -105,7 +110,12 @@ export default function AnalysisWorkspace() {
   const [areaSaving, setAreaSaving] = useState(false)
   const disabledReason = requestDisabledReason(savedAreaAvailable, workflowState)
   const steps = workflowSteps(savedAreaAvailable, workflowState, analysis.isError ? undefined : analysis.data)
-  const preparationStage = analysisPreparationStage(workflowState.pending, analysis.data, analysis.isError)
+  const preparationStage = analysisPreparationStage(workflowState.pending, selectedAnalysis, analysis.isError && !awaitingRoute, accepted?.status)
+  // While a request is in flight the selected analysis (if any) is the previous one: describe the request instead.
+  const draftInterval = workflowState.start && workflowState.end ? humanInterval(workflowState.start, workflowState.end) : undefined
+  const preparationInterval = preparationStage === 'submitting' || !selectedAnalysis
+    ? draftInterval
+    : humanInterval(selectedAnalysis.start_date, selectedAnalysis.end_date_exclusive)
   const openAreaForm = () => {
     if (setupPanel.current) setupPanel.current.open = true
     const editor = document.querySelector<HTMLDetailsElement>('#study-area .fb-editor')
@@ -257,10 +267,18 @@ export default function AnalysisWorkspace() {
           {copyMessage}
         </p>
       )}
-      {analysisId && analysis.isPending && <Skeleton height={56} label="Loading the selected analysis…" />}
+      {analysisId && analysis.isPending && !preparationStage && <Skeleton height={56} label="Loading the selected analysis…" />}
       {analysis.isError && analysis.data && <Banner tone="warning">Previously loaded analysis details are shown; the latest refresh failed. Result availability still follows the existing checks.</Banner>}
       <ApiError context="analysis" error={analysis.error} retry={() => { void analysis.refetch() }} />
-      {preparationStage && <AnalysisPreparation stage={preparationStage} />}
+      {preparationStage && (
+        <AnalysisPreparation
+          stage={preparationStage}
+          areaName={area.data?.name}
+          geometry={area.data?.geometry}
+          interval={preparationInterval}
+          startedAt={selectedAnalysis?.created_at}
+        />
+      )}
 
       {/* ── Tabs ───────────────────────────────────────────────────────── */}
       <div className="fbx-tabs-wrap">
@@ -396,6 +414,7 @@ export default function AnalysisWorkspace() {
                     }}
                     onSelect={(id) => setParams({ analysis: id })}
                     onWorkflowState={setWorkflowState}
+                    onAccepted={accept}
                   />
                 </div>
               </div>
