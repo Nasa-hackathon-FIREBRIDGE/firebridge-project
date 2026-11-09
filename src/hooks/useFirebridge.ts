@@ -49,7 +49,7 @@ export function useAnalysis(id: string | undefined) {
         (query.state.data.status === 'partial' &&
           query.state.data.job &&
           ['queued', 'running'].includes(query.state.data.job.status)))
-        ? 3000
+        ? (Date.now() - Date.parse(query.state.data.created_at) < 30_000 ? 1000 : 3000)
         : false,
   })
 }
