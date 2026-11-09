@@ -9,6 +9,28 @@ for (const path of ['/', '/dashboard', '/analyses', '/api-analysis', '/catalog',
   })
 }
 
+test('lazy demo controls retain shared date, satellite and search state', async ({ page }) => {
+  await visit(page, '/demo')
+  const satellites = page.getByRole('button', { name: /^Satellites/ })
+  await satellites.click()
+  const sensors = page.getByRole('region', { name: 'Satellite filter' })
+  await expect(sensors).toBeVisible()
+  const firstSensor = sensors.getByRole('checkbox').first()
+  await firstSensor.uncheck()
+  await expect(firstSensor).not.toBeChecked()
+  await firstSensor.check()
+  await page.keyboard.press('Escape')
+  await expect(sensors).toHaveCount(0)
+  await page.getByLabel('Start date', { exact: true }).fill('2024-07-19')
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2024-07-19')
+  await page.getByRole('button', { name: 'Search detections', exact: true }).click()
+  const search = page.getByRole('textbox', { name: 'Search synthetic detections' })
+  await search.fill('test-only-query')
+  await expect(search).toHaveValue('test-only-query')
+  await page.getByRole('button', { name: 'Clear search', exact: true }).click()
+  await expect(search).toHaveValue('')
+})
+
 test('dashboard lists saved analyses, filters by status and opens a record', async ({ page }) => {
   await visit(page, '/dashboard')
   const data = await actionResponse(page,
