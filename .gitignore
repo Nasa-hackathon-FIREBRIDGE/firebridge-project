@@ -33,3 +33,7 @@ documents/
 /firebridge-backend/Add-Content
 /firebridge-backend/if
 /firebridge-backend/q
+
+# Python deployment helpers
+__pycache__/
+*.py[cod]

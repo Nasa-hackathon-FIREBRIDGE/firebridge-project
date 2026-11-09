@@ -89,9 +89,9 @@ Schema additions are deliberately not reversed by image rollback.
 3. Copy this reviewed source tree to `/opt/firebridge/webapp/installer`. Back up
    the database using the data platform's backup tool before applying additions.
    Run as root from that tree:
-   `python3 deploy/prepare_database.py --compose /opt/firebridge/current/compose.yaml --database firebridge`.
+   `python3 deploy/prepare_database.py --stack /opt/firebridge/current/scripts/stack.sh --database firebridge`.
    This verifies all pipeline migration checksums and applies only the four
-   additional application migrations. Use the actual data-platform Compose path
+   additional application migrations. Use the actual data-platform stack script
    if it differs. Never run the application's full Prisma baseline on the data DB.
 4. Generate a dedicated Ed25519 CI key outside Git. Copy only its public key to
    the server and run `python3 deploy/provision_server.py --ci-public-key /path/to/ci.pub`.
