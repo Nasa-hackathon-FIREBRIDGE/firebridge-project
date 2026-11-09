@@ -1,129 +1,25 @@
-@layer theme, base, components, utilities;
+/*
+ * Cascade order (lowest → highest):
+ *   theme      Tailwind design tokens
+ *   vendor     MapLibre defaults
+ *   legacy     pre-redesign stylesheets (kept for screens not yet rebuilt)
+ *   components FIREBRIDGE design system (styles/theme.css)
+ *   utilities  Tailwind utilities used by redesigned components
+ */
+@layer theme, vendor, base, legacy, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
-@import 'maplibre-gl/dist/maplibre-gl.css';
-
-@theme static {
-  --color-firebridge-page: #060c19;
-  --color-firebridge-sidebar: #08111f;
-  --color-firebridge-panel: #0c1627;
-  --color-firebridge-surface: #101c31;
-  --color-firebridge-line: #1b2a44;
-  --color-firebridge-text: #e3ebf7;
-  --color-firebridge-cyan: #38bdf8;
-  --color-firebridge-blue: #5b9cf5;
-}
-
-:root {
-  font-family: 'Segoe UI', Arial, sans-serif;
-  color: #e4e9ef;
-  background: #060c19;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  font-optical-sizing: auto;
-  font-weight: 400;
-  --page: #060c19;
-  --sidebar: #08111f;
-  --panel: #0c1627;
-  --panel-soft: #101c31;
-  --line: #1b2a44;
-  --line-soft: #15223a;
-  --text: #e3ebf7;
-  --muted: #8a9bb5;
-  --dim: #64779a;
-  --teal: #38bdf8;
-  --teal-deep: #1d7fb8;
-  --accent: #38bdf8;
-  --orange: #f08a4b;
-  --blue: #5b9cf5;
-  --mono: Consolas, 'Courier New', monospace;
-  /* Presentation roles: original palette above stays unchanged. */
-  --surface-0: var(--page);
-  --surface-1: var(--sidebar);
-  --surface-2: var(--panel);
-  --surface-3: var(--panel-soft);
-  --text-primary: var(--text);
-  --text-secondary: var(--muted);
-  --text-decorative: var(--dim);
-  --status-success: #86d6b1;
-  --status-warning: #e7c47a;
-  --status-danger: #f3a6a6;
-  --status-partial: var(--blue);
-  --status-active: var(--accent);
-  --status-neutral: var(--muted);
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-12: 48px;
-  --space-16: 64px;
-  --radius-small: 4px;
-  --radius-control: 8px;
-  --radius-card: 12px;
-  --radius-pill: 999px;
-  --border-decorative: 1px solid var(--line);
-  --border-control: 1px solid var(--dim);
-  --focus-ring: 2px solid var(--accent);
-  --focus-offset: 3px;
-  --shadow-raised: 0 8px 24px rgb(6 12 25 / 35%);
-  --shadow-overlay: 0 16px 48px rgb(6 12 25 / 55%);
-  --map-glass: rgb(12 22 39 / 92%);
-  --map-glass-blur: 8px;
-  --z-content: 0;
-  --z-header: 10;
-  --z-map-tools: 20;
-  --z-popover: 30;
-  --z-drawer: 40;
-  --z-modal: 50;
-  --z-toast: 60;
-  --z-tooltip: 70;
-  --motion-fast: 120ms;
-  --motion-standard: 200ms;
-  --motion-enter: 320ms;
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
-  --font-ui: 'Segoe UI', system-ui, Arial, sans-serif;
-  --type-label: 12px;
-  --leading-label: 16px;
-  --type-table: 14px;
-  --leading-table: 20px;
-  --type-body: 15px;
-  --leading-body: 24px;
-  --type-subsection: 16px;
-  --leading-subsection: 24px;
-  --type-section: 20px;
-  --leading-section: 28px;
-  --type-title: 28px;
-  --leading-title: 36px;
-  --type-hero: 36px;
-  --leading-hero: 44px;
-  --type-stat: 32px;
-  --leading-stat: 40px;
-  --weight-body: 400;
-  --weight-label: 500;
-  --weight-heading: 600;
-  --target-control: 44px;
-  --target-compact: 40px;
-  /* Documentation aliases; CSS variables cannot be used in media query conditions. */
-  --breakpoint-tablet: 768px;
-  --breakpoint-sidebar: 820px;
-  --breakpoint-compact: 1024px;
-  --breakpoint-desktop: 1280px;
-  --breakpoint-wide: 1440px;
-  --breakpoint-extra-wide: 1920px;
-}
-
-* { box-sizing: border-box; }
-html { min-width: 360px; min-height: 100%; background: var(--page); }
-body { margin: 0; min-width: 360px; min-height: 100vh; background: var(--page); }
-button, input { font: inherit; }
-button { color: inherit; }
-a { color: inherit; }
-button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
-::selection { color: #fff; background: #1d6fa5; }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@import 'maplibre-gl/dist/maplibre-gl.css' layer(vendor);
+@import './styles/legacy-root.css' layer(legacy);
+@import './App.css' layer(legacy);
+@import './components/api/api-workspace.css' layer(legacy);
+@import './features/analyses/workspace.css' layer(legacy);
+@import './astra.css' layer(legacy);
+@import './geospatial.css' layer(legacy);
+@import './platform.css' layer(legacy);
+@import './components/ui/ui.css' layer(legacy);
+@import './components/shell.polish.css' layer(legacy);
+@import './features/analyses/workspace.presentation.css' layer(legacy);
+@import './pages/dashboard.css' layer(legacy);
+@import './styles/theme.css';
+@import './styles/workspace.css';
