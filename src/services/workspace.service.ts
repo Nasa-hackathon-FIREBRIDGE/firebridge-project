@@ -42,9 +42,9 @@ function validateListAnalysis(row: AnalysisListItem) {
         (key) => typeof value[key] === 'string' && !!value[key],
       ) &&
       analysisStatuses.includes(String(value.status)) &&
-      value.metric_key === 'native_detections_v1' &&
+      typeof value.metric_key === 'string' && !!value.metric_key &&
       value.data_mode === 'standard_only' &&
-      value.grid_id === null &&
+      (value.grid_id === null || (typeof value.grid_id === 'string' && !!value.grid_id)) &&
       (value.completed_at === null || typeof value.completed_at === 'string'),
   )
 }

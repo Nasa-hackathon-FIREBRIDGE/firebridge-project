@@ -5,6 +5,7 @@ import { health } from './health.service'
 import { areas } from './areas.service'
 import { analyses } from './analyses.service'
 import { jobs } from './jobs.service'
+import { workspace } from './workspace.service'
 import {
   acceptedFixture,
   analysisFixture,
@@ -123,6 +124,18 @@ describe('Ten public endpoint contracts (isolated HTTP adapter)', () => {
     await expect(analyses.get('analysis')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
     respond(null)
     await expect(areas.get('a')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  })
+  it('reads prepared scientific analyses without relaxing native-only creation', async () => {
+    const prepared = { ...analysisFixture, metric_key: 'source_response_fixture', grid_id: 'phase6_fixture' }
+    respond(prepared)
+    expect(await analyses.get('prepared')).toMatchObject({ metric_key: prepared.metric_key, grid_id: prepared.grid_id })
+    respond({ analyses: [analysisFixture, prepared], nextCursor: null })
+    expect((await workspace.analyses('')).items).toHaveLength(2)
+    respond({ ...acceptedFixture, metric_key: prepared.metric_key, grid_id: prepared.grid_id })
+    await expect(analyses.create({ input: { area_id: 'a', start_date: '2024-01-01', end_date_exclusive: '2024-01-02' }, idempotencyKey: 'native-only' }))
+      .rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+    respond({ ...prepared, grid_id: 42 })
+    await expect(analyses.get('prepared')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
   })
   it('accepts zero-byte tiles, requests binary MVT and rejects unsupported coordinates/layers', async () => {
     let calls = 0

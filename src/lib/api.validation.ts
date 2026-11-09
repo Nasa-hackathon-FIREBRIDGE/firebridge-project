@@ -86,14 +86,15 @@ const analysis = (d: RecordValue) =>
   text(d.area_id) &&
   text(d.release_id) &&
   statusIn(d.status, analysisStatuses) &&
-  d.metric_key === 'native_detections_v1' &&
-  d.grid_id === null &&
+  text(d.metric_key) &&
+  nullableText(d.grid_id) &&
   d.data_mode === 'standard_only' &&
   text(d.start_date) &&
   text(d.end_date_exclusive) &&
   text(d.created_at)
 export const validateAccepted = (data: AnalysisAccepted) =>
-  checked(data, (d) => analysis(d) && nullableText(d.job_id))
+  checked(data, (d) => analysis(d) && d.metric_key === 'native_detections_v1' &&
+    d.grid_id === null && nullableText(d.job_id))
 export const validateAnalysis = (data: AnalysisView) =>
   checked(
     data,
