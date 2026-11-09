@@ -3,7 +3,8 @@ import { summarizeCounts } from '../../lib/nativeCounts'
 import { ApiError, Empty, Status } from '../analyses/Feedback'
 import { useNativeCalendar, useNativeSummary } from './useResults'
 import type { ObservationFilters } from './filters'
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
+import { sensorMeta } from '../../lib/sensors'
 import { Link } from 'react-router-dom'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { CopyableId } from '../../components/ui/CopyableId'
@@ -24,15 +25,17 @@ export function TemporalPanel({ analysisId, filters, onChange, compact = false }
     {calendar.isError && calendar.data && <Banner tone="warning">Previously loaded temporal inventory is shown; the latest refresh failed.</Banner>}
     {!analysisId ? <Empty>Select an analysis to load its observation timeline.</Empty>
       : calendar.isPending ? <Skeleton height={132} label="Loading temporal inventory…" />
-      : rows.length > 0 ? <div className="geo-timeline" aria-label="Available observation periods">
-        {rows.map((row) => {
+      : rows.length > 0 ? <div className="geo-timeline" aria-label="Available observation periods" data-dense={rows.length > 45 || undefined}>
+        {rows.map((row, index) => {
           const start = row.start.slice(0, 10), end = row.end_exclusive.slice(0, 10)
+          const dense = rows.length > 45
+          const monthStart = dense && (start.endsWith('-01') || index === 0)
           const selected = filters.start === start && filters.endExclusive === end
           const label = row.value === null ? 'Unknown' : `${row.lowerBound ? '≥ ' : ''}${row.value.toLocaleString()}`
-          return <button key={row.start} type="button" aria-pressed={selected} title={`${row.start} until ${row.end_exclusive} (exclusive): ${label} records`}
+          return <button key={row.start} type="button" aria-pressed={selected} className={monthStart ? 'geo-month-start' : undefined} title={`${start}: ${label} records (UTC day)`}
             onClick={() => onChange({ ...filters, start: selected ? '' : start, endExclusive: selected ? '' : end })}>
             <strong>{label}</strong><span className={`geo-timeline-track ${row.value === null ? 'geo-unknown' : ''}`}><i style={{ height: `${row.value === null || row.value === 0n ? 0 : Math.max(2, Number(row.value * 10000n / max) / 100)}%` }} /></span>
-            <time dateTime={row.start}>{start.slice(5)}</time><span className="sr-only">{start} until {end} exclusive</span>
+            <time dateTime={row.start}>{dense ? new Date(row.start).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }) : start.slice(5)}</time><span className="sr-only">{start} until {end} exclusive</span>
           </button>
         })}
       </div> : !calendar.error && <Empty>No periods returned. Missing detections do not establish observation coverage.</Empty>}
@@ -59,7 +62,8 @@ export function SourceComparison({ analysisId }: { analysisId?: string }) {
       : summary.isPending ? <Skeleton height={200} label="Loading source inventories…" />
       : sources.length ? <div className="geo-source-grid">{displayed.map((source) => {
         const count = source.count === null || source.count_status === 'unknown' ? null : BigInt(source.count)
-        return <article key={source.source_id}><span className="fb-eyebrow">{source.product} · {source.collection}</span><h3>{source.platform}</h3>
+        const sensor = sensorMeta(source.platform, source.product, source.source_id)
+        return <article key={source.source_id} style={{ '--sensor': sensor.color } as CSSProperties}><span className="fb-eyebrow">{sensor.instrument} · {source.product} · C{source.collection}</span><h3><i className="geo-sensor-dot" aria-hidden="true" />{sensor.key === 'other' ? source.platform : sensor.label}</h3>
           <strong className="geo-source-count">{count === null ? 'Unknown' : `${source.count_status === 'lower_bound' ? '≥ ' : ''}${count.toLocaleString()}`}</strong><span>native detection records</span>
           <div className="geo-source-track" aria-hidden="true"><i style={{ width: `${count === null ? 0 : Number(count * 10000n / max) / 100}%` }} /></div>
           <dl><div><dt>Processing stream</dt><dd>{source.processing_stream}</dd></div><div><dt>Inventory</dt><dd>{source.inventory_status}</dd></div><div><dt>Count status</dt><dd>{source.count_status}</dd></div></dl>
