@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   nativeProcessingLevels,
+  nativePartitionSources,
   relevantNativePartitions,
   unsupportedNativePolicies
 } from '@firebridge/contracts';
@@ -46,15 +47,14 @@ function interval(partition: NativePartition): [number, number] | null {
   const { start, end_exclusive: end } = partition.support_spec;
   if (typeof start !== 'string' || typeof end !== 'string') return null;
   try {
-    const bounds: [number, number] = [Date.parse(timestamp(start)), Date.parse(timestamp(end))];
+    const bounds: [number, number] = [Date.parse(timestamp(start.replace(/\+00:00$/, 'Z'))), Date.parse(timestamp(end.replace(/\+00:00$/, 'Z')))];
     return bounds[0] < bounds[1] ? bounds : null;
   } catch {
     return null;
   }
 }
 function sourceIds(partition: NativePartition): string[] {
-  const ids = partition.support_spec.source_ids;
-  return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
+  return nativePartitionSources(partition);
 }
 // Complete point-feed inventory is different from satellite observation coverage.
 // Publication must explicitly verify completeness for this immutable area revision.

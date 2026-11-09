@@ -38,7 +38,9 @@ export function detectionSelection(
               JOIN firebridge.data_partitions frozen_p ON frozen_p.id=frozen_rp.partition_id
               WHERE frozen_rp.release_id=a.release_id AND frozen_p.kind='detections'
               AND d.source_id IN(SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(frozen_p.support_spec->'source_ids')='array'
-                THEN frozen_p.support_spec->'source_ids' ELSE '[]'::jsonb END))) END)`
+                THEN frozen_p.support_spec->'source_ids'
+                WHEN jsonb_typeof(frozen_p.support_spec->'source_id')='string'
+                THEN jsonb_build_array(frozen_p.support_spec->'source_id') ELSE '[]'::jsonb END))) END)`
       }
       AND a.time_basis = 'utc' AND a.metric_key = 'native_detections_v1'
       AND a.selection_policy = 'standard' AND a.grid_id IS NULL
@@ -122,12 +124,12 @@ export async function findResultContext(
     : parts.flatMap(nativePartitionSources);
   if (
     !frozen.length ||
-    frozen.length > 100 ||
     !frozen.every((v) => typeof v === 'string' && v.length > 0)
   )
     return result;
   const sources = [...new Set(frozen as string[])].sort(),
     levels = nativeProcessingLevels(spec);
+  if (sources.length > 100) return result;
   if (!levels.length || unsupportedNativePolicies(spec))
     return { ...result, snapshot_status: 'unsupported' };
   const selected = relevantNativePartitions(
