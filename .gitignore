@@ -23,3 +23,13 @@ documents/
 !/firebridge-backend/README.md
 /firebridge-frontend/*.md
 !/firebridge-frontend/README.md
+
+# Private deployment material and accidental terminal artifacts.
+.deploy/
+.tools/
+/firebridge-backend/$*
+/firebridge-backend/backend-inspection.txt
+/firebridge-backend/docker
+/firebridge-backend/Add-Content
+/firebridge-backend/if
+/firebridge-backend/q

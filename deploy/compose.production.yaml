@@ -1,0 +1,108 @@
+name: firebridge-webapp
+x-runtime: &runtime
+  restart: unless-stopped
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ['/tmp:size=64m,mode=1777']
+  logging:
+    driver: json-file
+    options: {max-size: '10m', max-file: '3'}
+
+services:
+  api:
+    <<: *runtime
+    image: ${API_IMAGE:?Verified API image required}
+    env_file:
+      - path: ./runtime.env
+        format: raw
+    networks: [web, jobs, data]
+    ports: ['127.0.0.1:13000:3000']
+    volumes: [exports:/app/.data/exports]
+    mem_limit: 384m
+    cpus: 1
+    depends_on:
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+  worker:
+    <<: *runtime
+    image: ${WORKER_IMAGE:?Verified worker image required}
+    env_file:
+      - path: ./runtime.env
+        format: raw
+    networks: [jobs, data]
+    volumes: [exports:/app/.data/exports]
+    stop_grace_period: 40s
+    mem_limit: 384m
+    cpus: 1
+    depends_on:
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, apps/worker/dist/health.js]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+  frontend:
+    <<: *runtime
+    image: ${FRONTEND_IMAGE:?Verified frontend image required}
+    networks: [web]
+    tmpfs: ['/tmp:size=32m,mode=1777', '/var/cache/nginx:size=32m']
+    mem_limit: 96m
+    cpus: 0.5
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/healthz']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  redis:
+    <<: *runtime
+    image: redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
+    # Run directly as redis; no root entrypoint/chown capability is needed.
+    user: '999:999'
+    entrypoint: [redis-server, /etc/redis/redis.conf]
+    networks: [jobs]
+    volumes: [redis_data:/data, './redis.conf:/etc/redis/redis.conf:ro']
+    mem_limit: 160m
+    cpus: 0.5
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$(sed -n "s/^requirepass //p" /etc/redis/redis.conf)" redis-cli ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  proxy:
+    <<: *runtime
+    image: caddy:2-alpine@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9
+    cap_add: [NET_BIND_SERVICE]
+    networks: [web]
+    ports: ['80:80', '443:443']
+    volumes: ['./Caddyfile:/etc/caddy/Caddyfile:ro', caddy_data:/data, caddy_config:/config]
+    mem_limit: 160m
+    cpus: 0.5
+    depends_on:
+      api: {condition: service_healthy}
+      frontend: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:2019/config/']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+networks:
+  web: {}
+  jobs: {internal: true}
+  data:
+    external: true
+    name: firebridge_default
+volumes:
+  exports: {}
+  redis_data: {}
+  caddy_data: {}
+  caddy_config: {}

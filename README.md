@@ -41,5 +41,17 @@ le VPS doit utiliser la configuration et les réseaux prévus pour la base exist
   par la publication du code dans cette branche.
 
 Les images API, worker et frontend ont été construites dans cette structure.
-L'audit npm du backend signale des dépendances à actualiser avant exposition
-publique : six alertes de production, dont trois élevées, au 8 novembre 2026.
+Les dépendances ont été actualisées avant exposition publique : les audits npm de
+production backend et frontend ne signalent aucune vulnérabilité au 8 novembre 2026.
+Six alertes modérées restent dans les outils de développement backend ; aucune
+alerte élevée ou critique n'est acceptée par la CI.
+
+## Production Contabo
+
+- Site prévu : https://astramind.solutions ; API : `/api/v1`.
+- La branche `staging` est déployée après validation par `.github/workflows/webapp.yml`.
+- Configuration, réseau privé, compte SQL limité et fonctionnement CI/CD :
+  [deploy/README.md](deploy/README.md).
+- Les images sont construites/testées en CI, puis transférées par un compte SSH
+  dédié. Aucun secret serveur ne fait partie des images ou du dépôt.
+- La base de données et les pipelines existants restent dans leur propre stack.

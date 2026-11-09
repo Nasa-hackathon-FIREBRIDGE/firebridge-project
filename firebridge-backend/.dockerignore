@@ -31,3 +31,8 @@ docs/PHASE_1_PAS_A_PAS.md
 /docker
 /if
 /q
+
+.env.*
+.deploy
+.tools
+**/coverage

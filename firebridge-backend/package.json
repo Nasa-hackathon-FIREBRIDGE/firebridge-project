@@ -22,15 +22,21 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "@eslint/js": "9.15.0",
-    "@types/node": "22.10.2",
+    "@eslint/js": "9.39.5",
+    "@types/node": "^22.19.0",
     "@typescript-eslint/eslint-plugin": "8.72.0",
     "@typescript-eslint/parser": "8.72.0",
-    "eslint": "9.15.0",
+    "eslint": "9.39.5",
     "globals": "14.0.0",
     "prettier": "3.4.0",
-    "tsx": "4.19.1",
+    "tsx": "4.23.15",
     "typescript": "5.7.2",
-    "vitest": "2.1.8"
+    "vitest": "5.0.5"
+  },
+  "engines": {
+    "node": ">=22.22.2 <23 || >=24.15.0 <25"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.0"
   }
 }

@@ -30,7 +30,7 @@ const research = [
   { to: '/catalog', label: 'Data catalogue', icon: Database },
 ]
 const demonstrations = [
-  { to: '/', label: 'Overview', icon: Compass },
+  { to: '/demo', label: 'Overview', icon: Compass },
   { to: '/explore', label: 'Explore map', icon: Map },
   { to: '/compare', label: 'Compare sensors', icon: Layers2 },
   { to: '/calendar', label: 'Activity calendar', icon: CalendarDays },

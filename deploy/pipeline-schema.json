@@ -1,0 +1,15 @@
+{
+  "revision": "980a58006432cea3214b8d0b492cf4781322bd1d",
+  "migrations": {
+    "001_initial.sql": "71a82852a02eb938de0d392730e5875a14e978357565a285663f14aaae789ad3",
+    "002_pipeline_runtime.sql": "a63d7ad099ea2fef35df07f3ae80acfb7afc6c61a9864fd0bfb6367be0bb48b0",
+    "003_publication_heads.sql": "99db560a3fbcf98c8c8d2265beed5b7e4990a73c372086bf8bd1e2d41a57ba85",
+    "004_science_inventory.sql": "44f0076094d6b8fcfa1518532c5f7e5725dd9a58289c21f0c33fdb2c51b469d3",
+    "005_news_tasks.sql": "1bc209df36c3c405d2e2b7bd0e1934214200a259a94a196eb29d3b6d946faef8",
+    "006_serving_weather_location.sql": "46238e7669bff9a8cddb319cc5fa5493c94545c6e18b3f2eea5d8530421dc033",
+    "007_registered_scopes.sql": "92f3c5aa06ee9c681f6df7578b3e1370ddf4995468179a11cff7e5e64dc1e2ac",
+    "008_portable_object_uris.sql": "0b67b9126fa1b813a769876183e70166ec2605d375280a6f72e90e3ffd6a7b0a",
+    "009_analytics_orchestration.sql": "108e103a807662c0f9c9ae91463b4ba03517f1f7bb952adb55713e322a232056",
+    "010_backfill_planning.sql": "dee2d58b35bd88e7588aa76cedcd1969c1d7986810950736014d5de8ba83e20f"
+  }
+}

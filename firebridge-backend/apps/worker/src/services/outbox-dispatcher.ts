@@ -96,7 +96,8 @@ export class OutboxDispatcher {
       const [event] = await prisma.$queryRaw<OutboxRecord[]>`
         WITH due AS (
           SELECT id FROM firebridge.outbox_events
-          WHERE attempts < ${env.OUTBOX_MAX_ATTEMPTS} AND (
+          WHERE event_type IN ('analysis.requested','export.requested','explanation.requested','ingestion.plan.requested')
+          AND attempts < ${env.OUTBOX_MAX_ATTEMPTS} AND (
             (status = 'pending' AND available_at <= now()) OR
             (status = 'dispatching' AND lease_expires_at <= now())
           ) ${scope}
