@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
-import { Layers2, Maximize2, MapPinned } from 'lucide-react'
+import { Layers2, Maximize2 } from 'lucide-react'
 import type { AreaOfInterest } from '../../types'
 import { SectionHeading } from '../../components/workspace/SectionHeading'
 import { ApiError } from './Feedback'
@@ -7,7 +7,6 @@ import { logDiagnostic } from '../../lib/userFeedback'
 import { useDetections } from '../observations/useResults'
 import { DetectionDetails } from '../observations/DetectionDetails'
 import { emptyObservationFilters, validObservationInterval, type ObservationFilters } from '../observations/filters'
-import { Button } from '../../components/ui/Button'
 import { Skeleton } from '../../components/ui/Skeleton'
 
 const MapView = lazy(() =>
@@ -25,7 +24,6 @@ export function SpatialPanel({
   onClear,
   error,
   filters = emptyObservationFilters,
-  onSetup,
 }: {
   area: AreaOfInterest | null
   analysisId?: string
@@ -37,6 +35,7 @@ export function SpatialPanel({
   onClear: () => void
   error: unknown
   filters?: ObservationFilters
+  /** Retained for callers; the map now guides drawing directly. */
   onSetup?: () => void
 }) {
   const [recordMode, setRecordMode] = useState(false)
@@ -108,10 +107,10 @@ export function SpatialPanel({
             onAreaDrawn={onDraw}
             onAreaRejected={onReject}
             onClearArea={onClear}
+            promptDraw={!area && !analysisId}
           />
         </Suspense>
       </MapBoundary>
-      {!area && !analysisId && onSetup && <div className="fw-map-empty"><MapPinned size={24} aria-hidden="true" /><strong>Start with a study boundary</strong><p>Define an area, set a UTC interval, then request an analysis.</p><Button variant="primary" onClick={onSetup}>Open analysis workflow</Button></div>}
       {selected && inspectRecords && intervalValid && showLayer && <DetectionDetails feature={selected} onClose={() => setSelectedId(null)} />}
       </div>
       {inspectRecords && <div className="geo-loaded-notice" role="status">
