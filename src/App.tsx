@@ -75,7 +75,8 @@ function AppPages() {
       <Route path="/analyses" element={<AnalysisWorkspace />} />
       <Route path="/api-analysis" element={<Suspense fallback={<p role="status">Chargement…</p>}><ApiAnalysisPage /></Suspense>} />
       <Route path="/ingestion" element={<Suspense fallback={<p role="status">Chargement…</p>}><IngestionPage /></Suspense>} />
-      <Route path="/" element={<WorkspacePage page="overview" />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/demo" element={<WorkspacePage page="overview" />} />
       <Route path="/explore" element={<WorkspacePage page="explore" />} />
       <Route path="/compare" element={<WorkspacePage page="compare" />} />
       <Route path="/calendar" element={<WorkspacePage page="calendar" />} />
