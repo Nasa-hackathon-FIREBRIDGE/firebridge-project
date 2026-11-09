@@ -43,6 +43,8 @@ const schema = z
       .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'])
       .default('info'),
     DATABASE_URL: postgresUrl,
+    HISTORY_SERVICE_URL: z.string().url().optional(),
+    HISTORY_SERVICE_TOKEN: z.string().min(32).optional(),
     REDIS_URL: redisUrl,
     CORS_ORIGINS: corsOrigins,
     PAGINATION_SECRET: z.string().min(16).default(defaultPaginationSecret),
@@ -57,6 +59,7 @@ const schema = z
     MAX_EVIDENCE_CELL_DAYS: z.coerce.number().int().positive().default(2000),
     MAX_POINTS_PER_PAGE: z.coerce.number().int().positive().default(5000)
   })
+  .refine((data) => !data.HISTORY_SERVICE_URL || !!data.HISTORY_SERVICE_TOKEN, { path: ['HISTORY_SERVICE_TOKEN'], message: 'Historical service requires authentication.' })
   .refine(
     (data) => data.NODE_ENV !== 'production' || data.PAGINATION_SECRET !== defaultPaginationSecret,
     { path: ['PAGINATION_SECRET'], message: 'Set a custom pagination secret in production.' }

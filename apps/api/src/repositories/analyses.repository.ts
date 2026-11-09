@@ -27,6 +27,7 @@ export interface DataReleaseRecord {
   stream: string;
   dataset_kind: string;
   observation_cutoff: Date;
+  config?: { engine?: string };
 }
 
 export interface AnalysisRecord {
@@ -400,23 +401,44 @@ export const analysesRepository = {
             ON CONFLICT (id) DO NOTHING`;
 
               // 3. Resolve published satellite release covering the observation window
-              const satelliteReleases = await tx.$queryRaw<DataReleaseRecord[]>`
+              let satelliteReleases = await tx.$queryRaw<DataReleaseRecord[]>`
             SELECT
               id::text,
               name,
               status,
               stream,
               dataset_kind,
-              observation_cutoff
+              observation_cutoff, config
             FROM firebridge.data_releases
             WHERE dataset_kind = 'satellite'
               AND scope_key = ${env.DEFAULT_SCOPE_KEY} AND stream = 'retrospective' AND published_at IS NOT NULL
               AND status = 'published'
               AND observation_cutoff >= ${input.end_date_exclusive}::timestamptz
+              AND (${!env.HISTORY_SERVICE_URL} OR (
+                config->>'engine' IS DISTINCT FROM 'archive-selection-v1' AND
+                (SELECT coalesce(range_agg(tstzrange((p.support_spec->>'start')::timestamptz,
+                  (p.support_spec->>'end_exclusive')::timestamptz,'[)')) @>
+                  tstzrange(${input.start_date}::timestamptz,${input.end_date_exclusive}::timestamptz,'[)'),false)
+                 FROM firebridge.release_partitions rp JOIN firebridge.data_partitions p ON p.id=rp.partition_id
+                 WHERE rp.release_id=firebridge.data_releases.id AND p.kind='detections'
+                   AND p.validation_status='validated' AND p.serving_complete
+                   AND (p.support_spec->>'area_id'=${input.area_id}
+                     OR p.support_spec->'bbox'='[-180,-90,180,90]'::jsonb))))
             ORDER BY observation_cutoff DESC, created_at DESC
             LIMIT 1;
           `;
 
+              if (!satelliteReleases.length && env.HISTORY_SERVICE_URL) {
+                satelliteReleases = await tx.$queryRaw<DataReleaseRecord[]>`
+                  SELECT id::text,name,status,stream,dataset_kind,observation_cutoff,config
+                  FROM firebridge.data_releases WHERE dataset_kind='satellite'
+                    AND scope_key=${env.DEFAULT_SCOPE_KEY} AND status='published'
+                    AND published_at IS NOT NULL AND config->>'engine'='archive-selection-v1'
+                    AND observation_cutoff>=${input.end_date_exclusive}::timestamptz
+                    AND (config->>'start')::date<${input.end_date_exclusive}::date
+                    AND (config->>'end_exclusive')::date>${input.start_date}::date
+                  ORDER BY created_at DESC LIMIT 1`;
+              }
               const satelliteRelease = satelliteReleases[0];
               if (!satelliteRelease) {
                 throw new BadRequestError(
@@ -424,6 +446,13 @@ export const analysesRepository = {
                   'NO_COMPATIBLE_RELEASE'
                 );
               }
+
+              const historyCatalogId = satelliteRelease.config?.engine === 'archive-selection-v1' ? satelliteRelease.id : undefined;
+              if (historyCatalogId && (input.time_basis !== 'utc' || input.selection_policy !== 'standard'))
+                throw new BadRequestError('Historical preparation supports UTC native standard selections.', 'UNSUPPORTED_HISTORICAL_SELECTION');
+              if (historyCatalogId && (Date.parse(input.end_date_exclusive)-Date.parse(input.start_date))/86400000>3660)
+                throw new BadRequestError('Select at most 3660 days per historical analysis.', 'HISTORICAL_WINDOW_TOO_LARGE');
+              const frozenSpec = historyCatalogId ? { ...input.request_spec, history_catalog_id: historyCatalogId } : input.request_spec;
 
               // Resolve optional weather and reports releases
               const weatherReleases = await tx.$queryRaw<DataReleaseRecord[]>`
@@ -505,7 +534,7 @@ export const analysesRepository = {
               ${JSON.stringify(input.baseline_spec)}::jsonb,
               ${JSON.stringify(input.weather_policy)}::jsonb,
               ${JSON.stringify(input.news_policy)}::jsonb,
-              ${JSON.stringify(input.request_spec)}::jsonb,
+              ${JSON.stringify(frozenSpec)}::jsonb,
               ${cacheKey},
               'queued'
             );
@@ -520,8 +549,8 @@ export const analysesRepository = {
               ${analysisId}::uuid,
               'satellite',
               ${satelliteRelease.id}::uuid,
-              'ready',
-              '[]'::jsonb
+              ${historyCatalogId ? 'missing' : 'ready'},
+              ${JSON.stringify(historyCatalogId ? ['HISTORICAL_PREPARATION_PENDING'] : [])}::jsonb
             );
           `;
 

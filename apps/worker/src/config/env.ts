@@ -16,6 +16,8 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default('info'),
   REDIS_URL: redisUrlSchema,
   DATABASE_URL: z.string().optional(),
+  HISTORY_SERVICE_URL: z.string().url().optional(),
+  HISTORY_SERVICE_TOKEN: z.string().min(32).optional(),
   WORKER_AUTOSTART: z.enum(['true', 'false']).optional(),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(1000),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
@@ -30,7 +32,7 @@ const envSchema = z.object({
   RECOVERY_STALE_SECONDS: z.coerce.number().int().min(30).max(86400).default(120),
   RECOVERY_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(20),
   RECOVERY_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5)
-}).refine((value) => value.RECOVERY_ENABLED === 'false' || !!value.RECOVERY_CREATED_AFTER, {
+}).refine((value) => !value.HISTORY_SERVICE_URL || !!value.HISTORY_SERVICE_TOKEN, { path: ['HISTORY_SERVICE_TOKEN'], message: 'Historical service requires authentication.' }).refine((value) => value.RECOVERY_ENABLED === 'false' || !!value.RECOVERY_CREATED_AFTER, {
   path: ['RECOVERY_CREATED_AFTER'], message: 'Recovery requires an explicit creation cutoff.'
 });
 
