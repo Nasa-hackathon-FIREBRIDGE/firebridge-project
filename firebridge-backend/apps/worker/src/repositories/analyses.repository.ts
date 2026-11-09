@@ -45,6 +45,47 @@ async function lockState(tx: Prisma.TransactionClient, payload: AnalysisJobPaylo
 }
 
 export const workerAnalysesRepository = {
+  async needsHistoricalPreparation(id: string): Promise<boolean> {
+    const [row] = await prisma.$queryRaw<{ needed: boolean }[]>`SELECT
+      request_spec->>'history_catalog_id' IS NOT NULL AND status IN ('queued','running') AS needed
+      FROM firebridge.analyses WHERE id=${id}::uuid`;
+    return row?.needed ?? false;
+  },
+
+  async renew(payload: AnalysisJobPayload, claim: AnalysisClaim): Promise<boolean> {
+    const changed = await prisma.$executeRaw`UPDATE firebridge.api_jobs SET
+      lease_expires_at=now()+(${env.ANALYSIS_LEASE_SECONDS} * interval '1 second'),
+      progress=progress || '{"percent":40,"stage":"preparing_history"}'::jsonb
+      WHERE id=${claim.id}::uuid AND analysis_id=${payload.analysis_id}::uuid
+        AND attempt=${claim.attempt} AND status='running' AND completed_at IS NULL
+        AND lease_expires_at>now()`;
+    return changed === 1;
+  },
+
+  async attachHistoricalResult(payload: AnalysisJobPayload, claim: AnalysisClaim, runId: string, release: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      const { analysis, job } = await lockState(tx, payload);
+      if (job.status !== 'running' || job.attempt !== claim.attempt || !job.lease_live
+        || job.completed_at || analysis.completed_at || analysis.status !== 'running') throw new AnalysisLeaseLost();
+      const [valid] = await tx.$queryRaw<{ id: string; source_ids: unknown }[]>`SELECT r.id::text,r.config->'source_ids' source_ids
+        FROM firebridge.pipeline_runs p JOIN firebridge.data_releases r ON r.id=p.release_id
+        JOIN firebridge.analyses a ON a.id=${claim.analysisId}::uuid
+        WHERE p.id=${runId}::uuid AND p.stage='archive-selection' AND p.status='succeeded'
+          AND r.id=${release}::uuid AND r.status='published' AND r.published_at IS NOT NULL
+          AND r.config->>'engine'='archive-selection-v1'
+          AND r.config->>'catalog_id'=a.request_spec->>'history_catalog_id'
+          AND r.config->>'area_id'=a.area_id::text
+          AND (r.config->>'start')::date=a.start_date
+          AND (r.config->>'end_exclusive')::date=a.end_date_exclusive`;
+      if (!valid || !Array.isArray(valid.source_ids) || !valid.source_ids.length)
+        throw new InvalidAnalysisTask('Historical result does not match the pinned selection.');
+      await tx.$executeRaw`UPDATE firebridge.analyses SET release_id=${release}::uuid,
+        request_spec=request_spec || ${JSON.stringify({ source_ids: valid.source_ids, history_preparation_id: runId })}::jsonb
+        WHERE id=${claim.analysisId}::uuid`;
+      await tx.$executeRaw`UPDATE firebridge.analysis_components SET release_id=${release}::uuid,
+        status='ready',reasons='[]'::jsonb WHERE analysis_id=${claim.analysisId}::uuid AND component='satellite'`;
+    }, { timeout: 10000 });
+  },
   async claim(payload: AnalysisJobPayload): Promise<ClaimResult> {
     return prisma.$transaction(async (tx) => {
       const { analysis, job } = await lockState(tx, payload);

@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { AnalysisLeaseLost, InvalidAnalysisTask, workerAnalysesRepository } from '../repositories/analyses.repository.js';
 import { analysisJobSchema, type AnalysisJobPayload } from '../validators/queue-payload.js';
+import { prepareHistoricalAnalysis } from '../services/historical-analysis.js';
 
 export type { AnalysisJobPayload } from '../validators/queue-payload.js';
 
@@ -22,8 +23,7 @@ export async function processAnalysisJob(job: Job<AnalysisJobPayload>): Promise<
   const { claim } = result;
   const started = Date.now();
   try {
-    // The current processor only evaluates resolved components. Keep this bounded;
-    // future long-running computation must renew the SQL lease and fence every write.
+    await prepareHistoricalAnalysis(payload, claim);
     const status = await workerAnalysesRepository.complete(payload, claim);
     logger.info({ apiJobId: claim.id, analysisId: claim.analysisId, attempt: claim.attempt,
       status, durationMs: Date.now() - started }, 'Analysis completed');
