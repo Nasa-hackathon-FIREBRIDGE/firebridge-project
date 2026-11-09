@@ -30,7 +30,7 @@ execute(db,input=sql)
 with tempfile.TemporaryDirectory(prefix='firebridge-image-smoke-') as temporary:
     directory=Path(temporary)
     shutil.copy2(root/'deploy/compose.production.yaml',directory/'compose.yaml')
-    shutil.copy2(root/'deploy/Caddyfile',directory/'Caddyfile')
+    shutil.copy2(root/'deploy/nginx.proxy.conf',directory/'nginx.proxy.conf')
     redis_password=secrets.token_hex(24)
     (directory/'redis.conf').write_text('bind 0.0.0.0\nprotected-mode yes\nrequirepass '+redis_password+'\nappendonly yes\nmaxmemory 96mb\nmaxmemory-policy noeviction\n')
     # The temp parent is private; the individual bind mount must be readable by redis.
