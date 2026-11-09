@@ -33,6 +33,30 @@ describe('Phase 3 native results on PostgreSQL/PostGIS', () => {
     expect(data.features[0].properties.confidence_raw).toBeNull();
     expect(data.data_release_id).toBe(ids.current);
   });
+  it('serves canonical single-source pipeline partitions across native reads and map tiles', async () => {
+    await pool.query(`DELETE FROM firebridge.partition_detections pd USING firebridge.detections d
+      WHERE d.id=pd.detection_id AND d.source_id='aqua'`);
+    await pool.query(`UPDATE firebridge.data_partitions p SET
+      row_count=(SELECT count(*) FROM firebridge.partition_detections pd WHERE pd.partition_id=p.id),
+      support_spec='{"source_id":"terra","scope_key":"global","bbox":[-180,-90,180,90],"start":"2024-01-17T00:00:00+00:00","end_exclusive":"2024-01-20T00:00:00+00:00","query_complete":true,"processing_stream":"standard","observation_coverage":"unknown"}'::jsonb`);
+    await pool.query(`UPDATE firebridge.analyses SET request_spec=request_spec-'source_ids' WHERE id=$1::uuid`, [nativeIds.analysis]);
+    const detections = await get('detections');
+    expect(detections.statusCode).toBe(200);
+    expect(detections.json().data.returned).toBe(2);
+    const summary = (await get('summary')).json().data;
+    expect(summary.native_detections_by_source).toEqual([
+      expect.objectContaining({ source_id: 'terra', count: '2', count_status: 'lower_bound' })
+    ]);
+    expect(summary.coverage.fraction).toBeNull();
+    const tile = await get('tiles/detections/0/0/0.mvt');
+    expect(tile.statusCode).toBe(200);
+    expect(tile.rawPayload.length).toBeGreaterThan(0);
+    // A pipeline whole-world scope must not be mistaken for a narrow dateline AOI.
+    await pool.query(`UPDATE firebridge.areas SET geom=ST_Multi(ST_MakeEnvelope(-180,-90,180,90,4326)) WHERE id=$1::uuid`, [nativeIds.area]);
+    const global = await get('detections');
+    expect(global.statusCode).toBe(200);
+    expect(global.json().data.returned).toBe(3);
+  });
   it('keeps microsecond precision and bigint IDs across cursor pages', async () => {
     const first = (await get('detections?limit=1')).json().data;
     const second = (

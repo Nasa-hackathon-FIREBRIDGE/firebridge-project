@@ -20,7 +20,10 @@ export function unsupportedNativePolicies(spec: Record<string, unknown>): boolea
 }
 export function nativePartitionSources(p: NativePartitionScope): string[] {
   const values = p.support_spec.source_ids;
-  return Array.isArray(values) ? values.filter((v): v is string => typeof v === 'string') : [];
+  if (Array.isArray(values)) return values.filter((v): v is string => typeof v === 'string');
+  // The canonical Python publisher writes one source per daily partition.
+  const source = p.support_spec.source_id;
+  return typeof source === 'string' && source.length > 0 ? [source] : [];
 }
 export function relevantNativePartitions<T extends NativePartitionScope>(
   parts: T[],
@@ -28,7 +31,9 @@ export function relevantNativePartitions<T extends NativePartitionScope>(
   start: number,
   end: number
 ): T[] {
-  const timestamp = (v: unknown): number | null => {
+  const timestamp = (raw: unknown): number | null => {
+    // Python's datetime.isoformat emits +00:00; it is the same UTC offset as Z.
+    const v = typeof raw === 'string' ? raw.replace(/\+00:00$/, 'Z') : raw;
     if (
       typeof v !== 'string' ||
       !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?Z$/.test(v)
@@ -53,7 +58,9 @@ export function relevantNativePartitions<T extends NativePartitionScope>(
 /** Alias is a developer-owned SQL identifier, never request input. */
 export function nativeAreaSql(alias: string): string {
   if (!/^[a-z_]+$/.test(alias)) throw new Error('Invalid internal area alias.');
-  return `CASE WHEN ST_XMax(${alias}.geom)-ST_XMin(${alias}.geom)>180
+  return `CASE WHEN ST_XMax(${alias}.geom)-ST_XMin(${alias}.geom)>=359.999
+    AND ST_YMax(${alias}.geom)-ST_YMin(${alias}.geom)>=179.999 THEN ${alias}.geom
+    WHEN ST_XMax(${alias}.geom)-ST_XMin(${alias}.geom)>180
     THEN (SELECT ST_Collect(CASE WHEN ST_XMax(part.geom)-ST_XMin(part.geom)>180
       THEN ST_WrapX(ST_ShiftLongitude(part.geom),180,-360) ELSE part.geom END)
       FROM ST_Dump(${alias}.geom) part) ELSE ${alias}.geom END`;

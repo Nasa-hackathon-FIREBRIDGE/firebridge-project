@@ -110,3 +110,9 @@ the database network, grant the backend owner credentials, or prune shared volum
 
 Redis uses the explicit jobs-network alias `firebridge-webapp-redis`, avoiding
 collisions with any `redis` service on an attached external data/test network.
+
+Native reads, tiles and exports accept the canonical Python publisher's single
+`support_spec.source_id` and UTC `+00:00` timestamps, while retaining compatibility
+with explicit `source_ids` arrays. Existing publications are not rewritten. A
+provider `query_complete` flag does not establish complete observation inventory
+for an arbitrary user AOI; positive counts can remain labelled as lower bounds.
