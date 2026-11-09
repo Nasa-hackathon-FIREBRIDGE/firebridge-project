@@ -234,7 +234,9 @@ describe('API workspace integration with isolated HTTP responses', () => {
     await screen.findByRole('region', { name: 'Analysis preparation' })
     current = { ...current, ...terminal }
     await act(async () => { await clients.at(-1)!.refetchQueries({ queryKey: apiKeys.analysis(analysisId), exact: true }) })
-    expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument()
+    expect(clients.at(-1)!.getQueryData<AnalysisView>(apiKeys.analysis(analysisId))).toMatchObject(terminal)
+    // Refetch resolves before React Query's scheduled observer notification commits to the DOM.
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument())
   })
   it('stops illustrating preparation when a refresh cannot confirm the active analysis and preserves the retry error', async () => {
     installApi({ ready: true })
@@ -251,9 +253,11 @@ describe('API workspace integration with isolated HTTP responses', () => {
     await screen.findByRole('region', { name: 'Analysis preparation' })
     offline = true
     await act(async () => { await clients.at(-1)!.refetchQueries({ queryKey: apiKeys.analysis(analysisId), exact: true }) })
-    expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument()
-    expect(screen.getByText('We couldn’t connect to the server.')).toBeVisible()
-    expect(screen.getByText(/Previously loaded analysis details are shown/)).toBeVisible()
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument()
+      expect(screen.getByText('We couldn’t connect to the server.')).toBeVisible()
+      expect(screen.getByText(/Previously loaded analysis details are shown/)).toBeVisible()
+    })
   })
   it('keeps the geometry label stable and focuses invalid geometry without sending a creation request', () => {
     const requests = installApi({ ready: true })
