@@ -1,75 +1,213 @@
-.fb-orbital {
-  display: grid;
-  grid-template-columns: minmax(240px, 34%) minmax(0, 1fr);
-  align-items: center;
-  min-height: 222px;
-  overflow: hidden;
+/* Analysis preparation — "overpass" scene. Canvas illustration on the left, server-confirmed status on the right. */
+.fb-overpass {
+  --ov-ember: var(--color-ember-400, #ff7c40);
+  --ov-flare: var(--color-flare, #ffb547);
   position: relative;
   isolation: isolate;
-  border: 1px solid rgb(255 181 71 / .19);
+  display: grid;
+  grid-template-columns: minmax(300px, 36%) minmax(0, 1fr);
+  min-height: 336px;
+  overflow: hidden;
+  scroll-margin-top: 72px;
+  border: 1px solid rgb(255 124 64 / .22);
   border-radius: var(--radius-2xl, 18px);
-  background: radial-gradient(ellipse at 12% 50%, rgb(28 62 73 / .22), transparent 47%), linear-gradient(110deg, #101820, var(--color-ink-850, #0e1016) 72%);
-  box-shadow: inset 0 1px rgb(255 255 255 / .035);
+  background:
+    radial-gradient(ellipse 40% 85% at 18% 50%, rgb(22 62 78 / .5), transparent 72%),
+    radial-gradient(ellipse 45% 70% at 100% 0%, rgb(255 95 31 / .09), transparent 70%),
+    linear-gradient(112deg, #0a121a 0%, var(--color-ink-900, #0a0c11) 68%);
+  box-shadow: var(--shadow-float, 0 24px 60px -20px rgb(0 0 0 / .75)), inset 0 1px rgb(255 255 255 / .04);
+  animation: fb-overpass-in .7s var(--ease-out-expo, cubic-bezier(.16, 1, .3, 1)) both;
 }
-.fb-orbital::before {
+/* Faint star field behind the text column. */
+.fb-overpass::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-image: linear-gradient(rgb(108 151 160 / .035) 1px, transparent 1px), linear-gradient(90deg, rgb(108 151 160 / .035) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: linear-gradient(90deg, #000, transparent 65%);
+  opacity: .55;
+  background-image:
+    radial-gradient(1px 1px at 22px 30px, rgb(219 231 255 / .5), transparent),
+    radial-gradient(1px 1px at 120px 88px, rgb(219 231 255 / .35), transparent),
+    radial-gradient(1.4px 1.4px at 170px 20px, rgb(255 200 150 / .45), transparent),
+    radial-gradient(1px 1px at 64px 128px, rgb(219 231 255 / .3), transparent),
+    radial-gradient(1px 1px at 200px 150px, rgb(219 231 255 / .4), transparent);
+  background-size: 230px 170px;
+  mask-image: linear-gradient(90deg, transparent 30%, #000 70%);
 }
-.fb-orbital__scene { position: relative; align-self: stretch; min-height: 222px; display: grid; place-items: center; }
-.fb-orbital__scene svg { display: block; width: min(100%, 360px); height: auto; overflow: visible; }
-.fb-orbital__crosshair { stroke: #60909a; stroke-opacity: .4; }
-.fb-orbital__coordinates { stroke: #59818a; stroke-width: .7; stroke-opacity: .3; }
-.fb-orbital__land { fill: #365e63; fill-opacity: .42; stroke: #71a09b; stroke-width: .7; stroke-opacity: .35; }
-.fb-orbital__orbit-path { stroke: #c99a57; stroke-width: 1.2; stroke-opacity: .38; }
-.fb-orbital__satellite-orbit { transform-origin: 0 0; animation: fb-orbital-pass 13s linear infinite; transform: rotate(-52deg); }
-.fb-orbital__swath { animation: fb-orbital-scan 5s ease-in-out infinite; transform: translateX(-21px); }
-.fb-orbital__signals { animation: fb-orbital-signals 5s ease-in-out infinite; opacity: .72; }
-.fb-orbital__illustration-label {
+/* A light sweep travelling along the top edge, like a scan line. */
+.fb-overpass::after {
+  content: '';
   position: absolute;
-  bottom: 12px;
+  top: 0;
   left: 0;
-  width: 100%;
-  text-align: center;
+  width: 38%;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgb(255 181 71 / .9), transparent);
+  animation: fb-overpass-sweep 5.5s var(--ease-standard, cubic-bezier(.2, 0, 0, 1)) infinite;
+}
+
+.fb-overpass__scene { position: relative; min-height: 336px; }
+.fb-overpass__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.fb-overpass__caption {
+  position: absolute;
+  left: 18px;
+  bottom: 12px;
   font: 9px/1.4 var(--font-mono);
-  letter-spacing: .025em;
-  color: #8a9ca7;
+  letter-spacing: .04em;
+  color: #6f8590;
 }
-.fb-orbital__content { min-width: 0; padding: 26px 32px 26px 12px; }
-.fb-orbital__eyebrow { margin: 0 0 13px; color: #a8b4be; font: 10px/1.5 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
-.fb-orbital__eyebrow span { margin: 0 5px; color: #ffb547; }
-.fb-orbital__status h2 { margin: 0; color: var(--color-fg, #f3f4f7); font: 600 clamp(21px, 2vw, 27px)/1.2 var(--font-display); letter-spacing: -.035em; }
-.fb-orbital__stage { display: flex; align-items: center; gap: 9px; margin: 15px 0 6px; color: #ffc58b; font-size: 13px; font-weight: 500; line-height: 1.45; }
-.fb-orbital__stage > span { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: #ffb547; box-shadow: 0 0 0 4px rgb(255 181 71 / .08); }
-.fb-orbital__detail { max-width: 490px; margin: 0; color: var(--color-fg-2, #aab0bc); font-size: 13px; line-height: 1.65; }
-.fb-orbital__footnote { margin: 17px 0 0; color: #8e99a7; font: 10px/1.5 var(--font-mono); }
-@keyframes fb-orbital-pass { from { transform: rotate(-52deg); } to { transform: rotate(308deg); } }
-@keyframes fb-orbital-scan { 0%, 100% { transform: translateX(-37px); opacity: .55; } 50% { transform: translateX(32px); opacity: 1; } }
-@keyframes fb-orbital-signals { 0%, 100% { opacity: .45; } 50% { opacity: .9; } }
-@media (max-width: 640px) {
-  .fb-orbital { grid-template-columns: 126px minmax(0, 1fr); min-height: 205px; }
-  .fb-orbital__scene { min-height: 205px; overflow: hidden; }
-  .fb-orbital__scene svg { width: 235px; max-width: none; margin-left: -18px; }
-  .fb-orbital__illustration-label { left: 6px; bottom: 13px; width: 108px; font-size: 8px; }
-  .fb-orbital__content { padding: 23px 20px 23px 3px; }
-  .fb-orbital__eyebrow { font-size: 8px; letter-spacing: .025em; margin-bottom: 10px; }
-  .fb-orbital__eyebrow span { margin: 0 2px; }
-  .fb-orbital__status h2 { font-size: 20px; }
-  .fb-orbital__stage { font-size: 12px; margin-top: 12px; }
-  .fb-orbital__detail { font-size: 12px; line-height: 1.55; }
-  .fb-orbital__footnote { font-size: 9px; margin-top: 12px; }
+
+.fb-overpass__content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 28px 32px 22px 12px;
 }
-@media (max-width: 380px) {
-  .fb-orbital { grid-template-columns: 92px minmax(0, 1fr); }
-  .fb-orbital__scene svg { width: 215px; margin-left: -42px; }
-  .fb-orbital__illustration-label { left: 5px; width: 80px; }
-  .fb-orbital__content { padding-right: 16px; }
+.fb-overpass__topline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.fb-overpass__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  color: var(--color-ember-300, #ffa070);
+  font: 600 10.5px/1.4 var(--font-mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.fb-overpass__beacon { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--ov-ember); box-shadow: 0 0 10px var(--ov-ember); }
+.fb-overpass__beacon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--ov-ember);
+  animation: fb-overpass-ping 2.4s var(--ease-standard, ease) infinite;
+}
+.fb-overpass__sensors { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.fb-overpass__sensors li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid color-mix(in oklab, var(--sensor) 32%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sensor) 8%, transparent);
+  color: var(--color-fg-2, #aab0bc);
+  font: 500 10px/1.4 var(--font-mono);
+  white-space: nowrap;
+}
+.fb-overpass__sensors i { width: 6px; height: 6px; border-radius: 50%; background: var(--sensor); box-shadow: 0 0 8px var(--sensor); }
+.fb-overpass__sensors span { color: var(--color-fg-3, #737a88); }
+
+.fb-overpass__title {
+  margin: 16px 0 0;
+  color: var(--color-fg, #f3f4f7);
+  font: 600 clamp(22px, 2.2vw, 30px)/1.15 var(--font-display);
+  letter-spacing: -.035em;
+}
+.fb-overpass__title span {
+  background: linear-gradient(100deg, var(--ov-flare) 0%, var(--ov-ember) 45%, var(--color-ember-600, #e84a10) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.fb-overpass__meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
+.fb-overpass__meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid rgb(255 255 255 / .08);
+  border-radius: 999px;
+  background: rgb(255 255 255 / .03);
+  color: var(--color-fg-2, #aab0bc);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.fb-overpass__meta svg { flex: none; color: var(--color-ember-300, #ffa070); }
+.fb-overpass__meta small { color: var(--color-fg-3, #737a88); font: 10.5px var(--font-mono); }
+
+.fb-overpass__status { margin-top: 18px; }
+.fb-overpass__stage { display: flex; align-items: center; gap: 10px; margin: 0; color: #ffd2b0; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.fb-overpass__radar {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgb(255 124 64 / .55);
+  background: conic-gradient(from 0deg, rgb(255 124 64 / .85), transparent 30%);
+  animation: fb-overpass-radar 1.6s linear infinite;
+}
+.fb-overpass__radar::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: var(--ov-flare); }
+.fb-overpass[data-stage='retrying'] .fb-overpass__radar { border-color: rgb(251 191 36 / .6); background: conic-gradient(from 0deg, rgb(251 191 36 / .85), transparent 30%); }
+.fb-overpass__detail { max-width: 520px; margin: 6px 0 0 24px; color: var(--color-fg-2, #aab0bc); font-size: 13px; line-height: 1.6; }
+
+.fb-overpass__phases { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; max-width: 560px; margin: 20px 0 0; padding: 0; list-style: none; }
+.fb-overpass__bar { position: relative; display: block; height: 3px; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / .08); }
+.fb-overpass__bar > span { position: absolute; inset: 0; border-radius: inherit; transform-origin: left; transform: scaleX(0); }
+.fb-overpass__phases [data-state='done'] .fb-overpass__bar > span {
+  transform: none;
+  background: linear-gradient(90deg, var(--color-ember-600, #e84a10), var(--ov-ember));
+  transition: transform .6s var(--ease-out-expo, ease);
+}
+.fb-overpass__phases [data-state='current'] .fb-overpass__bar { background: rgb(255 124 64 / .28); }
+.fb-overpass__phases [data-state='current'] .fb-overpass__bar > span {
+  transform: none;
+  background: linear-gradient(90deg, transparent, #ffe2b8, transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: fb-overpass-progress 1.5s var(--ease-standard, ease) infinite;
+}
+.fb-overpass[data-stage='retrying'] [data-state='current'] .fb-overpass__bar { background: rgb(251 191 36 / .25); }
+.fb-overpass[data-stage='retrying'] [data-state='current'] .fb-overpass__bar > span { background-image: linear-gradient(90deg, transparent, var(--color-warn, #fbbf24), transparent); }
+.fb-overpass__phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 7px;
+  color: var(--color-fg-3, #737a88);
+  font: 600 10px/1.3 var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.fb-overpass__phases [data-state='done'] .fb-overpass__phase { color: var(--color-fg-2, #aab0bc); }
+.fb-overpass__phases [data-state='done'] svg { color: var(--color-ok, #4ade80); }
+.fb-overpass__phases [data-state='current'] .fb-overpass__phase { color: var(--color-ember-200, #ffc5a3); }
+
+.fb-overpass__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-top: auto;
+  padding-top: 18px;
+  color: var(--color-fg-3, #737a88);
+  font: 10.5px/1.5 var(--font-mono);
+}
+.fb-overpass__elapsed { display: inline-flex; align-items: center; gap: 6px; color: var(--color-fg-2, #aab0bc); }
+.fb-overpass__elapsed > span { min-width: 4ch; color: var(--color-fg, #f3f4f7); font-variant-numeric: tabular-nums; }
+
+@keyframes fb-overpass-in { from { opacity: 0; transform: translateY(10px) scale(.99); } to { opacity: 1; transform: none; } }
+@keyframes fb-overpass-sweep { 0% { transform: translateX(-100%); opacity: 0; } 15% { opacity: 1; } 70%, 100% { transform: translateX(270%); opacity: 0; } }
+@keyframes fb-overpass-radar { to { transform: rotate(360deg); } }
+@keyframes fb-overpass-ping { 0% { transform: scale(.6); opacity: .7; } 80%, 100% { transform: scale(2.6); opacity: 0; } }
+@keyframes fb-overpass-progress { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+
+@media (max-width: 760px) {
+  .fb-overpass { grid-template-columns: minmax(0, 1fr); }
+  .fb-overpass__scene { min-height: 236px; }
+  .fb-overpass__caption { left: 50%; transform: translateX(-50%); white-space: nowrap; }
+  .fb-overpass__content { padding: 4px 20px 20px; }
+  .fb-overpass__title { margin-top: 14px; font-size: 22px; }
+  .fb-overpass__detail { margin-left: 0; }
+  .fb-overpass__phase { font-size: 9px; letter-spacing: .04em; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .fb-orbital *, .fb-orbital::before, .fb-orbital::after { animation: none !important; transition: none !important; }
+  .fb-overpass, .fb-overpass *, .fb-overpass::before, .fb-overpass::after { animation: none !important; transition: none !important; }
+  .fb-overpass::after { display: none; }
 }
