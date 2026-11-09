@@ -429,12 +429,14 @@ export const analysesRepository = {
           `;
 
               if (!satelliteReleases.length && env.HISTORY_SERVICE_URL) {
+                // An archive catalog can support part of the requested interval.
+                // Preparation clips to verified inputs; native results report
+                // the uncovered dates as unknown and observed totals as lower bounds.
                 satelliteReleases = await tx.$queryRaw<DataReleaseRecord[]>`
                   SELECT id::text,name,status,stream,dataset_kind,observation_cutoff,config
                   FROM firebridge.data_releases WHERE dataset_kind='satellite'
                     AND scope_key=${env.DEFAULT_SCOPE_KEY} AND status='published'
                     AND published_at IS NOT NULL AND config->>'engine'='archive-selection-v1'
-                    AND observation_cutoff>=${input.end_date_exclusive}::timestamptz
                     AND (config->>'start')::date<${input.end_date_exclusive}::date
                     AND (config->>'end_exclusive')::date>${input.start_date}::date
                   ORDER BY created_at DESC LIMIT 1`;
