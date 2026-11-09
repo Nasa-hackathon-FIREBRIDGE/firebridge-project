@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigationType } from 'react-router-dom'
+import { motion } from 'motion/react'
 import {
   Activity,
   AlertTriangle,
@@ -7,29 +8,39 @@ import {
   BookOpen,
   CalendarDays,
   ChevronDown,
+  CloudSun,
   Compass,
   Database,
-  Flame,
+  FlaskConical,
+  Home,
   Layers2,
   LayoutDashboard,
   Map,
   Menu,
+  Plus,
   Settings2,
   ShieldCheck,
   Sparkles,
   X,
-  CloudSun,
+  type LucideIcon,
 } from 'lucide-react'
 import { ChatWidget } from './ChatWidget'
 import { RouteErrorBoundary } from './RouteErrorBoundary'
+import { LogoMark, Wordmark } from './brand/Logo'
 
-const research = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+type NavItem = { to: string; label: string; icon: LucideIcon }
+
+const workspace: NavItem[] = [
+  { to: '/', label: 'Home', icon: Home },
   { to: '/analyses', label: 'Analysis workspace', icon: Activity },
-  { to: '/api-analysis', label: 'Results explorer', icon: Layers2 },
-  { to: '/catalog', label: 'Data catalogue', icon: Database },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
 ]
-const demonstrations = [
+const data: NavItem[] = [
+  { to: '/catalog', label: 'Data catalogue', icon: Database },
+  { to: '/evidence', label: 'Data & methods', icon: BookOpen },
+  { to: '/api-analysis', label: 'Results explorer', icon: Layers2 },
+]
+const demonstrations: NavItem[] = [
   { to: '/demo', label: 'Overview', icon: Compass },
   { to: '/explore', label: 'Explore map', icon: Map },
   { to: '/compare', label: 'Compare sensors', icon: Layers2 },
@@ -39,32 +50,31 @@ const demonstrations = [
   { to: '/explain', label: 'Analysis notes', icon: Sparkles },
   { to: '/alerts', label: 'Watchlist', icon: AlertTriangle },
 ]
-const tools = [
-  { to: '/evidence', label: 'Data & methods', icon: BookOpen },
+const system: NavItem[] = [
   { to: '/ingestion', label: 'Ingestion administration', icon: ShieldCheck },
   { to: '/settings', label: 'Preferences', icon: Settings2 },
 ]
+const researchPaths = new Set(['/dashboard', '/analyses', '/api-analysis', '/catalog', '/ingestion'])
 
 export function ApplicationShell({
   children,
   demoControls,
+  sidebarFooter,
 }: {
   children: ReactNode
   demoControls: ReactNode
+  sidebarFooter?: ReactNode
 }) {
   const location = useLocation()
   const navigationType = useNavigationType()
   const previousPath = useRef(location.pathname)
   const demo = demonstrations.some((item) => item.to === location.pathname)
-  const researchPage =
-    research.some((item) => item.to === location.pathname) || location.pathname === '/ingestion'
-  const current = [...research, ...demonstrations, ...tools].find(
-    (item) => item.to === location.pathname,
-  )
+  const researchPage = researchPaths.has(location.pathname)
+  const home = location.pathname === '/'
+  const current = [...workspace, ...data, ...demonstrations, ...system].find((item) => item.to === location.pathname)
   const [open, setOpen] = useState(false)
   const [compact, setCompact] = useState(
-    () =>
-      typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 820px)').matches,
+    () => typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 820px)').matches,
   )
   const sidebar = useRef<HTMLElement>(null)
   const menu = useRef<HTMLButtonElement>(null)
@@ -95,8 +105,8 @@ export function ApplicationShell({
     return () => media.removeEventListener('change', changed)
   }, [])
   useEffect(() => {
-    document.title = `${current?.label ?? 'Workspace'} · FIREBRIDGE`
-  }, [current?.label])
+    document.title = home ? 'FIREBRIDGE · A consistent fire history across changing satellites' : `${current?.label ?? 'Workspace'} · FIREBRIDGE`
+  }, [current?.label, home])
   useEffect(() => {
     if (!open) return
     const previous = document.body.style.overflow
@@ -129,30 +139,62 @@ export function ApplicationShell({
       document.removeEventListener('keydown', keydown)
     }
   }, [open])
-  const links = (items: typeof research) =>
+
+  const links = (items: NavItem[]) =>
     items.map(({ to, label, icon: Icon }) => (
       <NavLink
         key={to}
         to={to}
         end={to === '/'}
-        className={({ isActive }) => `nav-link fb-nav-item ${isActive ? 'nav-link-active fb-nav-active' : ''}`}
+        className={({ isActive }) =>
+          `group relative flex h-9 items-center gap-3 rounded-[10px] px-3 text-[13.5px] font-medium no-underline outline-offset-0 transition-colors duration-150 ${
+            isActive ? 'bg-white/[0.06] text-fg' : 'text-fg-2 hover:bg-white/[0.035] hover:text-fg'
+          }`
+        }
         onClick={() => {
           setOpen(false)
           if (compact) requestAnimationFrame(() => menu.current?.focus())
         }}
       >
-        <Icon size={17} strokeWidth={1.7} />
-        <span>{label}</span>
+        {({ isActive }) => (
+          <>
+            {isActive && (
+              <motion.span
+                layoutId="fb-nav-active"
+                transition={{ type: 'spring', stiffness: 520, damping: 40 }}
+                className="absolute inset-y-2 -left-3 w-[3px] rounded-r-full bg-ember-gradient shadow-[0_0_14px_rgba(255,95,31,0.8)]"
+                aria-hidden="true"
+              />
+            )}
+            <Icon
+              size={17}
+              strokeWidth={1.8}
+              className={`shrink-0 transition-colors ${isActive ? 'text-ember-400' : 'text-fg-3 group-hover:text-fg-2'}`}
+              aria-hidden="true"
+            />
+            <span className="truncate">{label}</span>
+          </>
+        )}
       </NavLink>
     ))
+  const group = (label: string, items: NavItem[]) => (
+    <section className="flex flex-col gap-0.5">
+      <p className="mb-1.5 px-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-fg-3">{label}</p>
+      {links(items)}
+    </section>
+  )
+
   return (
-    <div className="app-shell fb-shell astra-shell">
-      <a href="#main-content" className="astra-skip-link">
+    <div className="fb-shell astra-shell relative min-h-screen bg-ink-950 text-fg">
+      <a
+        href="#main-content"
+        className="fixed left-3 top-3 z-[80] -translate-y-24 rounded-lg bg-ember-400 px-4 py-2 font-semibold text-ink-950 transition-transform focus:translate-y-0"
+      >
         Skip to content
       </a>
       {open && (
         <button
-          className="mobile-backdrop"
+          className="fixed inset-0 z-40 cursor-default bg-ink-950/70 backdrop-blur-sm animate-fade-in"
           aria-label="Close navigation backdrop"
           onClick={close}
         />
@@ -160,134 +202,120 @@ export function ApplicationShell({
       <aside
         ref={sidebar}
         id="workspace-navigation"
-        className={`sidebar ${open ? 'sidebar-open' : ''}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col border-r border-white/[0.06] bg-ink-900/95 backdrop-blur-xl transition-[transform,visibility] duration-300 ease-out-expo ${
+          compact ? (open ? 'translate-x-0 shadow-float' : 'invisible -translate-x-full') : ''
+        }`}
         aria-label="Application navigation"
         role={compact && open ? 'dialog' : undefined}
         aria-modal={compact && open ? true : undefined}
         inert={(compact && !open) || undefined}
         aria-hidden={(compact && !open) || undefined}
       >
-        <div className="astra-brand-row">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(120%_80%_at_0%_0%,rgba(255,95,31,0.10),transparent_70%)]" aria-hidden="true" />
+        <div className="relative flex items-center justify-between gap-2 px-4 pb-4 pt-5">
           <Link
-            to="/dashboard"
-            className="brand fb-sidebar-brand astra-brand-link"
+            to="/"
+            className="flex min-w-0 items-center gap-3 rounded-xl no-underline"
             aria-label="FIREBRIDGE home"
             onClick={() => {
               if (compact) close()
               else setOpen(false)
             }}
           >
-            <span className="fb-brand-symbol" aria-hidden="true">
-              <Flame size={20} />
-            </span>
-            <div>
-              <strong>FIREBRIDGE</strong>
-              <span>GEOSPATIAL INTELLIGENCE</span>
-            </div>
+            <LogoMark size={38} animated />
+            <Wordmark />
           </Link>
           <button
             ref={closeButton}
-            className="astra-sidebar-close icon-button"
+            className={`grid size-9 shrink-0 place-items-center rounded-lg text-fg-2 hover:bg-white/5 hover:text-fg ${compact ? '' : 'hidden'}`}
             aria-label="Close navigation"
             onClick={close}
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
-        <div className="astra-workspace-context">
-          <span className="astra-workspace-icon">
-            <Flame size={17} />
-          </span>
-          <span>
-            <strong>Earth observation</strong>
-            <small>Public research workspace</small>
-          </span>
-        </div>
-        <nav className="primary-nav" aria-label="Primary navigation">
-          <section className="nav-group">
-            <p className="nav-heading">Research</p>
-            {links(research)}
-          </section>
-          <details
-            key={demo ? 'demo' : 'research'}
-            className="astra-demo-navigation nav-group"
-            open={demo}
-          >
-            <summary className="nav-heading">
-              Demonstration <span>DEMO</span>
-              <ChevronDown size={13} />
+        <nav className="relative flex flex-1 flex-col gap-6 overflow-y-auto px-4 pb-4 pt-2 scrollbar-none" aria-label="Primary navigation">
+          {group('Workspace', workspace)}
+          {group('Data', data)}
+          <details key={demo ? 'demo' : 'research'} className="group/demo flex flex-col" open={demo}>
+            <summary className="mb-1.5 flex cursor-pointer list-none items-center gap-2 rounded-md px-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-fg-3 hover:text-fg-2 [&::-webkit-details-marker]:hidden">
+              Demonstration
+              <span className="rounded-full border border-snpp/30 bg-snpp/10 px-1.5 py-px font-sans text-[9.5px] tracking-wider text-snpp">SYNTHETIC</span>
+              <ChevronDown size={13} className="ml-auto transition-transform group-open/demo:rotate-180" aria-hidden="true" />
             </summary>
-            <div>{links(demonstrations)}</div>
+            <div className="flex flex-col gap-0.5">{links(demonstrations)}</div>
           </details>
-          <section className="nav-group">
-            <p className="nav-heading">Workspace tools</p>
-            {links(tools)}
-          </section>
+          {group('System', system)}
         </nav>
-        <div className="astra-sidebar-foot">
-          <span className="astra-orbit" aria-hidden="true">
-            <Compass size={18} />
-          </span>
-          <p>
-            Observe with context.
-            <br />
-            <strong>Keep the evidence in view.</strong>
-          </p>
-          <small>Public access · No sign-in required</small>
-        </div>
+        {sidebarFooter && <div className="relative border-t border-white/[0.06] p-4">{sidebarFooter}</div>}
       </aside>
-      <main id="main-content" tabIndex={-1} className="main-panel" inert={open || undefined}>
-        <header className={`topbar ${demo ? 'topbar-demo' : ''}`}>
-          <div className="topbar-title">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className={`relative min-h-screen min-w-0 outline-none ${compact ? '' : 'pl-[260px]'}`}
+        inert={open || undefined}
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[420px] bg-[radial-gradient(60%_100%_at_70%_0%,rgba(255,95,31,0.07),transparent_70%)]" aria-hidden="true" />
+        <header
+          className={`sticky top-0 z-30 flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/[0.06] bg-ink-950/70 px-4 py-2 backdrop-blur-xl sm:px-6`}
+        >
+          <div className="flex min-w-0 items-center gap-2">
             <button
               ref={menu}
-              className="mobile-menu"
+              className={`grid size-9 shrink-0 place-items-center rounded-lg border border-white/10 bg-ink-800 text-fg hover:bg-ink-700 ${compact ? '' : 'hidden'}`}
               aria-label="Open navigation"
               aria-expanded={open}
               aria-controls="workspace-navigation"
               onClick={() => setOpen(true)}
             >
-              <Menu size={20} />
+              <Menu size={18} />
             </button>
-            <div className="breadcrumbs">
-              <Link to="/dashboard">FIREBRIDGE</Link>
-              <span className="breadcrumb-slash">/</span>
-              <strong>{current?.label ?? 'Workspace'}</strong>
+            <div className="flex min-w-0 items-center gap-2 text-[13px]">
+              <Link to="/" className="hidden text-fg-3 no-underline hover:text-fg-2 sm:inline">FIREBRIDGE</Link>
+              <span className="hidden text-fg-3/60 sm:inline" aria-hidden="true">/</span>
+              <strong className="truncate font-medium text-fg">{home ? 'Home' : current?.label ?? 'Workspace'}</strong>
             </div>
           </div>
-          <div className="astra-header-context">
+          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
             {demo ? (
               demoControls
             ) : (
               <>
-                <span className="astra-public-label">
-                  <span />
+                <span className="hidden items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.03] px-3 py-1 text-[12px] text-fg-2 md:inline-flex">
+                  <span className="relative flex size-1.5">
+                    <span className="absolute inset-0 rounded-full bg-ok animate-pulse-ring" />
+                    <span className="relative size-1.5 rounded-full bg-ok" />
+                  </span>
                   Public workspace
                 </span>
-                <span className="astra-coordinate">WGS 84 / UTC</span>
+                <span className="hidden rounded-full border border-white/[0.07] px-3 py-1 font-mono text-[11px] text-fg-3 lg:inline">WGS 84 · UTC</span>
+                {location.pathname !== '/analyses' && (
+                  <Link to="/analyses" className="ui-button ui-button--primary ui-button--small">
+                    <Plus size={15} aria-hidden="true" />
+                    New analysis
+                  </Link>
+                )}
               </>
             )}
           </div>
         </header>
         {demo ? (
-          <div className="global-demo-banner">
-            <Flame size={14} />
+          <div className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-snpp/15 bg-snpp/[0.06] px-4 py-2 text-[12.5px] text-fg-2 sm:px-6">
+            <FlaskConical size={14} className="text-snpp" aria-hidden="true" />
             <span>
-              <strong>Demo workspace.</strong> Maps and figures use synthetic fixtures, separate
-              from saved analyses.
+              <strong className="font-semibold text-fg">Demo workspace.</strong> Maps and figures use synthetic fixtures, separate from saved analyses.
             </span>
-            <Link to="/dashboard">
+            <Link to="/dashboard" className="ml-auto inline-flex items-center gap-1 font-medium text-snpp no-underline hover:underline">
               Open research dashboard <ArrowRight size={13} />
             </Link>
           </div>
         ) : researchPage ? (
-          <div className="astra-data-notice">
-            <Database size={13} />
+          <div className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/[0.04] px-4 py-2 text-[12.5px] text-fg-3 sm:px-6">
+            <Database size={13} className="text-ember-300" aria-hidden="true" />
             <span>
-              <strong>Published data</strong> Results reflect the server’s releases. Test releases
-              can contain synthetic records.
+              <strong className="font-medium text-fg-2">Published data.</strong> Results reflect the server’s releases. Test releases can contain synthetic records.
             </span>
-            <Link to="/evidence">
+            <Link to="/evidence" className="ml-auto inline-flex items-center gap-1 font-medium text-ember-300 no-underline hover:text-ember-200">
               Data & methods <ArrowRight size={12} />
             </Link>
           </div>
@@ -295,13 +323,13 @@ export function ApplicationShell({
         <RouteErrorBoundary key={location.pathname}>
           <Suspense
             fallback={
-              <div className="loading-view" role="status">
-                <span className="astra-loading-dot" />
+              <div className="flex min-h-[50vh] items-center justify-center gap-3 text-fg-2" role="status">
+                <LogoMark size={28} animated />
                 Loading workspace…
               </div>
             }
           >
-            {children}
+            <div className="relative animate-fade-up">{children}</div>
           </Suspense>
         </RouteErrorBoundary>
       </main>
