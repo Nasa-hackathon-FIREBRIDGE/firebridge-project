@@ -83,6 +83,7 @@ vi.mock('maplibre-gl', () => ({
   Map: mocks.FakeMap,
   NavigationControl: class {},
   AttributionControl: class {},
+  ScaleControl: class {},
   setWorkerUrl: vi.fn(),
   addProtocol: vi.fn(),
   LngLatBounds: class { points: unknown[] = []; extend(point: unknown) { this.points.push(point); return this } },
@@ -90,6 +91,7 @@ vi.mock('maplibre-gl', () => ({
 vi.mock('terra-draw', () => ({
   TerraDraw: mocks.FakeDraw,
   TerraDrawPolygonMode: class {},
+  TerraDrawRectangleMode: class {},
   TerraDrawRenderMode: class {},
 }))
 vi.mock('terra-draw-maplibre-gl-adapter', () => ({ TerraDrawMapLibreGLAdapter: class {} }))
@@ -211,9 +213,9 @@ describe('MapView with mocked MapLibre', () => {
   it('starts and cancels drawing, and clears the selected area', () => {
     const { props } = renderMap()
     act(() => lastMap().emit('style.load'))
-    fireEvent.click(screen.getByLabelText('Draw area of interest'))
+    fireEvent.click(screen.getByLabelText('Draw polygon'))
     expect(lastDraw().setMode).toHaveBeenLastCalledWith('polygon')
-    fireEvent.click(screen.getByLabelText('Cancel area drawing'))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(lastDraw().setMode).toHaveBeenLastCalledWith('view')
     fireEvent.click(screen.getByLabelText('Clear selected area'))
     expect(props.onClearArea).toHaveBeenCalled()
@@ -339,7 +341,7 @@ describe('Finish drawing control', () => {
   const start = () => {
     const view = renderMap()
     act(() => lastMap().emit('style.load'))
-    fireEvent.click(screen.getByLabelText('Draw area of interest'))
+    fireEvent.click(screen.getByLabelText('Draw polygon'))
     return view
   }
 
@@ -347,7 +349,7 @@ describe('Finish drawing control', () => {
     renderMap()
     act(() => lastMap().emit('style.load'))
     expect(screen.queryByRole('button', { name: 'Finish drawing' })).toBeNull()
-    fireEvent.click(screen.getByLabelText('Draw area of interest'))
+    fireEvent.click(screen.getByLabelText('Draw polygon'))
     expect(screen.getByRole('button', { name: 'Finish drawing' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
   })
@@ -379,6 +381,24 @@ describe('Finish drawing control', () => {
     expect(lastDraw().setMode).toHaveBeenLastCalledWith('view')
     expect(screen.queryByRole('button', { name: 'Finish drawing' })).toBeNull()
     expect(props.onAreaDrawn).not.toHaveBeenCalled()
+  })
+
+  it('offers a two-click rectangle that needs no Finish step and is validated the same way', () => {
+    const { props } = renderMap()
+    act(() => lastMap().emit('style.load'))
+    fireEvent.click(screen.getByLabelText('Draw rectangle'))
+    expect(lastDraw().setMode).toHaveBeenLastCalledWith('rectangle')
+    expect(screen.queryByRole('button', { name: 'Finish drawing' })).toBeNull()
+    expect(screen.getByText(/Click one corner, then click the opposite corner/)).toBeTruthy()
+    const ring = [[-6, 34], [-5, 34], [-5, 35], [-6, 35], [-6, 34]]
+    act(() => lastDraw().finish('r1', { type: 'Polygon', coordinates: [ring] }))
+    expect(props.onAreaDrawn).toHaveBeenCalledWith({ type: 'Polygon', coordinates: [ring] }, expect.any(String))
+    expect(screen.getByRole('group', { name: 'Draw a study area' })).toBeTruthy()
+  })
+
+  it('uses direct mouse gestures and never rotates the analysis map', () => {
+    renderMap()
+    expect(lastMap().options).toMatchObject({ cooperativeGestures: false, dragRotate: false, touchPitch: false })
   })
 
   it('still validates the finished polygon through shared handlers', () => {
