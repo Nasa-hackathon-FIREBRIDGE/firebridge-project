@@ -4,8 +4,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { AxiosError } from 'axios'
+import type { AnalysisView } from '@firebridge/contracts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import api from '../../lib/axios'
+import { apiKeys } from '../../services/api.keys'
 import { resultFixtures } from '../../services/results.test-fixtures'
 import {
   acceptedFixture,
@@ -126,6 +128,106 @@ function installApi({ ready = false, missing = false, failed = false, expired = 
 }
 
 describe('API workspace integration with isolated HTTP responses', () => {
+  it.each(['accepted', 'rejected'])('shows preparation while the initial request is pending and removes it when %s', async (outcome) => {
+    installApi({ ready: true })
+    const delegate = api.defaults.adapter as import('axios').AxiosAdapter
+    let release: () => void = () => {}
+    const pending = new Promise<void>((resolve) => { release = resolve })
+    api.defaults.adapter = async (config) => {
+      if (config.url === '/analyses' && config.method === 'post') {
+        await pending
+        if (outcome === 'rejected') throw new AxiosError('offline', 'ERR_NETWORK', config)
+      }
+      return delegate(config)
+    }
+    mount(`?area=${areaId}`)
+    await screen.findByRole('heading', { name: 'TEST ONLY area' })
+    fireEvent.change(screen.getByLabelText('Start date (UTC)'), { target: { value: '2024-01-01' } })
+    fireEvent.change(screen.getByLabelText('End date, exclusive (UTC)'), { target: { value: '2024-01-02' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Request analysis' }))
+    const preparation = await screen.findByRole('region', { name: 'Analysis preparation' })
+    expect(within(preparation).getByRole('status')).toHaveTextContent('Sending your request')
+    expect(screen.getByRole('button', { name: 'Submitting analysis…' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }))
+    expect(preparation).toBeVisible()
+    await act(async () => { release() })
+    if (outcome === 'accepted') await screen.findByRole('heading', { name: 'TEST ONLY area', level: 1 })
+    else await screen.findByText('We couldn’t connect to the server.')
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument())
+  })
+  it('follows confirmed processing stages, including a partial analysis with an active job, across tabs', async () => {
+    installApi({ ready: true })
+    const delegate = api.defaults.adapter as import('axios').AxiosAdapter
+    let current: AnalysisView = {
+      ...analysisFixture, id: analysisId, area_id: areaId, status: 'queued',
+      job: { id: jobId, status: 'queued', progress: { stage: 'queued' }, attempt: 0 },
+    }
+    api.defaults.adapter = async (config) => {
+      const response = await delegate(config)
+      return config.url === `/analyses/${analysisId}` ? { ...response, data: envelope(current) } : response
+    }
+    mount(`?analysis=${analysisId}`)
+    const preparation = await screen.findByRole('region', { name: 'Analysis preparation' })
+    expect(within(preparation).getByRole('status')).toHaveTextContent('Your request is queued')
+    fireEvent.click(screen.getByRole('tab', { name: 'Data & provenance' }))
+    expect(preparation).toBeVisible()
+    const update = async (status: AnalysisView['status'], stage: unknown) => {
+      current = { ...current, status, job: { ...current.job!, status: 'running', progress: stage } }
+      await act(async () => { await clients.at(-1)!.refetchQueries({ queryKey: apiKeys.analysis(analysisId), exact: true }) })
+    }
+    await update('running', { stage: 'resolving_data' })
+    await waitFor(() => expect(within(preparation).getByRole('status')).toHaveTextContent('Finding published observations'))
+    await update('running', { stage: 'preparing_history' })
+    await waitFor(() => expect(within(preparation).getByRole('status')).toHaveTextContent('Matching your area & dates'))
+    await update('partial', { stage: 'retrying' })
+    await waitFor(() => expect(within(preparation).getByRole('status')).toHaveTextContent('Retrying preparation'))
+    await update('partial', ['unrecognised progress'])
+    await waitFor(() => expect(within(preparation).getByRole('status')).toHaveTextContent('Your analysis is processing'))
+    await update('partial', { stage: 'completed' })
+    await waitFor(() => expect(within(preparation).getByRole('status')).toHaveTextContent('Finalising your results'))
+    current = { ...current, status: 'partial', job: null }
+    await act(async () => { await clients.at(-1)!.refetchQueries({ queryKey: apiKeys.analysis(analysisId), exact: true }) })
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument())
+    expect(screen.getByTestId('api-map')).toHaveTextContent(`API layer ${analysisId}`)
+  })
+  it.each([
+    { status: 'ready' as const, job: null },
+    { status: 'failed' as const, job: null },
+    { status: 'unsupported' as const, job: null },
+    { status: 'running' as const, job: { id: jobId, status: 'cancelled' as const, progress: {}, attempt: 1 } },
+  ])('removes preparation on terminal analysis/job state $status / $job.status', async (terminal) => {
+    installApi({ ready: true })
+    const delegate = api.defaults.adapter as import('axios').AxiosAdapter
+    let current: AnalysisView = { ...analysisFixture, id: analysisId, area_id: areaId, status: 'running' }
+    api.defaults.adapter = async (config) => {
+      const response = await delegate(config)
+      return config.url === `/analyses/${analysisId}` ? { ...response, data: envelope(current) } : response
+    }
+    mount(`?analysis=${analysisId}`)
+    await screen.findByRole('region', { name: 'Analysis preparation' })
+    current = { ...current, ...terminal }
+    await act(async () => { await clients.at(-1)!.refetchQueries({ queryKey: apiKeys.analysis(analysisId), exact: true }) })
+    expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument()
+  })
+  it('stops illustrating preparation when a refresh cannot confirm the active analysis and preserves the retry error', async () => {
+    installApi({ ready: true })
+    const delegate = api.defaults.adapter as import('axios').AxiosAdapter
+    let offline = false
+    api.defaults.adapter = async (config) => {
+      if (config.url === `/analyses/${analysisId}`) {
+        if (offline) throw new AxiosError('offline', 'ERR_NETWORK', config)
+        return { config, status: 200, statusText: 'OK', headers: {}, data: envelope({ ...analysisFixture, id: analysisId, area_id: areaId, status: 'running' }) }
+      }
+      return delegate(config)
+    }
+    mount(`?analysis=${analysisId}`)
+    await screen.findByRole('region', { name: 'Analysis preparation' })
+    offline = true
+    await act(async () => { await clients.at(-1)!.refetchQueries({ queryKey: apiKeys.analysis(analysisId), exact: true }) })
+    expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument()
+    expect(screen.getByText('We couldn’t connect to the server.')).toBeVisible()
+    expect(screen.getByText(/Previously loaded analysis details are shown/)).toBeVisible()
+  })
   it('keeps the geometry label stable and focuses invalid geometry without sending a creation request', () => {
     const requests = installApi({ ready: true })
     mount()
