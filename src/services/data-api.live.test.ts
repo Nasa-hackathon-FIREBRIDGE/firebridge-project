@@ -25,14 +25,20 @@ const originalURL = api.defaults.baseURL
 let token = ''
 suite('Live services against local phase1_test fixtures', () => {
   beforeAll(async () => {
-    const config = parseEnv(readFileSync(new URL('../../../firebridge-backend/.env', import.meta.url), 'utf8').replace(/^\uFEFF/, ''))
+    const isolatedURL = process.env.FIREBRIDGE_DATA_SMOKE_URL
+    if (isolatedURL && isolatedURL !== 'http://127.0.0.1:3301/api/v1')
+      throw new Error('Only the isolated local API on port 3301 is supported as an override.')
+    const config = isolatedURL
+      ? { DATABASE_URL: process.env.PHASE1_TEST_DATABASE_URL, PORT: '3301',
+          INGESTION_ADMIN_TOKEN: process.env.FIREBRIDGE_TEST_ADMIN_TOKEN }
+      : parseEnv(readFileSync(new URL('../../../firebridge-backend/.env', import.meta.url), 'utf8').replace(/^\uFEFF/, ''))
     if (!config.DATABASE_URL) throw new Error('DATABASE_URL is required for the guarded local smoke test.')
     const db = new URL(config.DATABASE_URL)
-    if (db.pathname !== '/firebridge_phase1_test' || !['localhost', '127.0.0.1'].includes(db.hostname) || (config.PORT && config.PORT !== '3000'))
+    if (db.pathname !== '/firebridge_phase1_test' || !['localhost', '127.0.0.1'].includes(db.hostname) || (config.PORT && config.PORT !== (isolatedURL ? '3301' : '3000')))
       throw new Error('Smoke test requires the local firebridge_phase1_test database and API port 3000.')
     token = config.INGESTION_ADMIN_TOKEN ?? ''
     if (!token) throw new Error('Local ingestion admin token is not configured.')
-    api.defaults.baseURL = 'http://127.0.0.1:3000/api/v1'
+    api.defaults.baseURL = isolatedURL ?? 'http://127.0.0.1:3000/api/v1'
     api.defaults.adapter = 'http'
     const current = await catalog.get()
     if (current.scope_key !== scope || !current.releases.some((r) => r.id === release && r.name.startsWith('TEST ONLY')))
