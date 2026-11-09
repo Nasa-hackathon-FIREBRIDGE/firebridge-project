@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import type { AnalysisView } from '@firebridge/contracts'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import api from '../../lib/axios'
 import { apiKeys } from '../../services/api.keys'
 import { resultFixtures } from '../../services/results.test-fixtures'
@@ -32,6 +32,8 @@ const areaId = '11111111-1111-4111-8111-111111111111'
 const analysisId = '22222222-2222-4222-8222-222222222222'
 const jobId = '33333333-3333-4333-8333-333333333333'
 const clients: QueryClient[] = []
+// The preparation globe is a decorative canvas; jsdom has no 2D context, so the scene stays inert.
+beforeEach(() => { vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null) })
 afterEach(() => {
   cleanup()
   clients.splice(0).forEach((client) => client.clear())
@@ -153,6 +155,31 @@ describe('API workspace integration with isolated HTTP responses', () => {
     await act(async () => { release() })
     if (outcome === 'accepted') await screen.findByRole('heading', { name: 'TEST ONLY area', level: 1 })
     else await screen.findByText('We couldn’t connect to the server.')
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument())
+  })
+  it('keeps the same preparation view from acceptance until the new analysis is first read', async () => {
+    installApi({ ready: true })
+    const delegate = api.defaults.adapter as import('axios').AxiosAdapter
+    let release: () => void = () => {}
+    const firstRead = new Promise<void>((resolve) => { release = resolve })
+    api.defaults.adapter = async (config) => {
+      if (config.url === `/analyses/${analysisId}`) await firstRead
+      return delegate(config)
+    }
+    mount(`?area=${areaId}`)
+    await screen.findByRole('heading', { name: 'TEST ONLY area' })
+    fireEvent.change(screen.getByLabelText('Start date (UTC)'), { target: { value: '2024-01-01' } })
+    fireEvent.change(screen.getByLabelText('End date, exclusive (UTC)'), { target: { value: '2024-01-02' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Request analysis' }))
+    const preparation = await screen.findByRole('region', { name: 'Analysis preparation' })
+    expect(within(preparation).getByText('TEST ONLY area')).toBeVisible()
+    expect(within(preparation).getByText('1 Jan 2024')).toBeVisible()
+    await waitFor(() => expect(screen.getByLabelText('Current workspace URL')).toHaveTextContent(`analysis=${analysisId}`))
+    await waitFor(() => expect(within(preparation).getByRole('status')).toHaveTextContent('Your request is queued'))
+    expect(screen.getByRole('region', { name: 'Analysis preparation' })).toBe(preparation)
+    expect(within(preparation).getByRole('listitem', { current: 'step' })).toHaveTextContent('Queue')
+    expect(screen.queryByText('Loading the selected analysis…')).not.toBeInTheDocument()
+    await act(async () => { release() })
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument())
   })
   it('follows confirmed processing stages, including a partial analysis with an active job, across tabs', async () => {
