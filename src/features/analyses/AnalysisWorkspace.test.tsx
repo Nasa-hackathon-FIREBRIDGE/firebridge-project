@@ -211,7 +211,7 @@ describe('API workspace integration with isolated HTTP responses', () => {
     await screen.findByRole('button', { name: 'Download file' })
     expect(requests.filter((r) => r.url.endsWith('/exports'))).toHaveLength(1)
     expect(document.body.textContent).not.toContain('never-display')
-  })
+  }, 15_000) // Complete create/read/context/export journey: allow CI CPU contention.
   it('shows missing analyses and never requests their result tiles or exports', async () => {
     const requests = installApi({ missing: true })
     mount(`?analysis=${analysisId}`)

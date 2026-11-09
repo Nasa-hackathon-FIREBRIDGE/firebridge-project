@@ -1,4 +1,8 @@
 node_modules
+.qa
+e2e
+playwright.config.ts
+scripts/run-e2e.mjs
 .github
 **/tests
 **/*.test.*
