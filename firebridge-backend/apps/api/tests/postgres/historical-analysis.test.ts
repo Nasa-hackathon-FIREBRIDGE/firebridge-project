@@ -42,6 +42,14 @@ describe('historical routing and immutable analysis identity', () => {
     expect(second.statusCode).toBe(200);
     expect(second.json().data.id).toBe(first.json().data.id);
   });
+  it('never treats a metadata-only catalog as prepared data when historical routing is disabled', async () => {
+    env.HISTORY_SERVICE_URL = undefined;
+    const result = await post();
+    expect(result.statusCode).toBe(202);
+    expect(result.json().data.release_id).not.toBe(catalog);
+    const { rows } = await pool.query('SELECT request_spec FROM firebridge.analyses WHERE id=$1', [result.json().data.id]);
+    expect(rows[0].request_spec.history_catalog_id).toBeUndefined();
+  });
   it('rejects dates before the archive starts', async () => {
     const result = await post({ ...body, start_date: '1980-01-01', end_date_exclusive: '1981-01-01' });
     expect(result.statusCode).toBe(400);

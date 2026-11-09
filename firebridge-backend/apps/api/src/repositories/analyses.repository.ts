@@ -414,8 +414,8 @@ export const analysesRepository = {
               AND scope_key = ${env.DEFAULT_SCOPE_KEY} AND stream = 'retrospective' AND published_at IS NOT NULL
               AND status = 'published'
               AND observation_cutoff >= ${input.end_date_exclusive}::timestamptz
+              AND config->>'engine' IS DISTINCT FROM 'archive-selection-v1'
               AND (${!env.HISTORY_SERVICE_URL} OR (
-                config->>'engine' IS DISTINCT FROM 'archive-selection-v1' AND
                 (SELECT coalesce(range_agg(tstzrange((p.support_spec->>'start')::timestamptz,
                   (p.support_spec->>'end_exclusive')::timestamptz,'[)')) @>
                   tstzrange(${input.start_date}::timestamptz,${input.end_date_exclusive}::timestamptz,'[)'),false)
