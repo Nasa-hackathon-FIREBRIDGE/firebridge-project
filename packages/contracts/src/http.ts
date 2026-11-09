@@ -29,7 +29,9 @@ export interface AnalysisAccepted {
   metric_key: 'native_detections_v1'; grid_id: null; data_mode: 'standard_only';
   start_date: string; end_date_exclusive: string; job_id: string | null; created_at: string;
 }
-export interface AnalysisView extends Omit<AnalysisAccepted, 'job_id'> {
+/** Reads also expose prepared scientific analyses; creation remains native-only. */
+export interface AnalysisView extends Omit<AnalysisAccepted, 'job_id' | 'metric_key' | 'grid_id'> {
+  metric_key: string; grid_id: string | null;
   time_basis: string;
   components: { component: string; release_id: string | null; status: string; reasons: unknown }[];
   job: { id: string; status: JobStatus; progress: unknown; attempt: number } | null;
