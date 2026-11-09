@@ -1,12 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// Self-hosted fonts: production CSP only allows fonts from 'self'.
+import '@fontsource-variable/inter'
+import '@fontsource-variable/space-grotesk'
+import '@fontsource-variable/jetbrains-mono'
 import './index.css'
 import App from './App.tsx'
-import './astra.css'
-import './geospatial.css'
-import './platform.css'
-import './components/ui/ui.css'
-import './components/shell.polish.css'
 import { MotionProvider } from './components/ui/MotionProvider'
 
 createRoot(document.getElementById('root')!).render(
