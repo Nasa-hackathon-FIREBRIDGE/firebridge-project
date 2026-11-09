@@ -15,12 +15,20 @@ describe('Phase 1 on migrated PostgreSQL/PostGIS and Redis', () => {
     if (result.rows[0].name !== 'firebridge_phase1_test') {
       throw new Error('Refusing to seed a database other than firebridge_phase1_test.');
     }
-    const migrations = await pool.query(
-      'SELECT migration_name FROM public._prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'
-    );
-    expect(migrations.rows.map((row) => row.migration_name)).toContain(
-      '20261031000000_phase1_catalog_versions'
-    );
+    const registry = await pool.query("SELECT to_regclass('public.firebridge_migrations') AS pipeline");
+    if (registry.rows[0].pipeline) {
+      const migrations = await pool.query('SELECT name FROM public.firebridge_migrations');
+      expect(migrations.rows.map((row) => row.name)).toEqual(expect.arrayContaining([
+        '001_initial.sql', '009_analytics_orchestration.sql', '010_backfill_planning.sql'
+      ]));
+    } else {
+      const migrations = await pool.query(
+        'SELECT migration_name FROM public._prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'
+      );
+      expect(migrations.rows.map((row) => row.migration_name)).toContain(
+        '20261031000000_phase1_catalog_versions'
+      );
+    }
     await seed({ exec: (sql) => pool.query(sql) }, true);
     app = createApp({ logger: false });
     await app.ready();

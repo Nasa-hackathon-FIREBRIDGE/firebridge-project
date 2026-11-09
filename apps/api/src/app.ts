@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import helmet from '@fastify/helmet';
 import compress from '@fastify/compress';
 import formbody from '@fastify/formbody';
@@ -33,7 +34,8 @@ export function createApp(
   } = {}
 ): FastifyInstance {
   const app = Fastify({
-    logger: options.logger ?? { level: env.LOG_LEVEL },
+    logger: options.logger ?? { level: env.LOG_LEVEL, redact: ['req.headers.authorization', 'req.headers.cookie'] },
+    trustProxy: env.NODE_ENV === 'production' ? (_address: string, hop: number) => hop === 0 : false,
     genReqId: () => randomUUID(),
     bodyLimit: 1024 * 1024,
     ajv: { customOptions: { removeAdditional: false, coerceTypes: false } }
@@ -92,6 +94,9 @@ export function createApp(
           env.CORS_ORIGINS.includes(origin)
       )
   });
+  if (env.NODE_ENV === 'production') {
+    app.register(rateLimit, { max: 120, timeWindow: '1 minute', allowList: (request) => request.url.startsWith('/api/v1/health/') });
+  }
   app.register(compress);
   app.register(formbody, { bodyLimit: 100 * 1024 });
   app.register(swagger, {

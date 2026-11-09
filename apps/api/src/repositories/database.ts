@@ -12,7 +12,7 @@ export interface SnapshotDatabase {
 export function createDatabase(connectionString: string): SnapshotDatabase {
   const pool = new pg.Pool({
     connectionString,
-    max: 10,
+    max: 5,
     connectionTimeoutMillis: 3000,
     statement_timeout: 5000,
     idle_in_transaction_session_timeout: 10000
