@@ -85,11 +85,11 @@ export function AreaPanel({
         <span className="fb-step">01</span>
         <div>
           <h2 id="area-heading">Define an area</h2>
-          <p>Draw a boundary on the map or paste Polygon geometry.</p>
+          <p>Draw a rectangle or polygon on the map, or paste GeoJSON.</p>
         </div>
       </div>
       {onStartDrawing && <Button variant="primary" onClick={onStartDrawing}><SquareDashedMousePointer size={16} aria-hidden="true" />Draw on map</Button>}
-      <p className="fw-helper">{geometryText ? 'Draft geometry is available. Name and save the area before requesting an analysis.' : 'Draw a polygon, then name and save your study area.'}</p>
+      <p className="fw-helper">{geometryText ? 'Draft geometry is available. Name and save the area before requesting an analysis.' : 'Draw your area on the map, then name and save it.'}</p>
       <details className="fb-editor" open={!id}>
         <summary>
           {id ? 'Define another study area' : 'Create a study boundary'}
