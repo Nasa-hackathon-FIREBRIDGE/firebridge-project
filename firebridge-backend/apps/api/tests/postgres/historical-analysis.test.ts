@@ -42,6 +42,34 @@ describe('historical routing and immutable analysis identity', () => {
     expect(second.statusCode).toBe(200);
     expect(second.json().data.id).toBe(first.json().data.id);
   });
+  it('queues an overlapping selection beyond the standard cutoff without shortening the saved dates', async () => {
+    const request = { ...body, start_date: '2025-03-09', end_date_exclusive: '2026-11-09' };
+    const response = await post(request);
+    expect(response.statusCode).toBe(202);
+    const { rows } = await pool.query(`SELECT release_id,start_date::text,end_date_exclusive::text,request_spec
+      FROM firebridge.analyses WHERE id=$1`, [response.json().data.id]);
+    expect(rows[0]).toMatchObject({ release_id: catalog, start_date: request.start_date,
+      end_date_exclusive: request.end_date_exclusive, request_spec: { history_catalog_id: catalog } });
+    const repeat = await post(request);
+    expect(repeat.statusCode).toBe(200);
+    expect(repeat.json().data.id).toBe(response.json().data.id);
+  });
+  it('queues an interval overlapping the beginning of the archive', async () => {
+    const response = await post({ ...body, start_date: '2000-10-25', end_date_exclusive: '2000-11-02' });
+    expect(response.statusCode).toBe(202);
+    const { rows } = await pool.query('SELECT release_id FROM firebridge.analyses WHERE id=$1', [response.json().data.id]);
+    expect(rows[0].release_id).toBe(catalog);
+  });
+  it.each([
+    ['2026-08-01', '2026-11-09'],
+    ['2027-01-01', '2027-02-01'],
+    ['2000-10-01', '2000-11-01']
+  ])('rejects a non-overlapping archive interval %s to %s', async (start, end) => {
+    const response = await post({ ...body, start_date: start, end_date_exclusive: end });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('NO_COMPATIBLE_RELEASE');
+    expect((await pool.query('SELECT count(*) AS n FROM firebridge.analyses WHERE start_date=$1 AND end_date_exclusive=$2', [start, end])).rows[0].n).toBe('0');
+  });
   it('never treats a metadata-only catalog as prepared data when historical routing is disabled', async () => {
     env.HISTORY_SERVICE_URL = undefined;
     const result = await post();
