@@ -11,12 +11,12 @@
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import 'maplibre-gl/dist/maplibre-gl.css' layer(vendor);
 @import './styles/legacy-root.css' layer(legacy);
-@import './App.css' layer(legacy);
+@import './styles/legacy/App.css' layer(legacy);
 @import './components/api/api-workspace.css' layer(legacy);
 @import './features/analyses/workspace.css' layer(legacy);
-@import './astra.css' layer(legacy);
-@import './geospatial.css' layer(legacy);
-@import './platform.css' layer(legacy);
+@import './styles/legacy/astra.css' layer(legacy);
+@import './styles/legacy/geospatial.css' layer(legacy);
+@import './styles/legacy/platform.css' layer(legacy);
 @import './components/ui/ui.css' layer(legacy);
 @import './components/shell.polish.css' layer(legacy);
 @import './features/analyses/workspace.presentation.css' layer(legacy);

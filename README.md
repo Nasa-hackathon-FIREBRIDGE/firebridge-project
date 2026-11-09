@@ -6,6 +6,9 @@ Application React/TypeScript, construite avec Vite et servie par Nginx dans Dock
 - `src/hooks` : accès aux données avec TanStack Query.
 - `src/services` : appels HTTP Axios vers l'API Fastify.
 - `src/components` : composants partagés et carte MapLibre.
+- `src/features/demo` : écrans synthétiques chargés à la demande.
+- `src/styles/legacy` : styles historiques, avec ordre de cascade conservé.
+- `src/App.tsx` : fournisseurs globaux et routes ; aucune récupération de données métier.
 
 Le package `@firebridge/contracts` est fourni par
 `../firebridge-backend/packages/contracts`. Conserver ces noms de dossiers.
