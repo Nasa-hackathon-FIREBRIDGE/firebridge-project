@@ -65,36 +65,34 @@ describe('All registered routes and generated documentation', () => {
       Object.keys(spec.paths ?? {}).filter((path) => path.startsWith('/api/v1/')).length
     ).toBeGreaterThan(25);
   });
-  it('retains explicit 501 for every planned route instead of fabricated success', async () => {
+  it('exposes canonical resources and removes all 18 retired scaffold operations', async () => {
     const app = await build();
     await app.ready();
     const paths = app.swagger().paths ?? {};
-    let checked = 0;
-    for (const [path, operations] of Object.entries(paths)) {
-      if (
-        !/^\/api\/v1\/(detections|tiles|cells|weather|reports|provenance|explanations|exports|admin)(\/|$)/.test(
-          path
-        )
-      )
-        continue;
-      if (
-        path.startsWith('/api/v1/admin/ingestion') ||
-        path.startsWith('/api/v1/admin/sources/') ||
-        /^\/api\/v1\/explanations\/\{id\}$/.test(path)
-      )
-        continue;
-      for (const method of ['get', 'post'] as const) {
-        if (!operations || !(method in operations)) continue;
-        const response = await app.inject({
-          method: method.toUpperCase() as 'GET' | 'POST',
-          url: path.replace(/\{[^}]+\}/g, id),
-          ...(method === 'post' ? { payload: {} } : {})
-        });
-        expect(response.statusCode, `${method} ${path}`).toBe(501);
-        expect(response.json().status).toBe('planned');
-        checked++;
-      }
+    const retired = [
+      ['GET', '/detections'], ['POST', '/detections'],
+      ['GET', '/tiles'], ['GET', '/tiles/' + id],
+      ['GET', '/cells'], ['GET', '/cells/' + id],
+      ['GET', '/weather'], ['GET', '/weather/' + id],
+      ['GET', '/reports'], ['POST', '/reports'],
+      ['GET', '/provenance'], ['GET', '/provenance/' + id],
+      ['GET', '/explanations'], ['POST', '/explanations'],
+      ['GET', '/exports'], ['POST', '/exports'],
+      ['GET', '/admin/status'], ['POST', '/admin/refresh']
+    ] as const;
+    for (const [method, path] of retired) {
+      const response = await app.inject({
+        method, url: '/api/v1' + path,
+        ...(method === 'POST' ? { payload: {} } : {})
+      });
+      expect(response.statusCode, method + ' ' + path).toBe(404);
     }
-    expect(checked).toBeGreaterThan(10);
+    for (const suffix of ['detections', 'provenance', 'weather', 'reports', 'coverage',
+      'cells/{cell_id}', 'comparison', 'explanations', 'exports']) {
+      expect(paths, suffix).toHaveProperty('/api/v1/analyses/{id}/' + suffix);
+    }
+    expect(paths).toHaveProperty('/api/v1/explanations/{id}');
+    expect(paths).toHaveProperty('/api/v1/admin/ingestion/subscriptions');
+    expect(paths).toHaveProperty('/api/v1/admin/ingestion/backfills');
   });
 });

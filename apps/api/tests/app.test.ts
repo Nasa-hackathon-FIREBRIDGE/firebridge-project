@@ -296,8 +296,8 @@ describe('Phase 1 routes with PostgreSQL queries', () => {
     for (const path of ['/api/v1/catalog/', '/api/v1/releases/{release_id}', '/api/v1/updates/'])
       expect(paths[path]?.get).toBeDefined();
   });
-  it('keeps other resource scaffolds reachable', async () => {
-    expect((await get('/tiles')).statusCode).toBe(501);
+  it('does not expose retired resource scaffolds', async () => {
+    expect((await get('/tiles')).statusCode).toBe(404);
     expect((await app.inject('/health')).statusCode).toBe(404);
     expect((await get('/nonexistent')).statusCode).toBe(404);
   });
