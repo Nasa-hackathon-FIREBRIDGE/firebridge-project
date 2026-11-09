@@ -41,8 +41,9 @@ import { Button } from '../../components/ui/Button'
 import { CopyableId } from '../../components/ui/CopyableId'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { Stepper } from '../../components/ui/Stepper'
-import { requestDisabledReason, workflowSteps, type WorkflowPresentation } from './workspace.presentation'
+import { analysisPreparationStage, requestDisabledReason, workflowSteps, type WorkflowPresentation } from './workspace.presentation'
 import { TabIndicator } from '../../components/ui/TabIndicator'
+import { AnalysisPreparation } from './AnalysisPreparation'
 
 const sections = [
   { id: 'workspace-top', label: 'Map workspace', icon: MapPinned },
@@ -104,6 +105,7 @@ export default function AnalysisWorkspace() {
   const [areaSaving, setAreaSaving] = useState(false)
   const disabledReason = requestDisabledReason(savedAreaAvailable, workflowState)
   const steps = workflowSteps(savedAreaAvailable, workflowState, analysis.isError ? undefined : analysis.data)
+  const preparationStage = analysisPreparationStage(workflowState.pending, analysis.data, analysis.isError)
   const openAreaForm = () => {
     if (setupPanel.current) setupPanel.current.open = true
     const editor = document.querySelector<HTMLDetailsElement>('#study-area .fb-editor')
@@ -258,6 +260,7 @@ export default function AnalysisWorkspace() {
       {analysisId && analysis.isPending && <Skeleton height={56} label="Loading the selected analysis…" />}
       {analysis.isError && analysis.data && <Banner tone="warning">Previously loaded analysis details are shown; the latest refresh failed. Result availability still follows the existing checks.</Banner>}
       <ApiError context="analysis" error={analysis.error} retry={() => { void analysis.refetch() }} />
+      {preparationStage && <AnalysisPreparation stage={preparationStage} />}
 
       {/* ── Tabs ───────────────────────────────────────────────────────── */}
       <div className="fbx-tabs-wrap">
