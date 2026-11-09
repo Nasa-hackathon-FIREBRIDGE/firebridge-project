@@ -1,5 +1,9 @@
-import { useId } from 'react'
-import type { PreparationStage } from './workspace.presentation'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { CalendarRange, Check, MapPin, Timer } from 'lucide-react'
+import type { AreaView } from '@firebridge/contracts'
+import { SENSORS } from '../../lib/sensors'
+import { formatElapsed, type PreparationStage } from './workspace.presentation'
+import { overpassTarget, startOverpassScene, type OverpassSatellite, type OverpassScene } from './overpass/overpassScene'
 import './analysis-preparation.css'
 
 const stageCopy: Record<PreparationStage, { label: string; detail: string }> = {
@@ -12,67 +16,118 @@ const stageCopy: Record<PreparationStage, { label: string; detail: string }> = {
   processing: { label: 'Your analysis is processing', detail: 'Preparing the available observations for your area and date range.' },
 }
 
-export function AnalysisPreparation({ stage }: { stage: PreparationStage }) {
-  const id = useId().replace(/:/g, '')
-  const globe = `orbital-globe-${id}`
-  const glow = `orbital-light-${id}`
+/** Lifecycle phases reported by the server; the illustration never implies a percentage. */
+const phases = ['Request', 'Queue', 'Process', 'Finalise'] as const
+const phaseOf: Record<PreparationStage, number> = {
+  submitting: 0, queued: 1, resolving_data: 2, preparing_history: 2, retrying: 2, processing: 2, completed: 3,
+}
+
+// Real swath widths; orbit timings are compressed for the illustration.
+const satellites: (OverpassSatellite & { sensor: typeof SENSORS.aqua })[] = [
+  { sensor: SENSORS.aqua, instrument: 'MODIS', color: SENSORS.aqua.color, swathKm: 2330, pixel: 3.4, period: 10.5, phase: 2.6, tilt: -0.17, altitude: 1.17, sweep: { amplitude: 0.4, period: 37, phase: 0.4 } },
+  { sensor: SENSORS.noaa20, instrument: 'VIIRS', color: SENSORS.noaa20.color, swathKm: 3060, pixel: 2, period: 8.2, phase: -1.1, tilt: -0.21, altitude: 1.23, sweep: { amplitude: 0.36, period: 29, phase: 2.1 } },
+]
+
+function prefersReducedMotion() {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+export function AnalysisPreparation({ stage, areaName, geometry, interval, startedAt }: {
+  stage: PreparationStage
+  areaName?: string
+  geometry?: AreaView['geometry']
+  /** Human-readable UTC interval of the request. */
+  interval?: string
+  /** Server creation time, used when the page opens on an analysis that is already running. */
+  startedAt?: string
+}) {
   const copy = stageCopy[stage]
+  const current = phaseOf[stage]
+  const section = useRef<HTMLElement>(null)
+  const canvas = useRef<HTMLCanvasElement>(null)
+  const elapsed = useRef<HTMLSpanElement>(null)
+  const scene = useRef<OverpassScene | null>(null)
+  const [reducedMotion] = useState(prefersReducedMotion)
+  const [origin] = useState(() => {
+    const created = startedAt ? Date.parse(startedAt) : Number.NaN
+    return stage === 'submitting' || !Number.isFinite(created) ? Date.now() : Math.min(Date.now(), created)
+  })
+  const target = useMemo(() => overpassTarget(geometry, areaName), [geometry, areaName])
+  const tone = stage === 'retrying' ? 'warn' : 'normal'
+
+  // The request is usually sent from the setup column further down the page: bring the scene into view once.
+  useEffect(() => {
+    const element = section.current
+    if (!element || typeof element.scrollIntoView !== 'function') return
+    const { top, bottom } = element.getBoundingClientRect()
+    if (top >= 56 && bottom <= window.innerHeight) return
+    element.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+  }, [])
+
+  useEffect(() => {
+    const element = elapsed.current
+    if (!element) return
+    const tick = () => { element.textContent = formatElapsed(Date.now() - origin) }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [origin])
+
+  useEffect(() => {
+    if (!canvas.current) return
+    scene.current = startOverpassScene(canvas.current, { satellites, target, reducedMotion })
+    return () => {
+      scene.current?.destroy()
+      scene.current = null
+    }
+  }, [target, reducedMotion])
+  useEffect(() => { scene.current?.setTone(tone) }, [tone, target, reducedMotion])
+
   return (
-    <section className="fb-orbital" aria-label="Analysis preparation">
-      <div className="fb-orbital__scene" aria-hidden="true">
-        <svg viewBox="0 0 360 220" fill="none" focusable="false">
-          <defs>
-            <clipPath id={globe}><circle cx="180" cy="108" r="73" /></clipPath>
-            <radialGradient id={glow} cx=".34" cy=".27" r=".84">
-              <stop stopColor="#173641" /><stop offset=".65" stopColor="#10232c" /><stop offset="1" stopColor="#0b141c" />
-            </radialGradient>
-          </defs>
-          <path className="fb-orbital__crosshair" d="M180 13v10m0 170v10M75 108H65m220 0h10" />
-          <circle cx="180" cy="108" r="84" stroke="#42717b" strokeOpacity=".13" strokeDasharray="2 7" />
-          <circle cx="180" cy="108" r="73" fill={`url(#${glow})`} stroke="#61909a" strokeOpacity=".4" />
-          <g clipPath={`url(#${globe})`}>
-            <g className="fb-orbital__coordinates">
-              <ellipse cx="180" cy="108" rx="29" ry="73" /><ellipse cx="180" cy="108" rx="56" ry="73" />
-              <ellipse cx="180" cy="108" rx="73" ry="27" /><ellipse cx="180" cy="108" rx="73" ry="53" />
-              <path d="M107 108h146M180 35v146" />
-            </g>
-            <g className="fb-orbital__land">
-              <path d="m133 64 18-9 17 5 7 12-12 7-2 12-15 5-12-13-8-4Zm20 36 18 1 9 14-7 17-3 21-9 8-5-24-9-18Z" />
-              <path d="m185 64 18-11 19 12 14 2 10 18-17 11-14-5-5 12-13-7-2-14-14-3Zm5 38 18 6 10 18-12 19-13-9-10-19Zm37 42 13-7 14 11-5 12-19-4Z" />
-            </g>
-            <g className="fb-orbital__swath">
-              <path d="M150 24h31l34 169h-31Z" fill="#ffb547" fillOpacity=".09" />
-              <path d="m181 24 34 169" stroke="#ffba67" strokeOpacity=".55" />
-            </g>
-            <g className="fb-orbital__signals" fill="#ffb366">
-              <circle cx="159" cy="99" r="2.5" /><circle cx="202" cy="121" r="2" /><circle cx="210" cy="78" r="2.5" />
-            </g>
-          </g>
-          <g transform="translate(180 108) rotate(-20) scale(1 .43)">
-            <circle r="142" className="fb-orbital__orbit-path" />
-            <g className="fb-orbital__satellite-orbit">
-              <g transform="translate(142 0) scale(1 2.3256) rotate(20)">
-                <path d="M-21-7h13v14h-13zm29 0h13v14H8Z" fill="#1d4658" stroke="#79adbc" strokeWidth="1" />
-                <path d="M-17-7V7m5-14V7m21-14V7m5-14V7M-21 0h13M8 0h13" stroke="#79adbc" strokeOpacity=".6" strokeWidth=".7" />
-                <path d="M-8 0H8" stroke="#d0dce0" strokeWidth="2" />
-                <rect x="-5" y="-8" width="10" height="16" rx="2" fill="#e8d9bc" stroke="#fff4dd" />
-                <path d="m-2 9 2 5 2-5" fill="#ffb547" /><path d="M0-8v-5m-3-1 3 1 3-1" stroke="#e8d9bc" />
-              </g>
-            </g>
-          </g>
-          <path d="M44 176h33l14-14M269 54l14-14h30" stroke="#68858c" strokeOpacity=".32" />
-          <circle cx="44" cy="176" r="2" fill="#94a9b0" /><circle cx="313" cy="40" r="2" fill="#ffb547" />
-        </svg>
-        <span className="fb-orbital__illustration-label">Earth observation illustration</span>
+    <section ref={section} className="fb-overpass" aria-label="Analysis preparation" data-stage={stage}>
+      <div className="fb-overpass__scene" aria-hidden="true">
+        <canvas ref={canvas} className="fb-overpass__canvas" />
+        <span className="fb-overpass__caption">Illustrative overpass · not live positions</span>
       </div>
-      <div className="fb-orbital__content">
-        <p className="fb-orbital__eyebrow">MODIS / VIIRS <span>·</span> Earth observation</p>
-        <div className="fb-orbital__status" role="status" aria-live="polite" aria-atomic="true">
-          <h2>Preparing your fire history</h2>
-          <p className="fb-orbital__stage"><span aria-hidden="true" />{copy.label}</p>
-          <p className="fb-orbital__detail">{copy.detail}</p>
+      <div className="fb-overpass__content">
+        <div className="fb-overpass__topline">
+          <p className="fb-overpass__eyebrow"><span className="fb-overpass__beacon" aria-hidden="true" />Analysis in progress</p>
+          <ul className="fb-overpass__sensors" aria-label="Illustrated sensors">
+            {satellites.map(({ instrument, color, sensor }) => (
+              <li key={instrument} style={{ '--sensor': color } as React.CSSProperties}>
+                <i aria-hidden="true" />
+                {instrument} · {sensor.label}
+                <span>{sensor.pixel}</span>
+              </li>
+            ))}
+          </ul>
         </div>
-        <p className="fb-orbital__footnote">Results will appear here automatically.</p>
+        <h2 className="fb-overpass__title">Preparing your <span>fire history</span></h2>
+        {(areaName || interval) && (
+          <p className="fb-overpass__meta">
+            {areaName && <span><MapPin size={13} aria-hidden="true" />{areaName}</span>}
+            {interval && <span><CalendarRange size={13} aria-hidden="true" />{interval}<small>UTC</small></span>}
+          </p>
+        )}
+        <div className="fb-overpass__status" role="status" aria-live="polite" aria-atomic="true">
+          <p className="fb-overpass__stage"><span className="fb-overpass__radar" aria-hidden="true" />{copy.label}</p>
+          <p className="fb-overpass__detail">{copy.detail}</p>
+        </div>
+        <ol className="fb-overpass__phases" aria-label="Request lifecycle">
+          {phases.map((phase, index) => (
+            <li key={phase} data-state={index < current ? 'done' : index === current ? 'current' : 'next'} aria-current={index === current ? 'step' : undefined}>
+              <span className="fb-overpass__bar" aria-hidden="true"><span /></span>
+              <span className="fb-overpass__phase">
+                {index < current && <Check size={11} aria-hidden="true" />}
+                {phase}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <div className="fb-overpass__footer">
+          <span className="fb-overpass__elapsed"><Timer size={12} aria-hidden="true" />Elapsed <span ref={elapsed}>0:00</span></span>
+          <span>Results load automatically — keep exploring meanwhile.</span>
+        </div>
       </div>
     </section>
   )
