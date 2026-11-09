@@ -19,6 +19,7 @@ function reasonText(value: unknown): string {
     NO_WEATHER_RELEASE: 'No weather release is available for this analysis.',
     NO_REPORTS_RELEASE: 'No reports release is available for this analysis.',
     NO_COMPATIBLE_RELEASE: 'No compatible published dataset covers the selected period.',
+    HISTORICAL_PREPARATION_PENDING: 'Archived observations are being prepared for this area and period.',
     GRID_REQUIRED: 'A prepared grid is required for this component.',
     NO_OBSERVATION_MASKS: 'Observation masks have not been provided.',
     'No weather release': 'No weather release is available for this analysis.',

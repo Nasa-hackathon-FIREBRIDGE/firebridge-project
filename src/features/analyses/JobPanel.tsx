@@ -161,6 +161,7 @@ function stageLabel(stage: string, status: string) {
     loading: 'Loading inputs',
     exporting: 'Preparing the file',
     validating: 'Validating inputs',
+    preparing_history: 'Preparing archived observations for your selection',
     writing: 'Writing results',
   }
   return labels[stage] ?? labels[status] ?? 'Processing status received'
