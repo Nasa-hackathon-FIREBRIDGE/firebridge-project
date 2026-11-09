@@ -1,7 +1,7 @@
 .api-stack { display: grid; gap: 18px; min-width: 0; }
 .api-stack .button, .api-workspace .button { font-size: 12px; min-height: 36px; height: auto; padding: 8px 12px; }
-.api-stack .button-primary, .api-workspace .button-primary { color: #04121f; background: #38bdf8; border-color: #38bdf8; }
-.api-stack .button-primary:hover:not(:disabled), .api-workspace .button-primary:hover:not(:disabled) { background: #7dd3fc; }
+.api-stack .button-primary, .api-workspace .button-primary { color: #16100d; background: #f87c38; border-color: #f87c38; }
+.api-stack .button-primary:hover:not(:disabled), .api-workspace .button-primary:hover:not(:disabled) { background: #fcb37d; }
 .api-section { min-width: 0; padding: 20px; }
 .api-section h2, .api-section h3 { margin: 0 0 12px; }
 .api-section p, .api-workspace > p { margin: 10px 0; color: var(--muted); line-height: 1.6; }
@@ -29,5 +29,5 @@
 .api-error small { display: block; margin-top: 6px; }
 .api-notes { padding: 10px; border: 1px solid #6b572c; border-radius: 6px; color: #e6c98d; overflow-wrap: anywhere; }
 .api-notes li { margin: 6px 0; }
-.api-form input:focus-visible, .api-form select:focus-visible, .api-form textarea:focus-visible, .api-field select:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
+.api-form input:focus-visible, .api-form select:focus-visible, .api-form textarea:focus-visible, .api-field select:focus-visible { outline: 2px solid #f87c38; outline-offset: 2px; }
 
