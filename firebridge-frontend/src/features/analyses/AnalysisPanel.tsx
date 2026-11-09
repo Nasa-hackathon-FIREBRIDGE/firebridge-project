@@ -10,7 +10,7 @@ import { validDateRange, validId } from './validation'
 import { Button } from '../../components/ui/Button'
 import { CopyableId } from '../../components/ui/CopyableId'
 import { DateRangePicker } from '../../components/ui/DateRangePicker'
-import { requestDisabledReason, type WorkflowPresentation } from './workspace.presentation'
+import { requestDisabledReason, type AcceptedAnalysis, type WorkflowPresentation } from './workspace.presentation'
 
 function reasonText(value: unknown): string {
   if (value == null || (Array.isArray(value) && !value.length))
@@ -38,6 +38,7 @@ export function AnalysisPanel({
   onSelect,
   refresh,
   onWorkflowState,
+  onAccepted,
 }: {
   areaId?: string
   analysis?: AnalysisView
@@ -46,6 +47,8 @@ export function AnalysisPanel({
   onSelect: (id: string) => void
   refresh: () => void
   onWorkflowState?: (state: WorkflowPresentation) => void
+  /** Called with the server acknowledgement before the new analysis is selected. */
+  onAccepted?: (accepted: AcceptedAnalysis) => void
 }) {
   const create = useCreateAnalysis()
   const [formError, setFormError] = useState<unknown>(null)
@@ -81,6 +84,7 @@ export function AnalysisPanel({
     lock.current = true
     try {
       const result = await create.mutateAsync({ input, idempotencyKey: intent.current.key })
+      onAccepted?.({ id: result.id, status: result.status, areaId: result.area_id })
       onSelect(result.id)
     } catch (reason) {
       setFormError(reason)
