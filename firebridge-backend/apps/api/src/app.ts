@@ -24,6 +24,7 @@ import { IngestionService } from './services/ingestion.service.js';
 import { ContextRepository } from './repositories/context.repository.js';
 import { ContextService } from './services/context.service.js';
 import { ExplanationService } from './services/explanation.service.js';
+import { ExplainerService } from './services/explainer.service.js';
 
 export function createApp(
   options: {
@@ -31,6 +32,7 @@ export function createApp(
     logger?: boolean;
     readinessChecks?: Partial<ReadinessProbes>;
     ingestionAdminToken?: string;
+    explainer?: ExplainerService;
   } = {}
 ): FastifyInstance {
   const app = Fastify({
@@ -57,6 +59,7 @@ export function createApp(
   );
   app.decorate('contextService', contextService);
   app.decorate('explanationService', new ExplanationService(contextService));
+  app.decorate('explainerService', options.explainer ?? new ExplainerService({ url: env.AGENT_SERVICE_URL, token: env.AGENT_SERVICE_TOKEN }));
   app.decorate('phase1ReadinessProvider', {
     async isCatalogueServable() {
       try {
