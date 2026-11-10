@@ -1,15 +1,15 @@
 import * as echarts from 'echarts/core'
-import { BarChart, CustomChart, LineChart } from 'echarts/charts'
+import { BarChart, CustomChart, LineChart, ScatterChart } from 'echarts/charts'
 import { AriaComponent, GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import ReactEChartsCore from 'echarts-for-react/esm/core'
 import type { CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams, CustomSeriesRenderItemReturn, EChartsOption } from 'echarts'
 import { useReducedMotion } from 'motion/react'
 import type { SensorKey } from '../../lib/sensors'
-import type { BridgeMonth, FrpDistribution, ModelId, OverpassRow, PlatformReplay, ResponseCurve } from './engine/index.ts'
+import type { BridgeMonth, FingerprintYear, FrpDistribution, Handover, ModelId, OverpassRow, PlatformReplay, ResponseCurve } from './engine/index.ts'
 import { fmtClock, fmtInt, fmtMonth, fmtOne, sensorColor, sensorLabel } from './format'
 
-echarts.use([AriaComponent, BarChart, CustomChart, LineChart, GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent, CanvasRenderer])
+echarts.use([AriaComponent, BarChart, CustomChart, LineChart, ScatterChart, GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent, CanvasRenderer])
 
 const CHART = {
   surface: '#12151c',
@@ -97,7 +97,7 @@ export function OverpassChart({ rows, baseline }: { rows: OverpassRow[]; baselin
             markArea: {
               silent: true,
               itemStyle: { color: 'rgba(56,198,244,0.07)' },
-              label: { show: true, position: 'insideTopLeft', color: CHART.text3, fontSize: 10.5, formatter: 'Aqua early-record pass ±30 min' },
+              label: { show: true, position: 'insideTopLeft', color: CHART.text3, fontSize: 10.5, formatter: 'Aqua original pass ±30 min' },
               data: [[{ yAxis: baseline - 0.5 }, { yAxis: baseline + 0.5 }]],
             },
           }
@@ -355,6 +355,7 @@ export function MonthlyBridgeChart({ months, platformLabel }: { months: BridgeMo
     if (!observed) return null
     return (kind === 'drift') === m.referenceDrift ? m.bridge.value : null
   }
+  const asFlown = (m: BridgeMonth) => (m.referenceDrift && m.aqua !== null && m.bridge && m.bridge.source !== 'aqua' ? m.aqua : null)
   const gaps: [string, string][] = []
   for (let i = 0; i < months.length; i++) {
     if (months[i].bridge) continue
@@ -379,7 +380,8 @@ export function MonthlyBridgeChart({ months, platformLabel }: { months: BridgeMo
         ? row('', 'Aqua-equivalent', 'no supported record')
         : m.bridge.source === 'aqua'
           ? row(swatch(sensorColor('aqua'), m.referenceDrift ? 0.45 : 1), 'Observed Aqua cell-days', fmtInt(m.bridge.value)) + (m.referenceDrift ? muted('Aqua overpass more than 30 min from its early-record time') : '')
-          : row(swatch(CHART.ember), `Estimated from ${platformLabel(m.bridge.source)}`, `${fmtOne(m.bridge.value)} <span style="color:${CHART.text3};font-weight:400">(${fmtOne(m.bridge.low)}–${fmtOne(m.bridge.high)})</span>`)
+          : row(swatch(CHART.ember), `Estimated from ${platformLabel(m.bridge.source)}`, `${fmtOne(m.bridge.value)} <span style="color:${CHART.text3};font-weight:400">(${fmtOne(m.bridge.low)}–${fmtOne(m.bridge.high)})</span>`) +
+            (asFlown(m) !== null ? row(swatch(sensorColor('aqua'), 0.45), 'Aqua as flown (drifted pass)', fmtInt(asFlown(m)!)) : '')
       return title(fmtMonth(m.month, 'long')) + lines + row('', 'Native detections, all satellites', fmtInt(m.raw))
     }),
     xAxis: { type: 'category', data: labels, axisLine: { lineStyle: { color: CHART.axis } }, axisTick: { show: false }, axisLabel: { ...axisLabel, interval: 0, formatter: (v: string) => (many ? (v.endsWith('-01') || v === labels[0] ? v.slice(0, 4) : '') : fmtMonth(v).slice(0, 3)) } },
@@ -390,7 +392,135 @@ export function MonthlyBridgeChart({ months, platformLabel }: { months: BridgeMo
       { id: 'drift', name: 'Observed Aqua (drifted pass)', type: 'bar', stack: 'm', barMaxWidth: 16, itemStyle: { color: sensorColor('aqua'), opacity: 0.45, borderRadius: [4, 4, 0, 0] }, data: months.map((m) => value(m, 'drift')) },
       { id: 'estimated', name: 'VIIRS-estimated', type: 'bar', stack: 'm', barMaxWidth: 16, itemStyle: { color: CHART.ember, borderRadius: [4, 4, 0, 0] }, data: months.map((m) => value(m, 'estimated')) },
       { id: 'range', type: 'custom', renderItem: whisker, encode: { x: 0, y: [1, 2] }, silent: true, z: 5, data: months.map((m, i) => (m.bridge && m.bridge.source !== 'aqua' ? [i, m.bridge.low, m.bridge.high] : [i, NaN, NaN])) },
+      { id: 'as-flown', name: 'Aqua as flown (drifted pass)', type: 'scatter', symbol: 'circle', symbolSize: 6, z: 6, itemStyle: { color: CHART.surface, borderColor: sensorColor('aqua'), borderWidth: 1.5 }, data: months.map(asFlown) },
     ],
   }
-  return <Chart option={option} height={260} label="Monthly Aqua-equivalent active cell-days: observed where Aqua is inventoried, VIIRS-estimated elsewhere" />
+  return <Chart option={option} height={260} label="Monthly Aqua-equivalent active cell-days: observed where Aqua flew in its original regime, VIIRS-estimated elsewhere" />
+}
+
+/* ── Act 2 · drift fingerprint ───────────────────────────────────────────── */
+export function FingerprintChart({ years }: { years: FingerprintYear[] }) {
+  const whisker = (params: CustomSeriesRenderItemParams, api: CustomSeriesRenderItemAPI): CustomSeriesRenderItemReturn => {
+    void params
+    const a = api.coord([api.value(0), api.value(1)])
+    const b = api.coord([api.value(0), api.value(2)])
+    const cap = 4
+    return {
+      type: 'group',
+      children: [
+        { type: 'line', shape: { x1: a[0], y1: a[1], x2: b[0], y2: b[1] }, style: { stroke: CHART.text2, lineWidth: 1 } },
+        { type: 'line', shape: { x1: a[0] - cap, y1: a[1], x2: a[0] + cap, y2: a[1] }, style: { stroke: CHART.text2, lineWidth: 1 } },
+        { type: 'line', shape: { x1: b[0] - cap, y1: b[1], x2: b[0] + cap, y2: b[1] }, style: { stroke: CHART.text2, lineWidth: 1 } },
+      ],
+    }
+  }
+  const option: EChartsOption = {
+    grid: { left: 8, right: 8, top: 16, bottom: 4, containLabel: true },
+    tooltip: tooltip((items) => {
+      const y = years[list(items)[0]?.dataIndex]
+      if (!y) return ''
+      return (
+        title(`${y.year} · ${y.drifted ? 'drifted pass' : 'original pass'}`) +
+        row(swatch(y.drifted ? CHART.ember : sensorColor('aqua')), 'Aqua fires no VIIRS pass saw that day', `${Math.round((y.share ?? 0) * 100)}%`) +
+        row('', 'Of Aqua fire cell-days', `${fmtInt(y.unmatched)} of ${fmtInt(y.cellDays)}`) +
+        (y.interval ? muted(`90% interval ${Math.round(y.interval[0] * 100)}–${Math.round(y.interval[1] * 100)}%`) : '')
+      )
+    }),
+    xAxis: { type: 'category', data: years.map((y) => y.year), axisLabel, axisLine: { lineStyle: { color: CHART.axis } }, axisTick: { show: false } },
+    yAxis: { type: 'value', min: 0, max: 1, interval: 0.25, axisLabel: { ...axisLabel, formatter: (v: number) => `${Math.round(v * 100)}%` }, splitLine: { lineStyle: { color: CHART.grid } } },
+    series: [
+      {
+        id: 'share',
+        type: 'bar',
+        barMaxWidth: 22,
+        data: years.map((y) => ({ value: y.share ?? 0, itemStyle: { color: y.drifted ? CHART.ember : sensorColor('aqua'), borderRadius: [4, 4, 0, 0] } })),
+      },
+      { id: 'interval', type: 'custom', renderItem: whisker, encode: { x: 0, y: [1, 2] }, silent: true, z: 5, data: years.map((y, i) => (y.interval ? [i, y.interval[0], y.interval[1]] : [i, NaN, NaN])) },
+    ],
+  }
+  return <Chart option={option} height={220} label="Share of Aqua fire cell-days with no VIIRS detection nearby that day, by year, original versus drifted overpass" />
+}
+
+/* ── Act 5 · handover rehearsal ──────────────────────────────────────────── */
+export function HandoverChart({ handover, platformLabel }: { handover: Handover; platformLabel: string }) {
+  const months = handover.months
+  const labels = months.map((m) => m.month)
+  const after = (m: Handover['months'][number]) => m.after
+  const estimate = months.map((m) => (after(m) ? Math.round(m.estimate * 10) / 10 : null))
+  const low = months.map((m) => (after(m) ? m.low : null))
+  const span = months.map((m) => (after(m) ? m.high - m.low : null))
+  const naive = months.map((m) => (after(m) ? m.naive : null))
+  // Lines start at the last month before the switch so the split reads as a continuation.
+  const lastBefore = months.findIndex((m) => after(m)) - 1
+  if (lastBefore >= 0) {
+    estimate[lastBefore] = months[lastBefore].actual
+    naive[lastBefore] = months[lastBefore].actual
+  }
+  const firstDrift = months.find((m) => m.drifted && after(m))?.month
+  const rows = ['Aqua (truth)', 'FIREBRIDGE', 'Un-harmonized'] as const
+  const alarmSets: Record<(typeof rows)[number], string[]> = { 'Aqua (truth)': handover.alarms.truth, FIREBRIDGE: handover.alarms.bridged, 'Un-harmonized': handover.alarms.naive }
+  const alarmColor: Record<(typeof rows)[number], string> = { 'Aqua (truth)': sensorColor('aqua'), FIREBRIDGE: CHART.ember, 'Un-harmonized': CHART.neutral }
+  const max = Math.max(4, ...months.map((m) => Math.max(m.actual, after(m) ? Math.max(m.naive, m.high) : 0)))
+  const option: EChartsOption = {
+    grid: [
+      { left: 8, right: 8, top: 18, height: 236, containLabel: true },
+      { left: 8, right: 8, top: 282, height: 66, containLabel: true },
+    ],
+    tooltip: tooltip((items) => {
+      const m = months[list(items)[0]?.dataIndex]
+      if (!m) return ''
+      const flags = rows.filter((r) => alarmSets[r].includes(m.month))
+      return (
+        title(fmtMonth(m.month, 'long')) +
+        row(swatch(sensorColor('aqua'), m.drifted ? 0.45 : 1), m.drifted ? 'Aqua as flown (drifted, not scored)' : m.after ? 'Aqua, revealed' : 'Aqua (before the switch)', fmtInt(m.actual)) +
+        (m.after
+          ? row(swatch(CHART.ember), 'FIREBRIDGE estimate', `${fmtOne(m.estimate)} <span style="color:${CHART.text3};font-weight:400">(${fmtOne(m.low)}–${fmtOne(m.high)})</span>`) + row(swatch(CHART.neutral), `${platformLabel}, un-harmonized`, fmtInt(m.naive))
+          : '') +
+        (flags.length ? muted(`Flagged unusual by: ${flags.join(', ')}`) : '')
+      )
+    }),
+    axisPointer: { link: [{ xAxisIndex: 'all' }] },
+    xAxis: [
+      { type: 'category', gridIndex: 0, data: labels, axisLabel: { show: false }, axisLine: { lineStyle: { color: CHART.axis } }, axisTick: { show: false } },
+      { type: 'category', gridIndex: 1, data: labels, axisLine: { lineStyle: { color: CHART.axis } }, axisTick: { show: false }, axisLabel: { ...axisLabel, interval: 0, formatter: (v: string) => (v.endsWith('-01') || v === labels[0] ? v.slice(0, 4) : '') } },
+    ],
+    yAxis: [
+      { type: 'value', gridIndex: 0, max: Math.ceil(max * 1.05), minInterval: 1, axisLabel, splitLine: { lineStyle: { color: CHART.grid } } },
+      { type: 'category', gridIndex: 1, data: [...rows], axisLabel: { ...axisLabel, fontFamily: 'Inter Variable, sans-serif', fontSize: 10.5 }, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: true, lineStyle: { color: CHART.grid } } },
+    ],
+    series: [
+      {
+        id: 'truth',
+        name: 'Aqua',
+        type: 'bar',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        barMaxWidth: 10,
+        data: months.map((m) => ({ value: m.actual, itemStyle: { color: sensorColor('aqua'), opacity: m.drifted ? 0.35 : m.after ? 1 : 0.55, borderRadius: [3, 3, 0, 0] } })),
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          lineStyle: { color: 'rgba(255,255,255,0.4)', width: 1, type: 'solid' },
+          label: { color: CHART.text2, fontSize: 10.5, position: 'insideEndTop', formatter: 'Aqua switched off' },
+          data: [{ xAxis: handover.switchMonth }],
+        },
+        markArea: firstDrift
+          ? { silent: true, itemStyle: { color: 'rgba(255,255,255,0.03)' }, label: { show: true, position: 'insideTop', color: CHART.text3, fontSize: 10, formatter: 'Aqua drifted: shown, not scored' }, data: [[{ xAxis: firstDrift }, { xAxis: labels[labels.length - 1] }]] as never }
+          : undefined,
+      },
+      { id: 'band-low', type: 'line', xAxisIndex: 0, yAxisIndex: 0, stack: 'band', symbol: 'none', silent: true, lineStyle: { opacity: 0 }, data: low },
+      { id: 'band-span', type: 'line', xAxisIndex: 0, yAxisIndex: 0, stack: 'band', symbol: 'none', silent: true, lineStyle: { opacity: 0 }, areaStyle: { color: CHART.ember, opacity: 0.14 }, data: span },
+      { id: 'naive', name: `${platformLabel}, un-harmonized`, type: 'line', xAxisIndex: 0, yAxisIndex: 0, symbol: 'none', connectNulls: false, lineStyle: { width: 1.5, color: CHART.neutral, type: [4, 3] }, z: 3, data: naive },
+      { id: 'bridge', name: 'FIREBRIDGE', type: 'line', xAxisIndex: 0, yAxisIndex: 0, symbol: 'circle', symbolSize: 5, showSymbol: false, connectNulls: false, lineStyle: { width: 2, color: CHART.ember }, itemStyle: { color: CHART.ember, borderColor: CHART.surface, borderWidth: 2 }, z: 4, data: estimate },
+      {
+        id: 'alarms',
+        type: 'scatter',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        symbolSize: 8,
+        data: rows.flatMap((r) => alarmSets[r].map((month) => ({ value: [month, r], itemStyle: { color: alarmColor[r], borderColor: CHART.surface, borderWidth: 1.5 } }))),
+      },
+    ],
+  }
+  return <Chart option={option} height={360} label={`Handover rehearsal: Aqua switched off in ${fmtMonth(handover.switchMonth, 'long')}; the revealed Aqua record against the FIREBRIDGE continuation and the un-harmonized ${platformLabel} record, with the months each would flag as unusual`} />
 }
