@@ -16,6 +16,7 @@ import {
   CalendarDays,
   SlidersHorizontal,
   Satellite,
+  GitCompareArrows,
 } from 'lucide-react'
 import { useAnalysis, useArea } from '../../hooks/useFirebridge'
 import type { AreaOfInterest } from '../../types'
@@ -45,10 +46,13 @@ import { analysisPreparationStage, requestDisabledReason, workflowSteps, type Wo
 import { useAnalysisLaunch } from './useAnalysisLaunch'
 import { TabIndicator } from '../../components/ui/TabIndicator'
 import { AnalysisPreparation } from './AnalysisPreparation'
+import { BridgePanel } from '../bridge/BridgePanel'
+import { EpisodesCard } from '../bridge/EpisodesCard'
 
 const sections = [
   { id: 'workspace-top', label: 'Map workspace', icon: MapPinned },
   { id: 'analysis-overview', label: 'Overview', icon: Sparkles },
+  { id: 'sensor-bridge', label: 'Sensor bridge', icon: GitCompareArrows },
   { id: 'observation-records', label: 'Observations', icon: Table2 },
   { id: 'temporal-analysis', label: 'Timeline', icon: CalendarDays },
   { id: 'source-comparison', label: 'Compare sources', icon: Layers2 },
@@ -197,11 +201,12 @@ export default function AnalysisWorkspace() {
       setCopyMessage('Copy the page address from your browser to share this selection.')
     }
   }
-  const showDayOnMap = (cell: DayCell) => {
-    changeFilters({ ...filters, start: cell.date, endExclusive: nextDay(cell.date) })
+  const showIntervalOnMap = (start: string, endExclusive: string) => {
+    changeFilters({ ...filters, start, endExclusive })
     selectSection('workspace-top')
     requestAnimationFrame(() => document.getElementById('spatial-workspace')?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
   }
+  const showDayOnMap = (cell: DayCell) => showIntervalOnMap(cell.date, nextDay(cell.date))
   const setupAction = (event: React.MouseEvent) => {
     event.preventDefault()
     if (activeSection === 'workspace-top') focusSetup()
@@ -329,12 +334,28 @@ export default function AnalysisWorkspace() {
           resultId ? (
             <div className="flex flex-col gap-8">
               <AnalysisInsights analysisId={resultId} onSelectDay={showDayOnMap} />
+              <EpisodesCard analysisId={resultId} onShowEpisode={showIntervalOnMap} onOpenBridge={() => { selectSection('sensor-bridge'); requestAnimationFrame(() => document.querySelector('.fbx-tabs-wrap')?.scrollIntoView({ block: 'start', behavior: 'smooth' })) }} />
               <SourceComparison analysisId={resultId} />
             </div>
           ) : (
             <EmptyPanel
               title={analysis.data && ['queued', 'running'].includes(analysis.data.status) ? 'Preparing your analysis…' : 'No results yet'}
               text={analysis.data && ['queued', 'running'].includes(analysis.data.status) ? 'Satellite results will appear here as soon as processing completes.' : 'Save an area and request an analysis to see automated insights: seasonal profile, busiest days and per-satellite contributions.'}
+              onSetup={setupAction}
+            />
+          )
+        )}
+      </div>
+
+      {/* ── Sensor bridge (harmonization lab) ───────────────────────────── */}
+      <div id="panel-sensor-bridge" role="tabpanel" aria-labelledby="tab-sensor-bridge" hidden={activeSection !== 'sensor-bridge'} className="fbx-panel">
+        {mounted('sensor-bridge') && (
+          resultId ? (
+            <BridgePanel analysisId={resultId} releaseId={analysis.data?.release_id} />
+          ) : (
+            <EmptyPanel
+              title="No analysis to harmonize yet"
+              text="Request an analysis to compare satellites on a common Aqua-equivalent scale, run the withheld-satellite experiment and see how much of a difference comes from the observing system."
               onSetup={setupAction}
             />
           )
