@@ -15,7 +15,8 @@ function level(value: number, max: number) {
 function describe(cell: DayCell) {
   if (cell.total === null) return `${formatDay(cell.date)} · inventory unknown`
   const parts = (Object.entries(cell.bySensor) as [SensorKey, number][]).filter(([, v]) => v > 0).map(([key, v]) => `${SENSORS[key].label} ${v}`)
-  return `${formatDay(cell.date)} · ${cell.total.toLocaleString('en-US')} detection${cell.total === 1 ? '' : 's'}${parts.length ? ` (${parts.join(' · ')})` : ''}`
+  const missing = cell.missing.length ? ` · at least: no ${cell.missing.map((key) => SENSORS[key].label).join(' or ')} record that day` : ''
+  return `${formatDay(cell.date)} · ${cell.missing.length ? '≥ ' : ''}${cell.total.toLocaleString('en-US')} detection${cell.total === 1 ? '' : 's'}${parts.length ? ` (${parts.join(' · ')})` : ''}${missing}`
 }
 
 export function ActivityHeatmap({ periods, onSelect }: { periods: DayCell[]; onSelect?: (cell: DayCell) => void }) {
@@ -95,6 +96,7 @@ export function ActivityHeatmap({ periods, onSelect }: { periods: DayCell[]; onS
                   const y = 18 + (position % 7) * STEP
                   const l = cell.total === null ? -2 : level(cell.total, max)
                   const active = hover?.date === cell.date
+                  const partial = cell.total !== null && cell.missing.length > 0
                   return (
                     <rect
                       key={cell.date}
@@ -104,7 +106,8 @@ export function ActivityHeatmap({ periods, onSelect }: { periods: DayCell[]; onS
                       height={SIZE}
                       rx={3}
                       fill={l === -2 ? `url(#unknown-${year})` : l === -1 ? EMPTY : LEVELS[l]}
-                      stroke={active ? '#fff5ee' : l >= 3 ? 'rgba(255,200,150,0.25)' : 'rgba(255,255,255,0.03)'}
+                      stroke={active ? '#fff5ee' : partial ? '#fbbf24' : l >= 3 ? 'rgba(255,200,150,0.25)' : 'rgba(255,255,255,0.03)'}
+                      strokeDasharray={partial && !active ? '2 2' : undefined}
                       strokeWidth={active ? 1.5 : 1}
                       className="cursor-pointer transition-[stroke] duration-100"
                       onMouseEnter={() => setHover(cell)}
@@ -122,6 +125,18 @@ export function ActivityHeatmap({ periods, onSelect }: { periods: DayCell[]; onS
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="m-0 min-h-5 text-[12.5px] text-fg-2" aria-live="polite">{hover ? describe(hover) : 'Hover a day for its satellite breakdown · click to show it on the map.'}</p>
         <div className="flex items-center gap-1.5 text-[11px] text-fg-3" aria-hidden="true">
+          {periods.some((cell) => cell.total !== null && cell.missing.length > 0) && (
+            <span className="mr-2 inline-flex items-center gap-1.5">
+              <span className="size-2.5 rounded-[3px] border border-dashed border-warn" />
+              A satellite’s record missing
+            </span>
+          )}
+          {periods.some((cell) => cell.total === null) && (
+            <span className="mr-2 inline-flex items-center gap-1.5">
+              <span className="size-2.5 rounded-[3px]" style={{ background: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.14) 0 1.5px, #161920 1.5px 4px)' }} />
+              No record
+            </span>
+          )}
           None
           <span className="size-2.5 rounded-[3px]" style={{ background: EMPTY }} />
           {LEVELS.map((color) => <span key={color} className="size-2.5 rounded-[3px]" style={{ background: color }} />)}
