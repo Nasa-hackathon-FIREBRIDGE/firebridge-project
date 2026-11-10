@@ -48,7 +48,10 @@ function Comparison({ report, comparison }: { report: BridgeReport; comparison: 
   const fleetMatters = fleet && (fleet.flips || Math.abs(fleet.raw - fleet.same) > 0.1)
   // Fire-size effect: VIIRS resolves small fires, the Aqua-equivalent scale mostly larger ones.
   const size = constant?.change != null && bridge?.change != null ? { viirs: constant.change, aqua: bridge.change } : null
-  const sizeMatters = size && Math.abs(Math.log1p(size.aqua) - Math.log1p(size.viirs)) > Math.log(1.25)
+  // An estimated year carries an error range: the fire-size reading needs that range to exclude the same-sensor change.
+  const separated = !!size && (bridge!.observed || (!!bridge!.range && (size.viirs < bridge!.range[0] || size.viirs > bridge!.range[1])))
+  const sizeMatters = size && separated && Math.abs(Math.log1p(size.aqua) - Math.log1p(size.viirs)) > Math.log(1.25)
+  const sizeUnresolved = size && !separated && Math.abs(Math.log1p(size.aqua) - Math.log1p(size.viirs)) > Math.log(1.25)
   const drifted = [a, b].filter((year) => comparison.months.some((mm) => byMonth.get(`${year}-${mm}`)?.referenceDrift))
   const verb = (change: number) => (change >= 0 ? 'rises' : 'falls')
   const magnitude = (change: number) => fmtSigned(change).replace(/^[+−±]/, '')
@@ -87,9 +90,14 @@ function Comparison({ report, comparison }: { report: BridgeReport; comparison: 
             <strong className="font-semibold text-fg">{size.aqua > size.viirs ? 'The change is concentrated in larger fires.' : 'The change is concentrated in smaller fires.'}</strong> Activity at Aqua’s scale, which mostly resolves fires above its detection floor, changes {fmtSigned(size.aqua)}, against {fmtSigned(size.viirs)} for {sensorLabel(constantSensor!)} detections, which include many small fires.
           </p>
         )}
+        {sizeUnresolved && bridge?.range && (
+          <p className="m-0">
+            At Aqua’s scale the change is {fmtSigned(size!.aqua)}, but part of it is estimated from VIIRS with a range of {fmtSigned(bridge.range[0])} to {fmtSigned(bridge.range[1])}, which includes the {fmtSigned(size!.viirs)} {sensorLabel(constantSensor!)} change. The two cannot be told apart here.
+          </p>
+        )}
         {bridge && drifted.length > 0 && (
           <p className="m-0 text-[12.5px] text-fg-3">
-            Aqua’s overpass in {drifted.join(' and ')} is more than 30 min from its early-record time, so part of the Aqua-equivalent change can come from the later pass itself rather than from burning.
+            Aqua’s overpass in {drifted.join(' and ')} had drifted more than 30 min from its original time, so those months are estimated from VIIRS as Aqua would have recorded at its original time, not taken from the drifted pass.
           </p>
         )}
       </div>
@@ -138,15 +146,16 @@ export function BridgeAct({ report }: { report: BridgeReport }) {
   }, [report, fullYears])
 
   const observed = report.months.filter((m) => m.bridge?.source === 'aqua').length
+  const asFlown = report.months.filter((m) => m.referenceDrift && m.bridge && m.bridge.source !== 'aqua').length
   const estimated = report.months.filter((m) => m.bridge && m.bridge.source !== 'aqua').length
   const missing = report.months.filter((m) => !m.bridge).length
   return (
     <Act
-      index={5}
+      index={6}
       id="sensor-bridge-record"
       eyebrow="The bridge"
       title="One comparable record across changing satellites"
-      lede={<>The harmonized unit is the <strong className="font-semibold text-fg">Aqua-equivalent active cell-day</strong>: a 5 km equal-area cell in which the Aqua reference reports at least one daytime fire detection that day. Observed Aqua is used wherever it is inventoried; elsewhere the best-scoring VIIRS model from the experiment estimates it, with its empirical error range.</>}
+      lede={<>The harmonized unit is the <strong className="font-semibold text-fg">Aqua-equivalent active cell-day</strong>: a 5 km equal-area cell in which the Aqua reference reports at least one daytime fire detection that day. Observed Aqua is used wherever it flew in its original overpass regime; where it has no record or a drifted pass, the best-scoring VIIRS model from the experiment estimates it, with its empirical error range.</>}
     >
       {comparison && years.length >= 2 && (
         <div className="mb-8">
@@ -186,7 +195,8 @@ export function BridgeAct({ report }: { report: BridgeReport }) {
         <p className="m-0 text-[13px] font-medium text-fg">Monthly Aqua-equivalent activity</p>
         <Legend label="Monthly bridge series">
           <LegendItem color={sensorColor('aqua')} shape="bar" label={`Observed Aqua · ${observed} mo`} />
-          {report.months.some((m) => m.referenceDrift) && <LegendItem color="rgba(56,198,244,0.45)" shape="bar" label="Observed, drifted pass" />}
+          {report.months.some((m) => m.referenceDrift && m.bridge?.source === 'aqua') && <LegendItem color="rgba(56,198,244,0.45)" shape="bar" label="Observed, drifted pass (no estimate)" />}
+          {asFlown > 0 && <LegendItem color={sensorColor('aqua')} label={`Aqua as flown, drifted pass · ${asFlown} mo`} muted />}
           <LegendItem color={EMBER} shape="bar" label={`VIIRS-estimated · ${estimated} mo`} />
           {missing > 0 && <LegendItem color="rgba(255,255,255,0.12)" shape="bar" label={`No supported record · ${missing} mo`} muted />}
         </Legend>
