@@ -2,13 +2,20 @@ import { lazy, Suspense } from 'react'
 import { SENSORS, type SensorKey } from '../../../lib/sensors'
 import type { BridgeReport } from '../engine/index.ts'
 import { REFERENCE_DRIFT_MINUTES } from '../engine/index.ts'
-import { fmtClock, fmtDate, fmtInt, fmtMinutes, sensorLabel } from '../format'
+import { fmtClock, fmtDate, fmtInt, fmtMinutes, fmtOne, sensorLabel } from '../format'
 import { Act, Legend, LegendItem, Note, SensorDot, Tile } from '../ui'
 
 const OverpassChart = lazy(() => import('../BridgeCharts').then((m) => ({ default: m.OverpassChart })))
+const FingerprintChart = lazy(() => import('../BridgeCharts').then((m) => ({ default: m.FingerprintChart })))
+const pct = (value: number | null) => (value === null ? '—' : `${Math.round(value * 100)}%`)
 
 export function RegimeAct({ report }: { report: BridgeReport }) {
-  const { rows, drift, timing, referenceBaseline, driftYears } = report.regime
+  const { rows, drift, timing, referenceBaseline, driftYears, orbits, fingerprint } = report.regime
+  const aquaOrbit = orbits.find((o) => o.sensor === 'aqua')
+  const effect = report.driftEffect
+  const span = (years: string[]) => (years.length > 1 ? `${years[0]}–${years[years.length - 1]}` : years[0] ?? '')
+  const originalYears = fingerprint.years.filter((y) => !y.drifted).map((y) => y.year)
+  const driftedYears = fingerprint.years.filter((y) => y.drifted).map((y) => y.year)
   const years = [...new Set(rows.filter((r) => r.pass === 'day').map((r) => r.year))].sort()
   const aquaDrift = drift.find((d) => d.sensor === 'aqua')
   const terraDrift = drift.find((d) => d.sensor === 'terra')
@@ -57,8 +64,38 @@ export function RegimeAct({ report }: { report: BridgeReport }) {
       )}
       {driftYears.length > 0 && referenceBaseline !== null && (
         <Note>
-          Aqua passes more than {REFERENCE_DRIFT_MINUTES} min away from its early-record time ({fmtClock(referenceBaseline)}) in {driftYears.join(', ')}. Those months still use observed Aqua in the bridge, flagged as a drifted reference.
+          From {aquaOrbit?.onset ?? driftYears[0]}, Aqua passes more than {REFERENCE_DRIFT_MINUTES} min from its original {fmtClock(referenceBaseline)} ({aquaOrbit?.baselineFrom === 'design-orbit' ? 'its design-orbit time at this latitude, as this window holds no years before the drift' : 'measured here while its orbit was still maintained, through 2021'}). Once the orbit is no longer corrected the drift does not reverse, so FIREBRIDGE keeps every year from then on out of calibration and estimates it from VIIRS as Aqua would have recorded at its original time. Aqua as flown stays visible for comparison.
         </Note>
+      )}
+      {driftedYears.length > 0 && fingerprint.inRegime.cellDays > 0 && (
+        <div className="mt-6 grid gap-6 rounded-2xl border border-white/[0.06] bg-white/[0.015] p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          <div className="min-w-0">
+            <p className="m-0 text-[14px] font-semibold text-fg">What the drift changed in Aqua’s record</p>
+            <p className="mb-0 mt-1.5 text-[13px] leading-relaxed text-fg-2">
+              A pass long after VIIRS’s (about 13:30) catches fires that ignited or flared after VIIRS went by, and misses ones that had died down. The fingerprint: Aqua fire cell-days with no VIIRS detection nearby that day. Counted only in months where both records exist, so a missing record never looks like a miss.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <Tile label={`Original pass · ${span(originalYears)}`} value={pct(fingerprint.inRegime.share)} sub={`${fmtInt(fingerprint.inRegime.unmatched)} of ${fmtInt(fingerprint.inRegime.cellDays)} Aqua fire cell-days${fingerprint.inRegime.interval ? ` · 90%: ${pct(fingerprint.inRegime.interval[0])}–${pct(fingerprint.inRegime.interval[1])}` : ''}`} />
+              <Tile tone="ember" label={`Drifted pass · ${span(driftedYears)}`} value={pct(fingerprint.drifted.share)} sub={`${fmtInt(fingerprint.drifted.unmatched)} of ${fmtInt(fingerprint.drifted.cellDays)} Aqua fire cell-days${fingerprint.drifted.interval ? ` · 90%: ${pct(fingerprint.drifted.interval[0])}–${pct(fingerprint.drifted.interval[1])}` : ''}`} />
+            </div>
+            <p className="mb-0 mt-3 text-[13px] leading-relaxed text-fg-2">
+              {fingerprint.distinguishable
+                ? <><strong className="font-semibold text-fg">The 90% intervals do not overlap:</strong> the drift measurably changed which fires Aqua records here{fingerprint.addedInDrift.length ? `, even though ${fingerprint.addedInDrift.map(sensorLabel).join(' and ')} joined in the drifted years and made a VIIRS match more likely` : ''}.</>
+                : 'The intervals overlap, so no change is established here yet.'}
+              {effect && <> In total, Aqua as flown recorded {fmtInt(effect.observed)} cell-days in the drifted months; at its original time, {effect.sources.map(sensorLabel).join(' and ')} predict{effect.sources.length === 1 ? 's' : ''} {fmtOne(effect.estimate.value)} (range {fmtOne(effect.estimate.low)}–{fmtOne(effect.estimate.high)}).</>}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <Suspense fallback={<div className="ui-skeleton h-[220px] w-full" />}>
+              <FingerprintChart years={fingerprint.years} />
+            </Suspense>
+            <Legend label="Fingerprint bars">
+              <LegendItem color={SENSORS.aqua.color} shape="bar" label="Original overpass" />
+              <LegendItem color="#ff7c40" shape="bar" label="Drifted overpass" />
+              <LegendItem color="#aab0bc" shape="line" label="90% interval" />
+            </Legend>
+          </div>
+        </div>
       )}
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         {timingPlatforms.length > 0 && (
