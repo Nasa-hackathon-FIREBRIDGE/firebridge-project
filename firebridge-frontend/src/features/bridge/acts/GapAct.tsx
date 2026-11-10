@@ -18,7 +18,11 @@ export function GapAct({ report, platform }: { report: BridgeReport; platform: S
   if (!gap || gap.ratioDetections === null || gap.ratioCells === null)
     return (
       <Act index={1} eyebrow="The gap, decomposed" title={`Why does ${name} record more detections than Aqua?`}>
-        <p className="m-0 text-[13.5px] text-fg-2">This needs Aqua and {name} detections in the same inventoried months. They do not overlap in this analysis, so the gap cannot be decomposed here.</p>
+        <p className="m-0 text-[13.5px] text-fg-2">
+          {report.replays.find((r) => r.platform === platform)?.driftBlocked
+            ? <>{name} overlaps Aqua here only after Aqua’s overpass drifted from its original time (from {report.regime.driftYears[0]}). The gap is not decomposed against a drifted reference.</>
+            : <>This needs Aqua and {name} detections in the same inventoried months. They do not overlap in this analysis, so the gap cannot be decomposed here.</>}
+        </p>
       </Act>
     )
   const steps = [
