@@ -59,13 +59,33 @@ describe('computeInsights', () => {
       ...summary,
       native_detections_by_source: [source('modis-aqua-c6-standard', 'Aqua', 'modis-aqua', null, 'unknown'), source('viirs-noaa20-c2-standard', 'N20', 'viirs-noaa20', '30')],
     } as unknown as NativeSummary
-    const gap = { ...calendar, periods: [period('2020-08-01', [['modis-aqua-c6-standard', null], ['viirs-noaa20-c2-standard', '5']])] } as unknown as NativeCalendar
+    const gap = { ...calendar, periods: [period('2020-08-01', [['modis-aqua-c6-standard', null], ['viirs-noaa20-c2-standard', '5']]), period('2020-08-02', [['modis-aqua-c6-standard', null], ['viirs-noaa20-c2-standard', null]])] } as unknown as NativeCalendar
     const insights = computeInsights(unknown, gap)
     expect(insights.total).toBeNull()
     expect(insights.sensors[0].count).toBeNull()
-    expect(insights.periods[0].total).toBeNull()
-    expect(insights.knownPeriods).toBe(0)
+    // The known satellite's count is a lower bound, flagged with the satellite that is missing.
+    expect(insights.periods[0]).toMatchObject({ total: 5, missing: ['aqua'] })
+    // No satellite known that day: no total at all (NOAA-20's record span ended the day before).
+    expect(insights.periods[1]).toMatchObject({ total: null, missing: ['aqua'] })
+    expect(insights.knownPeriods).toBe(1)
     expect(insights.ratio).toBeNull()
+  })
+
+  it('judges availability per satellite across collection changes and record spans', () => {
+    const spanning = {
+      ...calendar,
+      periods: [
+        // Aqua C6 superseded by C6.1, NOAA-21 joins on the second day: neither is missing data.
+        period('2022-12-30', [['modis-aqua-c6-standard', '2'], ['modis-aqua-c61-standard', null], ['viirs-noaa21-c2-standard', null]]),
+        period('2023-01-02', [['modis-aqua-c6-standard', null], ['modis-aqua-c61-standard', '1'], ['viirs-noaa21-c2-standard', '4']]),
+        period('2023-01-03', [['modis-aqua-c6-standard', null], ['modis-aqua-c61-standard', null], ['viirs-noaa21-c2-standard', '3']]),
+        period('2023-01-04', [['modis-aqua-c6-standard', null], ['modis-aqua-c61-standard', '0'], ['viirs-noaa21-c2-standard', '0']]),
+      ],
+    } as unknown as NativeCalendar
+    const insights = computeInsights(summary, spanning)
+    expect(insights.periods.map((p) => [p.total, p.missing])).toEqual([[2, []], [5, []], [3, ['aqua']], [0, []]])
+    expect(insights.knownPeriods).toBe(4)
+    expect(insights.activePeriods).toBe(3)
   })
 
   it('returns an empty, honest result before data loads', () => {
