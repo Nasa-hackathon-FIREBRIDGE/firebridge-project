@@ -8,6 +8,8 @@ export const fmtRatio = (value: number | null | undefined) => (value == null ? '
 export const fmtShare = (value: number | null | undefined) => (value == null ? '—' : `${Math.round(value * 100)}%`)
 export const fmtSigned = (value: number | null | undefined) => (value == null ? 'n/a' : `${value > 0 ? '+' : value < 0 ? '−' : '±'}${Math.abs(Math.round(value * 100))}%`)
 export const fmtOne = (value: number) => (Math.abs(value) >= 100 ? fmtInt(value) : value.toFixed(1))
+/** Whole counts without a decimal; estimates keep one. */
+export const fmtCount = (value: number) => (Number.isInteger(value) ? fmtInt(value) : fmtOne(value))
 
 /** Hours (local solar time) as HH:MM. */
 export function fmtClock(hours: number) {
