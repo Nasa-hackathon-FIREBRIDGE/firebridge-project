@@ -1,18 +1,21 @@
-import type { SensorKey } from '../../../lib/sensors.ts'
+import { SENSORS, type SensorKey } from '../../../lib/sensors.ts'
 import { availabilityFromCalendar, availabilityFromDetections, type Availability, type CalendarPeriodInput, type MonthState } from './availability.ts'
+import { satelliteJury, type AnomalyReport } from './anomaly.ts'
 import { CellDayIndex } from './celldays.ts'
+import { driftFingerprint, type DriftFingerprint } from './drift.ts'
 import { detectEpisodes, type EpisodeSummary } from './episodes.ts'
 import { GRID_CRS } from './geo.ts'
+import { rehearseHandovers, type Handover } from './handover.ts'
 import { prepareDetections, type Observation, type RawDetection } from './prepare.ts'
-import { overpassRegime, pairTiming, type Drift, type OverpassRow, type PairTiming } from './regime.ts'
+import { orbitDrift, overpassRegime, pairTiming, type Drift, type OrbitDrift, type OverpassRow, type PairTiming } from './regime.ts'
 import { estimateMonth, isComplete, platformMonths, replayPlatform, type PlatformReplay } from './replay.ts'
 import { sensitivity, type GapDecomposition, type Sensitivity } from './sensitivity.ts'
-import { median } from './stats.ts'
 
-export const ENGINE_VERSION = 'fb-bridge/1.0.0'
-/** Reference passes more than this far from Aqua's early-record overpass time are flagged:
- *  the same tolerance the blueprint proposes for pairing near-simultaneous passes. */
+export const ENGINE_VERSION = 'fb-bridge/1.1.0'
+/** A reference pass more than this far from Aqua's maintained-orbit overpass time is outside the
+ *  reference regime: the same tolerance the blueprint proposes for pairing near-simultaneous passes. */
 export const REFERENCE_DRIFT_MINUTES = 30
+const WITNESSES: SensorKey[] = ['aqua', 'terra', 'snpp', 'noaa20', 'noaa21']
 export const VIIRS_PLATFORMS: SensorKey[] = ['snpp', 'noaa20', 'noaa21']
 
 export interface BridgeInput {
@@ -39,9 +42,11 @@ export interface BridgeMonth {
   /** Observed Aqua-active cell-days (daytime, presumed vegetation) when Aqua is inventoried. */
   aqua: number | null
   aquaState: MonthState
+  /** Aqua is inventoried but passes outside its original overpass regime this year. */
   referenceDrift: boolean
   estimates: Partial<Record<SensorKey, Estimate>>
-  /** The harmonized value: observed reference when available, else the best supported estimate. */
+  /** The harmonized value: observed Aqua inside its original regime; otherwise (drifted or
+   *  missing reference) the best supported VIIRS estimate; drifted Aqua only as a last resort. */
   bridge: (Estimate & { source: SensorKey }) | null
   /** All native detections in the UTC month, every sensor and type (matches the calendar). */
   raw: number
@@ -76,13 +81,37 @@ export interface BridgeReport {
   }
   availability: Availability
   platforms: SensorKey[]
-  regime: { rows: OverpassRow[]; drift: Drift[]; timing: PairTiming[]; referenceBaseline: number | null; driftYears: string[] }
+  regime: {
+    rows: OverpassRow[]
+    drift: Drift[]
+    timing: PairTiming[]
+    /** Aqua's maintained-orbit overpass time (local solar hours). */
+    referenceBaseline: number | null
+    /** Years Aqua spends outside its original regime: excluded from calibration and estimated. */
+    driftYears: string[]
+    orbits: OrbitDrift[]
+    fingerprint: DriftFingerprint
+  }
   sensitivity: Sensitivity
   replays: PlatformReplay[]
+  /** Handover rehearsals for every supported platform, by switch year. */
+  handovers: Handover[]
+  /** Observed (drifted) Aqua against the original-regime estimate in the drifted years. */
+  driftEffect: DriftEffect | null
   months: BridgeMonth[]
   years: BridgeYear[]
+  anomalies: AnomalyReport
   episodes: EpisodeSummary
   headline: GapDecomposition | null
+}
+
+export interface DriftEffect {
+  years: { year: string; months: number; observed: number; estimate: Estimate }[]
+  observed: number
+  estimate: Estimate
+  /** observed / estimate: how much more (or less) the drifted Aqua records than it would have. */
+  ratio: number | null
+  sources: SensorKey[]
 }
 
 const utcMonth = (o: Observation) => new Date(o.t).toISOString().slice(0, 7)
@@ -107,18 +136,38 @@ export function analyzeBridge(input: BridgeInput, options: BridgeOptions = {}): 
   }
   const state = (sensor: SensorKey, month: string): MonthState => availability.bySensor[sensor]?.[month] ?? 'unknown'
   const platforms = VIIRS_PLATFORMS.filter((p) => availability.bySensor[p] && Object.values(availability.bySensor[p]!).some(isComplete))
-  const paired = (platform: SensorKey) => new Set(availability.months.filter((m) => isComplete(state('aqua', m)) && isComplete(state(platform, m))))
+  const windowYears = [...new Set(availability.months.map((m) => m.slice(0, 4)))]
 
   const index = new CellDayIndex(observations)
   const regime = overpassRegime(observations)
   const timing = pairTiming(index, platforms)
-  const aquaDays = regime.rows.filter((row) => row.sensor === 'aqua' && row.pass === 'day')
-  const earlyAqua = observations.filter((o) => o.sensor === 'aqua' && o.day && o.year <= '2021').map((o) => o.lst)
-  const referenceBaseline = earlyAqua.length >= 10 ? median(earlyAqua) : aquaDays.find((row) => row.n >= 10)?.median ?? null
-  const driftYears = referenceBaseline === null ? [] : aquaDays.filter((row) => Math.abs(row.median - referenceBaseline) * 60 > REFERENCE_DRIFT_MINUTES).map((row) => row.year)
+  const orbits = (['aqua', 'terra'] as SensorKey[]).map((sensor) => orbitDrift(observations, regime.rows, sensor, windowYears, REFERENCE_DRIFT_MINUTES))
+  const aquaOrbit = orbits[0]
+  const referenceBaseline = aquaOrbit.baseline
+  const driftYears = aquaOrbit.years
+  const drifted = new Set(driftYears)
+  // Calibration only ever sees Aqua inside its original overpass regime.
+  const inRegime = (month: string) => isComplete(state('aqua', month)) && !drifted.has(month.slice(0, 4))
+  const paired = (platform: SensorKey) => new Set(availability.months.filter((m) => inRegime(m) && isComplete(state(platform, m))))
+  const driftedPaired = (platform: SensorKey) => availability.months.filter((m) => isComplete(state('aqua', m)) && drifted.has(m.slice(0, 4)) && isComplete(state(platform, m)))
 
   const sense = sensitivity(observations, index, platforms, paired)
-  const replays = platforms.map((platform) => replayPlatform(index, observations, platform, { pairedMonths: paired(platform) }))
+  const clock = (hours: number) => {
+    const minutes = Math.round(hours * 60)
+    return `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+  }
+  const replays = platforms.map((platform) => {
+    const replay = replayPlatform(index, observations, platform, { pairedMonths: paired(platform) })
+    if (replay.support === 'insufficient' && replay.pairedMonths < 4 && driftedPaired(platform).length && aquaOrbit.onset && referenceBaseline !== null) {
+      replay.driftBlocked = true
+      replay.supportReasons = [
+        `${SENSORS[platform].label} overlaps Aqua here only from ${aquaOrbit.onset}, after Aqua's overpass drifted away from its original ${clock(referenceBaseline)}. Calibrating against a drifted reference would build the drift into the bridge, so ${SENSORS[platform].label} is not calibrated. A window that includes years before ${aquaOrbit.onset} allows it.`,
+      ]
+    }
+    return replay
+  })
+  const handovers = replays.filter((r) => r.support !== 'insufficient').flatMap((r) => rehearseHandovers(index, observations, r.platform, [...paired(r.platform)].sort(), driftedPaired(r.platform)))
+  const fingerprint = driftFingerprint(index, VIIRS_PLATFORMS, (month) => isComplete(state('aqua', month)) && VIIRS_PLATFORMS.some((p) => isComplete(state(p, month))), drifted, (platform, month) => isComplete(state(platform, month)), availability.months)
 
   // Apply each supported platform's final model to every month it is inventoried.
   const estimates = new Map<SensorKey, Map<string, ReturnType<typeof estimateMonth>>>()
@@ -149,6 +198,7 @@ export function analyzeBridge(input: BridgeInput, options: BridgeOptions = {}): 
   const months: BridgeMonth[] = availability.months.map((month) => {
     const aquaState = state('aqua', month)
     const aqua = isComplete(aquaState) ? aquaByMonth.get(month) ?? 0 : null
+    const referenceDrift = aqua !== null && drifted.has(month.slice(0, 4))
     const monthEstimates: BridgeMonth['estimates'] = {}
     for (const [platform, byMonth] of estimates) {
       const estimate = byMonth.get(month)
@@ -156,16 +206,45 @@ export function analyzeBridge(input: BridgeInput, options: BridgeOptions = {}): 
     }
     const best = ranked.find((platform) => monthEstimates[platform])
     const rawBySensor = rawByMonth.get(month) ?? {}
+    const observed = aqua !== null ? { value: aqua, low: aqua, high: aqua, source: 'aqua' as SensorKey } : null
     return {
       month,
       aqua,
       aquaState,
-      referenceDrift: aqua !== null && driftYears.includes(month.slice(0, 4)),
+      referenceDrift,
       estimates: monthEstimates,
-      bridge: aqua !== null ? { value: aqua, low: aqua, high: aqua, source: 'aqua' } : best ? { ...monthEstimates[best]!, source: best } : null,
+      bridge: observed && !referenceDrift ? observed : best ? { ...monthEstimates[best]!, source: best } : observed,
       raw: Object.values(rawBySensor).reduce((a, b) => a + (b ?? 0), 0),
       rawBySensor,
     }
+  })
+
+  let driftEffect: DriftEffect | null = null
+  const corrected = months.filter((m) => m.referenceDrift && m.bridge && m.bridge.source !== 'aqua')
+  if (corrected.length) {
+    const sum = (list: BridgeMonth[], pick: (m: BridgeMonth) => number) => list.reduce((total, m) => total + pick(m), 0)
+    const estimateOf = (list: BridgeMonth[]): Estimate => ({ value: sum(list, (m) => m.bridge!.value), low: sum(list, (m) => m.bridge!.low), high: sum(list, (m) => m.bridge!.high) })
+    const byYear = [...new Set(corrected.map((m) => m.month.slice(0, 4)))].map((year) => {
+      const list = corrected.filter((m) => m.month.startsWith(year))
+      return { year, months: list.length, observed: sum(list, (m) => m.aqua!), estimate: estimateOf(list) }
+    })
+    const estimate = estimateOf(corrected)
+    const observed = sum(corrected, (m) => m.aqua!)
+    driftEffect = { years: byYear, observed, estimate, ratio: estimate.value > 0 ? observed / estimate.value : null, sources: [...new Set(corrected.map((m) => m.bridge!.source))] }
+  }
+
+  // Satellite jury: each sensor's own daytime cell-days in the months it is fully inventoried.
+  const cellDays = new Map<string, number>()
+  for (const cell of index.cells.values()) for (const sensor of Object.keys(cell.bySensor)) cellDays.set(`${sensor}|${cell.month}`, (cellDays.get(`${sensor}|${cell.month}`) ?? 0) + 1)
+  const anomalies = satelliteJury({
+    months: availability.months,
+    harmonized: new Map(months.filter((m) => m.bridge).map((m) => [m.month, m.bridge!.value])),
+    raw: new Map(months.map((m) => [m.month, m.raw])),
+    witnesses: WITNESSES.filter((sensor) => availability.bySensor[sensor]).map((sensor) => ({
+      sensor,
+      values: new Map(availability.months.filter((m) => isComplete(state(sensor, m))).map((m) => [m, cellDays.get(`${sensor}|${m}`) ?? 0])),
+      drifted: new Set(orbits.find((o) => o.sensor === sensor)?.years ?? []),
+    })),
   })
 
   const years: BridgeYear[] = []
@@ -207,11 +286,14 @@ export function analyzeBridge(input: BridgeInput, options: BridgeOptions = {}): 
     },
     availability,
     platforms,
-    regime: { ...regime, timing, referenceBaseline, driftYears },
+    regime: { ...regime, timing, referenceBaseline, driftYears, orbits, fingerprint },
     sensitivity: sense,
     replays,
+    handovers,
+    driftEffect,
     months,
     years,
+    anomalies,
     episodes,
     headline,
   }
@@ -271,6 +353,12 @@ export function compareYears(report: BridgeReport, a: string, b: string): YearCo
 }
 
 export type { RawDetection } from './prepare.ts'
+export type { Handover, HandoverMonth, HandoverWindow } from './handover.ts'
+export type { AnomalyKind, AnomalyReport, MonthAnomaly, SeriesScore, Witness, WitnessState } from './anomaly.ts'
+export { ANOMALY_THRESHOLD, ANOMALY_MINIMUM_YEARS } from './anomaly.ts'
+export type { DriftFingerprint, FingerprintYear, UnmatchedShare } from './drift.ts'
+export type { OrbitDrift } from './regime.ts'
+export { MAINTAINED_ORBIT_UNTIL } from './regime.ts'
 export type { PlatformReplay, ModelId, ModelScore, ReplayMonth } from './replay.ts'
 export { MODELS, B2_FEATURES } from './replay.ts'
 export type { Episode, EpisodeSummary } from './episodes.ts'
