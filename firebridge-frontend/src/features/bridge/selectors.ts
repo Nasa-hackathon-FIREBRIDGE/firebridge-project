@@ -1,5 +1,5 @@
 import type { SensorKey } from '../../lib/sensors'
-import { VIIRS_PLATFORMS, type BridgeReport } from './engine/index.ts'
+import { VIIRS_PLATFORMS, type BridgeReport, type Handover } from './engine/index.ts'
 
 /** Default comparison platform: the VIIRS record with the longest testable overlap with Aqua. */
 export function defaultPlatform(report: BridgeReport): SensorKey | null {
@@ -15,3 +15,19 @@ export function bridgeCsv(report: BridgeReport) {
   return [header, ...rows].map((r) => r.join(',')).join('\n') + '\n'
 }
 
+
+/** Outcome of one rehearsal, as read by an analyst comparing each new month with the record before the switch. */
+export function alarmOutcome(h: Handover) {
+  const truth = new Set(h.alarms.truth)
+  return {
+    naiveFalse: h.alarms.naive.filter((m) => !truth.has(m)),
+    bridgedFalse: h.alarms.bridged.filter((m) => !truth.has(m)),
+    caught: h.alarms.truth.filter((m) => h.alarms.bridged.includes(m)),
+    missed: h.alarms.truth.filter((m) => !h.alarms.bridged.includes(m)),
+  }
+}
+
+/** The default rehearsal: the earliest switch, which leaves the longest answer key. */
+export function defaultHandover(report: BridgeReport, platform: SensorKey) {
+  return report.handovers.filter((h) => h.platform === platform).sort((a, b) => b.scored.months - a.scored.months)[0] ?? null
+}
