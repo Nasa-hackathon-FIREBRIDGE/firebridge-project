@@ -17,6 +17,7 @@ import {
   SlidersHorizontal,
   Satellite,
   GitCompareArrows,
+  CalendarSearch,
 } from 'lucide-react'
 import { useAnalysis, useArea } from '../../hooks/useFirebridge'
 import type { AreaOfInterest } from '../../types'
@@ -48,10 +49,13 @@ import { TabIndicator } from '../../components/ui/TabIndicator'
 import { AnalysisPreparation } from './AnalysisPreparation'
 import { BridgePanel } from '../bridge/BridgePanel'
 import { EpisodesCard } from '../bridge/EpisodesCard'
+import { CalendarPanel } from '../bridge/CalendarPanel'
+import { VerdictCard } from '../bridge/VerdictCard'
 
 const sections = [
   { id: 'workspace-top', label: 'Map workspace', icon: MapPinned },
   { id: 'analysis-overview', label: 'Overview', icon: Sparkles },
+  { id: 'fire-calendar', label: 'Fire calendar', icon: CalendarSearch },
   { id: 'sensor-bridge', label: 'Sensor bridge', icon: GitCompareArrows },
   { id: 'observation-records', label: 'Observations', icon: Table2 },
   { id: 'temporal-analysis', label: 'Timeline', icon: CalendarDays },
@@ -207,6 +211,10 @@ export default function AnalysisWorkspace() {
     requestAnimationFrame(() => document.getElementById('spatial-workspace')?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
   }
   const showDayOnMap = (cell: DayCell) => showIntervalOnMap(cell.date, nextDay(cell.date))
+  const openSection = (id: string) => {
+    selectSection(id)
+    requestAnimationFrame(() => document.querySelector('.fbx-tabs-wrap')?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+  }
   const setupAction = (event: React.MouseEvent) => {
     event.preventDefault()
     if (activeSection === 'workspace-top') focusSetup()
@@ -333,14 +341,30 @@ export default function AnalysisWorkspace() {
         {mounted('analysis-overview') && (
           resultId ? (
             <div className="flex flex-col gap-8">
+              <VerdictCard analysisId={resultId} onOpenCalendar={() => openSection('fire-calendar')} onOpenBridge={() => openSection('sensor-bridge')} />
               <AnalysisInsights analysisId={resultId} onSelectDay={showDayOnMap} />
-              <EpisodesCard analysisId={resultId} onShowEpisode={showIntervalOnMap} onOpenBridge={() => { selectSection('sensor-bridge'); requestAnimationFrame(() => document.querySelector('.fbx-tabs-wrap')?.scrollIntoView({ block: 'start', behavior: 'smooth' })) }} />
+              <EpisodesCard analysisId={resultId} onShowEpisode={showIntervalOnMap} onOpenBridge={() => openSection('sensor-bridge')} />
               <SourceComparison analysisId={resultId} />
             </div>
           ) : (
             <EmptyPanel
               title={analysis.data && ['queued', 'running'].includes(analysis.data.status) ? 'Preparing your analysis…' : 'No results yet'}
               text={analysis.data && ['queued', 'running'].includes(analysis.data.status) ? 'Satellite results will appear here as soon as processing completes.' : 'Save an area and request an analysis to see automated insights: seasonal profile, busiest days and per-satellite contributions.'}
+              onSetup={setupAction}
+            />
+          )
+        )}
+      </div>
+
+      {/* ── Fire calendar (unusual activity, satellite jury) ──────────────── */}
+      <div id="panel-fire-calendar" role="tabpanel" aria-labelledby="tab-fire-calendar" hidden={activeSection !== 'fire-calendar'} className="fbx-panel">
+        {mounted('fire-calendar') && (
+          resultId ? (
+            <CalendarPanel analysisId={resultId} onShowEpisode={showIntervalOnMap} />
+          ) : (
+            <EmptyPanel
+              title="No calendar yet"
+              text="Request an analysis to see when burning was unusual, judged by every satellite against its own past."
               onSetup={setupAction}
             />
           )
