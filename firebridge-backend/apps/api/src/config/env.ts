@@ -45,6 +45,9 @@ const schema = z
     DATABASE_URL: postgresUrl,
     HISTORY_SERVICE_URL: z.string().url().optional(),
     HISTORY_SERVICE_TOKEN: z.string().min(32).optional(),
+    // Private FireBridge AI Agent: the API holds its service key; browsers never see it.
+    AGENT_SERVICE_URL: z.string().url().optional(),
+    AGENT_SERVICE_TOKEN: z.string().min(16).optional(),
     REDIS_URL: redisUrl,
     CORS_ORIGINS: corsOrigins,
     PAGINATION_SECRET: z.string().min(16).default(defaultPaginationSecret),
