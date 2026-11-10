@@ -48,7 +48,7 @@ export function ReplayAct({ report, platform }: { report: BridgeReport; platform
             {replay.supportReasons.map((reason) => <li key={reason}>{reason}</li>)}
           </ul>
         )}
-        <Note>Choose a longer period or a larger area in which both Aqua and {name} recorded fires. Three or more years allow independent year-by-year tests.</Note>
+        {!replay?.driftBlocked && <Note>Choose a longer period or a larger area in which both Aqua and {name} recorded fires. Three or more years allow independent year-by-year tests.</Note>}
       </Act>
     )
 
@@ -60,6 +60,7 @@ export function ReplayAct({ report, platform }: { report: BridgeReport; platform
   }
   const chosen = replay.scores.find((s) => s.model === replay.decision.model)!
   const miss = replay.largestMiss
+  const jury = miss ? report.anomalies.months.find((a) => a.month === miss.month) : undefined
   const blockText = replay.blockKind === 'year' ? `${replay.blocks} calendar years. Each year is predicted by models fitted only on the other ${replay.blocks - 1}.` : `${replay.blocks} calendar months. Each month is predicted by models fitted without it or its neighbouring months (a buffer against fire episodes spanning the split).`
   return (
     <Act
@@ -171,6 +172,11 @@ export function ReplayAct({ report, platform }: { report: BridgeReport; platform
                 <p className="mb-0 mt-1.5 text-[12.5px] leading-relaxed text-fg-3">
                   {name} recorded {fmtInt(miss.platformCellDays)} active cell-days that month. A miss this size marks conditions the calibration does not capture, such as a large episode one satellite recorded and the other did not.
                 </p>
+                {jury?.kind === 'disputed' && jury.outlier === 'aqua' && (
+                  <p className="mb-0 mt-2 text-[12.5px] leading-relaxed text-fg-2">
+                    <strong className="font-semibold text-fg">The satellite jury disputes this month.</strong> Compared with their own past, {jury.witnesses.filter((w) => w.state === 'scored' && w.sensor !== 'aqua').map((w) => sensorLabel(w.sensor)).join(', ')} saw an ordinary or busier month; Aqua alone recorded {miss.actual === 0 ? 'nothing' : 'almost nothing'}. The miss may be Aqua’s, not the model’s.
+                  </p>
+                )}
               </div>
             )}
             <ul className="m-0 flex list-none flex-col gap-2 p-0 text-[12.5px] leading-relaxed text-fg-3">
