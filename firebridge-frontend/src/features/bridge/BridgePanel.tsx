@@ -7,11 +7,12 @@ import type { BridgeReport } from './engine/index.ts'
 import { fmtInt, fmtMinutes, fmtRatio, fmtShare, sensorLabel } from './format'
 import { MAX_BRIDGE_DETECTIONS, useBridgeReport, type BridgeState } from './useBridgeReport'
 import { PlatformPicker, Tile } from './ui'
-import { defaultPlatform } from './selectors'
+import { alarmOutcome, defaultHandover, defaultPlatform } from './selectors'
 import { GapAct } from './acts/GapAct'
 import { RegimeAct } from './acts/RegimeAct'
 import { SensitivityAct } from './acts/SensitivityAct'
 import { ReplayAct } from './acts/ReplayAct'
+import { HandoverAct } from './acts/HandoverAct'
 import { BridgeAct } from './acts/BridgeAct'
 import { MethodAct } from './acts/MethodAct'
 
@@ -35,15 +36,21 @@ export function BridgeProgress({ state }: { state: Extract<BridgeState, { status
 function Headline({ report, platform }: { report: BridgeReport; platform: SensorKey | null }) {
   const gap = platform ? report.sensitivity.gaps.find((g) => g.platform === platform) : null
   const aqua = report.regime.drift.find((d) => d.sensor === 'aqua')
-  const replay = platform ? report.replays.find((r) => r.platform === platform) : null
-  const chosen = replay?.scores.find((s) => s.model === replay.decision.model)
+  const { fingerprint } = report.regime
+  const handover = platform ? defaultHandover(report, platform) : null
+  const outcome = handover ? alarmOutcome(handover) : null
   const explained = gap?.shares && gap.shares.residual >= 0 ? gap.shares.pixel + gap.shares.smallFires : null
+  const unseen = fingerprint.inRegime.share !== null && fingerprint.drifted.share !== null ? `fires no VIIRS pass saw: ${fmtShare(fingerprint.inRegime.share)} → ${fmtShare(fingerprint.drifted.share)}` : null
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Tile tone="ember" label={`${platform ? sensorLabel(platform) : 'VIIRS'} vs Aqua, raw`} value={fmtRatio(gap?.ratioDetections)} sub="daytime detections in the same months" />
       <Tile label="Instrument effect" value={fmtShare(explained)} sub="of that gap from pixel size and fires below MODIS’s floor" />
-      <Tile label="Aqua overpass drift" value={aqua ? fmtMinutes(aqua.shiftMinutes) : '—'} sub={aqua ? `${aqua.fromYear} → ${aqua.toYear}, measured from timestamps` : 'needs two well-sampled years'} />
-      <Tile label="Withheld-Aqua replay" value={chosen ? `±${chosen.mae.toFixed(1)}` : '—'} sub={chosen ? `Aqua cell-days per month, ${replay!.decision.model} on ${replay!.months.length} unseen months` : 'not enough paired data'} />
+      <Tile label="Aqua overpass drift" value={aqua ? fmtMinutes(aqua.shiftMinutes) : '—'} sub={aqua ? `${aqua.fromYear} → ${aqua.toYear}, from timestamps${unseen ? `; ${unseen}` : ''}` : 'needs two well-sampled years'} />
+      <Tile
+        label="If Aqua went dark: false alarms"
+        value={outcome ? `${outcome.naiveFalse.length} → ${outcome.bridgedFalse.length}` : '—'}
+        sub={handover ? `un-harmonized → FIREBRIDGE, rehearsed switch-off on 1 Jan ${handover.switchMonth.slice(0, 4)}` : 'needs two years of overlap before a switch'}
+      />
     </div>
   )
 }
@@ -90,6 +97,7 @@ export function BridgePanel({ analysisId, releaseId }: { analysisId?: string; re
           <RegimeAct report={report} />
           {platform && <SensitivityAct report={report} platform={platform} />}
           {platform && <ReplayAct report={report} platform={platform} />}
+          {platform && <HandoverAct report={report} platform={platform} />}
           <BridgeAct report={report} />
           <MethodAct report={report} analysisId={analysisId} releaseId={releaseId} />
         </>
