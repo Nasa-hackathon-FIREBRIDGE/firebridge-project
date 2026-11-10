@@ -55,6 +55,8 @@ export interface DetectionFeature {
     day_night: string | null
     frp_mw: number | null
     processing_level: string
+    /** FIRMS fire type: 0 presumed vegetation, 1 volcano, 2 other static land source, 3 offshore. */
+    type_raw?: string | null
   }
 }
 export interface DetectionPage {
