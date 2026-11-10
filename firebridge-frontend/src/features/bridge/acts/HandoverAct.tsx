@@ -4,6 +4,7 @@ import { MODELS, type BridgeReport } from '../engine/index.ts'
 import { fmtInt, fmtMonth, fmtOne, fmtRatio, sensorColor, sensorLabel } from '../format'
 import { Act, Legend, LegendItem, Note, Tile } from '../ui'
 import { alarmOutcome, defaultHandover } from '../selectors'
+import { AskWhy } from '../../copilot/AskWhy'
 
 const HandoverChart = lazy(() => import('../BridgeCharts').then((m) => ({ default: m.HandoverChart })))
 const EMBER = '#ff7c40'
@@ -38,6 +39,7 @@ export function HandoverAct({ report, platform }: { report: BridgeReport; platfo
       id="handover-rehearsal"
       eyebrow="Synthetic instrument switch"
       title={title}
+      action={<AskWhy question="What does this rehearsal mean for the fire record when MODIS stops for good?" label="What does it mean?" />}
       lede={
         <>
           MODIS will stop. Here it is switched off early, on 1 January of a year inside the overlap. Everything after is continued from {name} by a model chosen and fitted on the months before the switch only, as it will be on the real day. The months in which Aqua actually kept flying are the answer key.
