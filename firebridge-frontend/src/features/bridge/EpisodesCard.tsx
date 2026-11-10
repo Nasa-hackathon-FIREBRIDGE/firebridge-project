@@ -2,7 +2,6 @@ import { ArrowRight, Flame, MapPinned } from 'lucide-react'
 import { SENSORS, type SensorKey } from '../../lib/sensors'
 import type { Episode } from './engine/index.ts'
 import { fmtDate, fmtInt, fmtRatio, fmtShare, sensorColor, sensorLabel } from './format'
-import { BridgeProgress } from './BridgePanel'
 import { useBridgeReport } from './useBridgeReport'
 import { Legend, LegendItem, Tile } from './ui'
 
@@ -26,8 +25,8 @@ function SensorSplit({ episode }: { episode: Episode }) {
 
 export function EpisodesCard({ analysisId, onShowEpisode, onOpenBridge }: { analysisId?: string; onShowEpisode?: (start: string, endExclusive: string) => void; onOpenBridge?: () => void }) {
   const state = useBridgeReport(analysisId)
-  if (!analysisId || state.status === 'idle') return null
-  if (state.status === 'loading') return <BridgeProgress state={state} />
+  // While loading, the verdict card above reports progress.
+  if (!analysisId || state.status === 'idle' || state.status === 'loading') return null
   if (state.status === 'error' || state.status === 'too-large')
     return <p className="card m-0 p-5 text-[13px] text-fg-2">{state.status === 'too-large' ? 'Fire episodes are computed in the browser and this selection is too large; narrow the area or period.' : 'Fire episodes could not be computed right now.'}</p>
   const { report } = state
