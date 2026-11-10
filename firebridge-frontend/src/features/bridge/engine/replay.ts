@@ -63,6 +63,8 @@ export interface PlatformReplay {
   /** Half-width multiplier k: band = estimate ± k·√(estimate+1), the 90th percentile of the
    *  chosen model's standardised out-of-fold errors. An empirical error range, not a guarantee. */
   bandK: number
+  /** The platform overlaps Aqua only in years outside Aqua's original overpass regime. */
+  driftBlocked?: boolean
   largestMiss: ReplayMonth | null
 }
 
@@ -72,7 +74,7 @@ interface PlatformRow {
   y: number
 }
 
-interface MonthData {
+export interface MonthData {
   month: string
   aquaCells: number
   unattributed: number
@@ -145,7 +147,7 @@ export interface Fitted {
   residualRate: number
 }
 
-function fit(training: MonthData[], init?: readonly number[]): Fitted {
+export function fit(training: MonthData[], init?: readonly number[]): Fitted {
   let aqua = 0
   let detections = 0
   let cells = 0
@@ -177,7 +179,7 @@ function cellResponse(model: Fitted, x: readonly number[]) {
   return Math.exp(linear(model.b2!.weights, clamped))
 }
 
-function predictMonth(model: Fitted, month: MonthData): Record<ModelId, number> {
+export function predictMonth(model: Fitted, month: MonthData): Record<ModelId, number> {
   let b2 = 0
   if (model.b2) for (const row of month.rows) b2 += cellResponse(model, row.x)
   b2 += model.residualRate * month.rows.length
@@ -242,8 +244,7 @@ export function replayPlatform(index: CellDayIndex, observations: readonly Obser
   const paired = [...options.pairedMonths].sort()
   const data = monthData(index, observations, platform, options.pairedMonths)
   const all = paired.map((month) => data.get(month)!)
-  const years = new Set(paired.map((month) => month.slice(0, 4)))
-  const blockKind: 'year' | 'month' = years.size >= 3 ? 'year' : 'month'
+  const blockKind = blockKindOf(paired)
   const blockOf = (month: string) => (blockKind === 'year' ? month.slice(0, 4) : month)
   const blocks = [...new Set(paired.map(blockOf))]
   const aquaCellDays = all.reduce((sum, m) => sum + m.aquaCells, 0)
@@ -279,13 +280,35 @@ export function replayPlatform(index: CellDayIndex, observations: readonly Obser
   }
   if (support === 'insufficient') return empty
 
+  return { ...empty, ...evaluate(all, final.b2?.weights) }
+}
+
+export interface Evaluation {
+  blockKind: 'year' | 'month'
+  blocks: number
+  months: ReplayMonth[]
+  scores: ModelScore[]
+  decision: Decision
+  bandK: number
+  largestMiss: ReplayMonth | null
+}
+
+export const blockKindOf = (months: readonly string[]): 'year' | 'month' => (new Set(months.map((month) => month.slice(0, 4))).size >= 3 ? 'year' : 'month')
+
+/** Leave-one-block-out evaluation of the model ladder on paired months (sorted), with the
+ *  decision rule and empirical band applied to the out-of-fold predictions. */
+export function evaluate(all: MonthData[], init?: readonly number[]): Evaluation {
+  const paired = all.map((m) => m.month)
+  const blockKind = blockKindOf(paired)
+  const blockOf = (month: string) => (blockKind === 'year' ? month.slice(0, 4) : month)
+  const blocks = [...new Set(paired.map(blockOf))]
   const months: ReplayMonth[] = []
   for (const block of blocks) {
     const test = all.filter((m) => blockOf(m.month) === block)
     const excluded = new Set(test.map((m) => m.month))
     if (blockKind === 'month') for (const m of test) for (const delta of [-1, 1]) excluded.add(paired.find((p) => monthIndex(p) === monthIndex(m.month) + delta) ?? '')
     const training = all.filter((m) => !excluded.has(m.month))
-    const model = fit(training, final.b2?.weights)
+    const model = fit(training, init)
     for (const m of test)
       months.push({ month: m.month, block, actual: m.aquaCells, platformDetections: m.platformDetections, platformCellDays: m.rows.length, predicted: predictMonth(model, m) })
   }
@@ -294,7 +317,7 @@ export function replayPlatform(index: CellDayIndex, observations: readonly Obser
   const byId = Object.fromEntries(scores.map((s) => [s.model, s])) as Record<ModelId, ModelScore>
   const baseline: ModelId = byId.B0.mae <= byId.B1.mae ? 'B0' : 'B1'
   let decision: Decision
-  if (!final.b2) decision = { model: baseline, baseline, delta: null, reason: 'no-improvement' }
+  if (all.reduce((rows, m) => rows + m.rows.length, 0) < 8) decision = { model: baseline, baseline, delta: null, reason: 'no-improvement' }
   else {
     const delta = bootstrapDelta(months, 'B2', baseline)
     if (byId.B2.mae < byId[baseline].mae && delta.high < 0) decision = { model: 'B2', baseline, delta, reason: 'improves' }
@@ -304,7 +327,7 @@ export function replayPlatform(index: CellDayIndex, observations: readonly Obser
   const chosen = decision.model
   const standardised = months.map((m) => Math.abs(m.predicted[chosen] - m.actual) / Math.sqrt(m.predicted[chosen] + 1))
   const largestMiss = months.reduce<ReplayMonth | null>((worst, m) => (!worst || Math.abs(m.predicted[chosen] - m.actual) > Math.abs(worst.predicted[chosen] - worst.actual) ? m : worst), null)
-  return { ...empty, months, scores, decision, bandK: quantile(standardised, 0.9), largestMiss }
+  return { blockKind, blocks: blocks.length, months, scores, decision, bandK: quantile(standardised, 0.9), largestMiss }
 }
 
 /** Aqua-equivalent estimate for one month of platform data using the final chosen model. */
