@@ -29,7 +29,9 @@ export function MethodAct({ report, analysisId, releaseId }: { report: BridgeRep
     ['Replay', 'Leave-one-block-out: calendar years when ≥ 3 are paired, else months with a ±1-month buffer'],
     ['Decision', 'Lowest replay error among B0/B1; B2 adopted only when its 90% paired block-bootstrap interval of the error difference lies below zero'],
     ['Error range', 'Estimate ± k·√(estimate+1), k the 90th percentile of standardised replay errors'],
-    ['Reference drift', `Aqua years more than ${REFERENCE_DRIFT_MINUTES} min from its early-record pass time are flagged`],
+    ['Reference regime', `Aqua within ${REFERENCE_DRIFT_MINUTES} min of its original pass time (measured through 2021, or its design orbit at this latitude). From the first year beyond that, Aqua is excluded from calibration and estimated${report.regime.driftYears.length ? `: ${report.regime.driftYears.join(', ')}` : ''}`],
+    ['Handover rehearsal', 'Aqua switched off on 1 January of each year with ≥ 2 years of original-regime overlap before it; models chosen and fitted on earlier months only; scored on later original-regime months'],
+    ['Satellite jury', `Each satellite against the same calendar month in its own other years (≥ ${report.anomalies.minimumYears}), log(1 + cell-days), pooled spread; unusual when the median testifying satellite is ≥ ${report.anomalies.threshold} spreads away, or the harmonized record is and the satellites lean the same way`],
     ['Clusters', `Detections ≤ ${report.episodes.linkMetres / 1000} km and ≤ ${report.episodes.linkHours} h apart, chained`],
   ]
   return (
@@ -61,7 +63,8 @@ export function MethodAct({ report, analysisId, releaseId }: { report: BridgeRep
           <p className="m-0 mb-3 text-[13px] font-medium text-fg">What this does not establish</p>
           <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-[12.5px] leading-relaxed text-fg-3">
             <li>No cloud or fire-mask data are used yet, so the calibration is conditional on detections. Cells that neither satellite could see are not distinguished from cells without fire.</li>
-            <li>Aqua is a reference convention with its own limits and orbital drift, not ground truth.</li>
+            <li>Aqua is a reference convention with its own limits, not ground truth. Its drifted years are estimated, not observed, in the harmonized record.</li>
+            <li>The jury flags months that stand out in the satellites’ own records; it does not establish causes, and agreement between satellites that share a blind spot (clouds, smoke) is not independent proof.</li>
             <li>Detections and clusters are not fire incidents; FRP is not burned area or fire energy.</li>
             <li>Models are fitted to this selection only. Transfer to another region or period needs its own replay{report.platforms.length ? ` (platforms tested here: ${report.platforms.map(sensorLabel).join(', ')})` : ''}.</li>
             <li>Error ranges are empirical, from this replay; they are not guaranteed 90% intervals and do not cover every source of bias.</li>
