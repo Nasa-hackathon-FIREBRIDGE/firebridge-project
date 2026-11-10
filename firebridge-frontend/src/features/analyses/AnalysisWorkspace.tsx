@@ -51,6 +51,9 @@ import { BridgePanel } from '../bridge/BridgePanel'
 import { EpisodesCard } from '../bridge/EpisodesCard'
 import { CalendarPanel } from '../bridge/CalendarPanel'
 import { VerdictCard } from '../bridge/VerdictCard'
+import { CopilotProvider } from '../copilot/CopilotProvider'
+import { reveal } from '../copilot/reveal'
+import type { CopilotNav } from '../copilot/actions'
 
 const sections = [
   { id: 'workspace-top', label: 'Map workspace', icon: MapPinned },
@@ -211,10 +214,20 @@ export default function AnalysisWorkspace() {
     requestAnimationFrame(() => document.getElementById('spatial-workspace')?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
   }
   const showDayOnMap = (cell: DayCell) => showIntervalOnMap(cell.date, nextDay(cell.date))
-  const openSection = (id: string) => {
+  const openSection = (id: string, anchor?: string) => {
     selectSection(id)
-    requestAnimationFrame(() => document.querySelector('.fbx-tabs-wrap')?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+    if (anchor) reveal(anchor)
+    else requestAnimationFrame(() => document.querySelector('.fbx-tabs-wrap')?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
   }
+  // The copilot navigates the workspace; a stable object keeps its answers from re-rendering.
+  const navTargets = useRef({ openSection, showIntervalOnMap })
+  useEffect(() => {
+    navTargets.current = { openSection, showIntervalOnMap }
+  })
+  const copilotNav = useMemo<Omit<CopilotNav, 'focusMonth'>>(
+    () => ({ openSection: (id, anchor) => navTargets.current.openSection(id, anchor), showInterval: (start, end) => navTargets.current.showIntervalOnMap(start, end) }),
+    [],
+  )
   const setupAction = (event: React.MouseEvent) => {
     event.preventDefault()
     if (activeSection === 'workspace-top') focusSetup()
@@ -225,6 +238,7 @@ export default function AnalysisWorkspace() {
   }
 
   return (
+    <CopilotProvider analysisId={resultId} releaseId={analysis.data?.release_id} section={activeSection} nav={copilotNav}>
     <div
       className={`fb-workspace geo-analysis-page fw-workspace fbx-workspace ${activeSection === 'workspace-top' ? 'geo-map-active' : ''}`}
       id="workspace-top"
@@ -506,6 +520,7 @@ export default function AnalysisWorkspace() {
       </div>
       <details className="geo-system-status fbx-system-status"><summary>Service health & data readiness</summary><HealthStatus /></details>
     </div>
+    </CopilotProvider>
   )
 }
 
