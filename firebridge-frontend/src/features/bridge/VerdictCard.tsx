@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { ArrowRight, ArrowUpRight, PowerOff, Scale, TriangleAlert } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, PowerOff, Scale, Sparkles, TriangleAlert } from 'lucide-react'
+import { useCopilot } from '../copilot/context'
 import { attention, calendarMonthName } from './calendar'
 import { fmtCount, fmtMonth, fmtOne, sensorLabel } from './format'
 import { alarmOutcome, defaultHandover, defaultPlatform } from './selectors'
@@ -20,6 +21,7 @@ function Finding({ icon, tone, children }: { icon: ReactNode; tone: string; chil
 /** Overview card: the findings of the calendar and the bridge in plain sentences. */
 export function VerdictCard({ analysisId, onOpenCalendar, onOpenBridge }: { analysisId?: string; onOpenCalendar?: () => void; onOpenBridge?: () => void }) {
   const state = useBridgeReport(analysisId)
+  const copilot = useCopilot()
   if (state.status === 'loading') return <BridgeProgress state={state} />
   if (state.status !== 'ready') return null
   const { report } = state
@@ -69,8 +71,14 @@ export function VerdictCard({ analysisId, onOpenCalendar, onOpenBridge }: { anal
         )}
       </ul>
       <div className="relative mt-5 flex flex-wrap gap-2">
+        {copilot && copilot.available !== false && (
+          <button type="button" className="ui-button ui-button--primary" onClick={copilot.brief}>
+            <Sparkles size={15} aria-hidden="true" />
+            Brief me
+          </button>
+        )}
         {onOpenCalendar && (
-          <button type="button" className="ui-button ui-button--primary" onClick={onOpenCalendar}>
+          <button type="button" className={`ui-button ${copilot && copilot.available !== false ? '' : 'ui-button--primary'}`} onClick={onOpenCalendar}>
             Open the fire calendar
             <ArrowRight size={15} aria-hidden="true" />
           </button>
