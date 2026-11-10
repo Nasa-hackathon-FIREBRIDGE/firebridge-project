@@ -4,6 +4,7 @@ import type { BridgeReport } from '../engine/index.ts'
 import { REFERENCE_DRIFT_MINUTES } from '../engine/index.ts'
 import { fmtClock, fmtDate, fmtInt, fmtMinutes, fmtOne, sensorLabel } from '../format'
 import { Act, Legend, LegendItem, Note, SensorDot, Tile } from '../ui'
+import { AskWhy } from '../../copilot/AskWhy'
 
 const OverpassChart = lazy(() => import('../BridgeCharts').then((m) => ({ default: m.OverpassChart })))
 const FingerprintChart = lazy(() => import('../BridgeCharts').then((m) => ({ default: m.FingerprintChart })))
@@ -70,7 +71,10 @@ export function RegimeAct({ report }: { report: BridgeReport }) {
       {driftedYears.length > 0 && fingerprint.inRegime.cellDays > 0 && (
         <div className="mt-6 grid gap-6 rounded-2xl border border-white/[0.06] bg-white/[0.015] p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           <div className="min-w-0">
-            <p className="m-0 text-[14px] font-semibold text-fg">What the drift changed in Aqua’s record</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="m-0 text-[14px] font-semibold text-fg">What the drift changed in Aqua’s record</p>
+              <AskWhy question="Why does Aqua's overpass drift matter for comparing years?" />
+            </div>
             <p className="mb-0 mt-1.5 text-[13px] leading-relaxed text-fg-2">
               A pass long after VIIRS’s (about 13:30) catches fires that ignited or flared after VIIRS went by, and misses ones that had died down. The fingerprint: Aqua fire cell-days with no VIIRS detection nearby that day. Counted only in months where both records exist, so a missing record never looks like a miss.
             </p>
