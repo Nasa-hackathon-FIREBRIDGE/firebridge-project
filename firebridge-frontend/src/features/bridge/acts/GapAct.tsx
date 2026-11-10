@@ -2,6 +2,7 @@ import type { SensorKey } from '../../../lib/sensors'
 import type { BridgeReport } from '../engine/index.ts'
 import { fmtInt, fmtMinutes, fmtRatio, fmtShare, sensorColor, sensorLabel } from '../format'
 import { Act, Legend, LegendItem, Note } from '../ui'
+import { AskWhy } from '../../copilot/AskWhy'
 
 const SEGMENTS = [
   { key: 'pixel', label: 'Pixel size', color: '#ffc5a3' },
@@ -41,6 +42,7 @@ export function GapAct({ report, platform }: { report: BridgeReport; platform: S
       index={1}
       eyebrow="The gap, decomposed"
       title={`Why ${name} records ${fmtRatio(gap.ratioDetections)} as many detections as Aqua`}
+      action={<AskWhy question={`Is ${name} seeing more fire than Aqua, or just smaller fires?`} label="Ask" />}
       lede={<>Same area, same months, daytime passes only. Each step removes one known difference between the instruments; what remains is the part of the gap that the satellites alone do not explain.</>}
     >
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
