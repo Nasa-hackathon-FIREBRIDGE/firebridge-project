@@ -15,8 +15,12 @@ export interface DayCell {
   date: string // YYYY-MM-DD
   start: string
   endExclusive: string
+  /** Detections of every satellite with a known count that day; null when none is known. */
   total: number | null
   bySensor: Partial<Record<SensorKey, number>>
+  /** Satellites expected that day (inside their own inventoried span) whose count is unknown:
+   *  the total is then a lower bound. */
+  missing: SensorKey[]
 }
 
 export interface MonthBucket {
@@ -70,21 +74,42 @@ export function computeInsights(summary?: NativeSummary, calendar?: NativeCalend
   const modis = sensors.filter((s) => s.instrument === 'MODIS').reduce((sum, s) => sum + (s.count ?? 0), 0)
   const viirs = sensors.filter((s) => s.instrument === 'VIIRS').reduce((sum, s) => sum + (s.count ?? 0), 0)
 
-  const periods: DayCell[] = (calendar?.periods ?? []).map((period) => {
-    const bySensor: Partial<Record<SensorKey, number>> = {}
-    let periodTotal: number | null = 0
+  // Availability is judged per satellite, not per product collection: a collection that was
+  // superseded (MODIS C6 → C6.1) or a satellite outside its own record span (NOAA-21 before
+  // launch) is not missing data. Inside a satellite's span, an unknown count is.
+  const sensorOf = (sourceId: string) => sourceSensor.get(sourceId) ?? sensorKeyOf(sourceId)
+  const countOf = (source: { count: string | null; count_status: string }) => (source.count_status === 'unknown' ? null : toNumber(source.count))
+  const spans = new Map<SensorKey, [string, string]>()
+  for (const period of calendar?.periods ?? []) {
+    const date = period.start.slice(0, 10)
     for (const source of period.counts_by_source) {
-      const count = source.count_status === 'unknown' ? null : toNumber(source.count)
-      if (count === null) {
-        periodTotal = null
-        continue
-      }
-      const key = sourceSensor.get(source.source_id) ?? sensorKeyOf(source.source_id)
-      bySensor[key] = (bySensor[key] ?? 0) + count
-      if (periodTotal !== null) periodTotal += count
+      if (countOf(source) === null) continue
+      const key = sensorOf(source.source_id)
+      const span = spans.get(key)
+      spans.set(key, span ? [span[0] < date ? span[0] : date, span[1] > date ? span[1] : date] : [date, date])
     }
-    if (!period.counts_by_source.length) periodTotal = null
-    return { date: period.start.slice(0, 10), start: period.start, endExclusive: period.end_exclusive, total: periodTotal, bySensor }
+  }
+  const periods: DayCell[] = (calendar?.periods ?? []).map((period) => {
+    const date = period.start.slice(0, 10)
+    const bySensor: Partial<Record<SensorKey, number>> = {}
+    const expected = new Set<SensorKey>()
+    for (const source of period.counts_by_source) {
+      const key = sensorOf(source.source_id)
+      const span = spans.get(key)
+      // A satellite with no known count anywhere cannot be placed in time, so it stays expected.
+      if (!span || (date >= span[0] && date <= span[1])) expected.add(key)
+      const count = countOf(source)
+      if (count !== null) bySensor[key] = (bySensor[key] ?? 0) + count
+    }
+    const known = Object.values(bySensor) as number[]
+    return {
+      date,
+      start: period.start,
+      endExclusive: period.end_exclusive,
+      total: known.length ? known.reduce((a, b) => a + b, 0) : null,
+      bySensor,
+      missing: [...expected].filter((key) => bySensor[key] === undefined),
+    }
   })
 
   const monthMap = new Map<string, MonthBucket>()
