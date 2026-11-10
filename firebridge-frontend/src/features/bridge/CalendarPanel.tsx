@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowUpRight, CalendarSearch, CircleSlash, MapPinned, Scale, SearchCheck, TriangleAlert } from 'lucide-react'
 import { SENSORS } from '../../lib/sensors'
 import { Banner } from '../../components/ui/Banner'
@@ -9,6 +9,8 @@ import { fmtCount, fmtDate, fmtInt, fmtMonth, fmtOne, sensorLabel } from './form
 import { BridgeProgress } from './BridgePanel'
 import { MAX_BRIDGE_DETECTIONS, useBridgeReport } from './useBridgeReport'
 import { Legend, Note, SensorDot, Tile } from './ui'
+import { AskWhy } from '../copilot/AskWhy'
+import { useCopilot } from '../copilot/context'
 
 type Mode = 'harmonized' | 'raw'
 
@@ -186,7 +188,10 @@ function MonthJury({ report, month, announce, onShowEpisode }: { report: BridgeR
     <div className="flex min-w-0 flex-col gap-4" aria-live={announce ? 'polite' : 'off'}>
       <div>
         <p className="m-0 font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-fg-3">{fmtMonth(month, 'long')}</p>
-        <p className={`m-0 mt-1 flex items-center gap-1.5 text-[17px] font-semibold ${TONE_TEXT[v.tone]}`}><ToneIcon tone={v.tone} size={17} />{v.label}</p>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <p className={`m-0 flex items-center gap-1.5 text-[17px] font-semibold ${TONE_TEXT[v.tone]}`}><ToneIcon tone={v.tone} size={17} />{v.label}</p>
+          {v.tone !== 'empty' && <AskWhy month={month} question={v.tone === 'none' ? `What happened in ${fmtMonth(month, 'long')}?` : `Why is ${fmtMonth(month, 'long')} marked "${v.label.toLowerCase()}"?`} />}
+        </div>
         {v.testimony && <p className="mb-0 mt-1.5 text-[13px] leading-relaxed text-fg-2">{v.testimony}</p>}
       </div>
       <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
@@ -303,7 +308,20 @@ export function CalendarView({ report, onShowEpisode }: { report: BridgeReport; 
   const [hover, setHover] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>('harmonized')
   const grid = useRef<HTMLDivElement>(null)
+  // The copilot can ask the calendar to show a month, and reads which month is shown.
+  const copilot = useCopilot()
+  const request = copilot?.monthRequest
+  const [appliedRequest, setAppliedRequest] = useState(0)
+  if (request && request.nonce !== appliedRequest && report.months.some((m) => m.month === request.month)) {
+    setAppliedRequest(request.nonce)
+    setPicked({ report, month: request.month })
+  }
   const focus = picked?.report === report ? picked.month : initial
+  const reportMonth = copilot?.reportMonth
+  useEffect(() => {
+    reportMonth?.(focus ?? null)
+    return () => reportMonth?.(null)
+  }, [reportMonth, focus])
   if (!focus) return null
   const shown = hover ?? focus
   const scored = report.anomalies.months.some((a) => a.harmonized || (a.consensus?.n ?? 0) >= 2)
