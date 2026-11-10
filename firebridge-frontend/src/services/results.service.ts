@@ -51,6 +51,33 @@ async function read<T>(
   return checked(unwrap(response.data), valid)
 }
 const analysisPath = (id: string) => `/analyses/${encodeURIComponent(id)}`
+const detectionPage = (v: Record<string, unknown>) =>
+  page(v) &&
+  text(v.status) &&
+  text(v.inventory_status) &&
+  Number.isSafeInteger(v.returned) &&
+  Array.isArray(v.features) &&
+  v.returned === v.features.length &&
+  v.features.every(
+    (f) =>
+      isRecord(f) &&
+      f.type === 'Feature' &&
+      isRecord(f.geometry) &&
+      f.geometry.type === 'Point' &&
+      Array.isArray(f.geometry.coordinates) &&
+      f.geometry.coordinates.length === 2 &&
+      f.geometry.coordinates.every(finite) &&
+      Math.abs(f.geometry.coordinates[0]) <= 180 &&
+      Math.abs(f.geometry.coordinates[1]) <= 90 &&
+      isRecord(f.properties) &&
+      ['detection_id', 'platform', 'source_id', 'processing_level'].every((k) =>
+        text(f.properties && (f.properties as Record<string, unknown>)[k]),
+      ) &&
+      date(f.properties.acquired_at) &&
+      (f.properties.frp_mw === null ||
+        (finite(f.properties.frp_mw) && f.properties.frp_mw >= 0)) &&
+      (f.properties.day_night === null || text(f.properties.day_night)),
+  )
 export const results = {
   catalogue: (signal?: AbortSignal) =>
     read<Catalogue>(
@@ -99,38 +126,15 @@ export const results = {
     signal?: AbortSignal,
     interval?: { start?: string; end_exclusive?: string },
   ) =>
-    read<DetectionPage>(
-      analysisPath(id) + '/detections',
-      (v) =>
-        page(v) &&
-        text(v.status) &&
-        text(v.inventory_status) &&
-        Number.isSafeInteger(v.returned) &&
-        Array.isArray(v.features) &&
-        v.returned === v.features.length &&
-        v.features.every(
-          (f) =>
-            isRecord(f) &&
-            f.type === 'Feature' &&
-            isRecord(f.geometry) &&
-            f.geometry.type === 'Point' &&
-            Array.isArray(f.geometry.coordinates) &&
-            f.geometry.coordinates.length === 2 &&
-            f.geometry.coordinates.every(finite) &&
-            Math.abs(f.geometry.coordinates[0]) <= 180 &&
-            Math.abs(f.geometry.coordinates[1]) <= 90 &&
-            isRecord(f.properties) &&
-            ['detection_id', 'platform', 'source_id', 'processing_level'].every((k) =>
-              text(f.properties && (f.properties as Record<string, unknown>)[k]),
-            ) &&
-            date(f.properties.acquired_at) &&
-            (f.properties.frp_mw === null ||
-              (finite(f.properties.frp_mw) && f.properties.frp_mw >= 0)) &&
-            (f.properties.day_night === null || text(f.properties.day_night)),
-        ),
-      signal,
-      { limit: 20, source_ids: sourceId, cursor, ...interval },
-    ),
+    read<DetectionPage>(analysisPath(id) + '/detections', detectionPage, signal, {
+      limit: 20,
+      source_ids: sourceId,
+      cursor,
+      ...interval,
+    }),
+  /** Large pages of the full saved selection, for whole-analysis computation (bridge engine). */
+  detectionsBulk: (id: string, cursor: string | undefined, signal?: AbortSignal, limit = 5000) =>
+    read<DetectionPage>(analysisPath(id) + '/detections', detectionPage, signal, { limit, cursor }),
   calendar: (id: string, signal?: AbortSignal) =>
     read<NativeCalendar>(
       analysisPath(id) + '/calendar',
