@@ -23,6 +23,15 @@ The separate full-history acquisition remains owned by the data platform. The
 webapp consumes published subsets; a completed source download is not automatically
 a PostgreSQL release. No synthetic observations are seeded into production.
 
+Historical analysis requests and native daily calendars support up to 10,980 days
+(about 30 years), enough for the MODIS archive from 2000. The data platform's
+`firebridge.history_query` service must use the same limit before the updated
+webapp is activated. Its catalogue fingerprints the preparation code: rebuild
+the history service and publish a current catalogue with
+`firebridge publish-history-catalog --scope global` as described in the data
+platform's `docs/data/HISTORICAL_ANALYSES.md`. The existing row, disk and execution
+budgets still apply; a wider date interval does not guarantee complete coverage.
+
 HTTPS uses the patched frontend Nginx image as a separate proxy container. Its
 master can read the root-owned certificate; request workers drop to UID 101.
 Both Nginx containers use a read-only filesystem, restricted capabilities and
