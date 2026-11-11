@@ -10,6 +10,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@firebridge/database';
+import { HISTORICAL_MAX_WINDOW_DAYS } from '@firebridge/contracts';
 import { Prisma } from '@prisma/client';
 import {
   AppError,
@@ -452,8 +453,8 @@ export const analysesRepository = {
               const historyCatalogId = satelliteRelease.config?.engine === 'archive-selection-v1' ? satelliteRelease.id : undefined;
               if (historyCatalogId && (input.time_basis !== 'utc' || input.selection_policy !== 'standard'))
                 throw new BadRequestError('Historical preparation supports UTC native standard selections.', 'UNSUPPORTED_HISTORICAL_SELECTION');
-              if (historyCatalogId && (Date.parse(input.end_date_exclusive)-Date.parse(input.start_date))/86400000>3660)
-                throw new BadRequestError('Select at most 3660 days per historical analysis.', 'HISTORICAL_WINDOW_TOO_LARGE');
+              if (historyCatalogId && (Date.parse(input.end_date_exclusive)-Date.parse(input.start_date))/86400000>HISTORICAL_MAX_WINDOW_DAYS)
+                throw new BadRequestError(`Select at most ${HISTORICAL_MAX_WINDOW_DAYS} days per historical analysis.`, 'HISTORICAL_WINDOW_TOO_LARGE');
               const frozenSpec = historyCatalogId ? { ...input.request_spec, history_catalog_id: historyCatalogId } : input.request_spec;
 
               // Resolve optional weather and reports releases
