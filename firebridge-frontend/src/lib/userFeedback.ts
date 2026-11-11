@@ -1,4 +1,5 @@
 import { ApiClientError } from './axios'
+import { HISTORICAL_MAX_WINDOW_DAYS } from '@firebridge/contracts/analysis-limits'
 
 /** Only messages authored by the frontend may be displayed verbatim. */
 export class UserInputError extends Error {
@@ -28,6 +29,11 @@ export function userFeedback(
     retryable,
   })
   if (error instanceof UserInputError) return result('Check your input', error.message)
+  if (api?.code === 'HISTORICAL_WINDOW_TOO_LARGE')
+    return result(
+      'The historical date range is too long',
+      `Select up to ${HISTORICAL_MAX_WINDOW_DAYS.toLocaleString('en-US')} days (about 30 years) per historical analysis. Shorten the interval or split it into separate analyses. The end date is excluded.`,
+    )
   const oversized =
     api?.code === 'VALIDATION_ERROR' && api.status === 400
       ? /^Polygon surface area \((\d+) km²\) exceeds the maximum allowed \(([\d,.]+) km²\)\.$/.exec(
