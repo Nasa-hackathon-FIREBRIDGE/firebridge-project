@@ -6,6 +6,9 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Detection, AreaOfInterest } from '../types'
 import { resultFixtures } from '../services/results.test-fixtures'
+import { buildAtlas } from '../features/atlas/atlas'
+import { fixture } from '../features/atlas/test-fixtures'
+import type { AtlasLayerConfig } from '../features/atlas/useAtlasLayers'
 
 const mocks = vi.hoisted(() => {
   type Handler = (event?: unknown) => void
@@ -26,6 +29,9 @@ const mocks = vi.hoisted(() => {
       this.emit('style.load')
     })
     setLayoutProperty = vi.fn()
+    setPaintProperty = vi.fn()
+    setFilter = vi.fn()
+    getStyle = () => ({ layers: [{ id: 'imagery', type: 'raster' }, ...[...this.layers].map((id) => ({ id, type: 'circle' }))] })
     addControl = vi.fn()
     zoomTo = vi.fn()
     easeTo = vi.fn()
@@ -448,5 +454,34 @@ describe('Optional Esri World Imagery provider (mocked MapLibre; no real tiles)'
     act(() => lastMap().emit('error', { sourceId: 'astra-esri-world-imagery', error: new Error('tile 500') }))
     expect(screen.getByText('Some imagery tiles failed to load')).toBeTruthy()
     expect(lastMap().setStyle).not.toHaveBeenCalled()
+  })
+})
+
+describe('Fire atlas layers (mocked MapLibre)', () => {
+  const data = buildAtlas(fixture)
+  const config = (patch: Partial<AtlasLayerConfig> = {}): AtlasLayerConfig => ({
+    data, visible: data.points, replay: null, popup: null, focus: null, onHover: vi.fn(), onPick: vi.fn(), ...patch,
+  })
+
+  it('groups detections into ember circles, dims the imagery, and swaps to the replay layers', () => {
+    const view = renderMap({ apiMode: true, records: [], atlas: config() })
+    act(() => lastMap().emit('style.load'))
+    const map = lastMap()
+    expect(map.sourceDefinitions.get('atlas-groups')).toMatchObject({ type: 'geojson', cluster: true })
+    expect(map.layers.has('atlas-core')).toBe(true)
+    expect(map.layers.has('atlas-replay-core')).toBe(true)
+    expect(map.setPaintProperty).toHaveBeenCalledWith('imagery', 'raster-brightness-max', 0.62)
+
+    const now = Date.parse('2022-07-11T12:00:00Z')
+    view.rerender(<MapView {...view.props} apiMode records={[]} atlas={config({ replay: { now, sensors: data.sensorsPresent, glowDays: 3 } })} />)
+    expect(map.setLayoutProperty).toHaveBeenCalledWith('atlas-core', 'visibility', 'none')
+    expect(map.setLayoutProperty).toHaveBeenCalledWith('atlas-replay-core', 'visibility', 'visible')
+    expect(map.setFilter).toHaveBeenCalledWith('atlas-replay-core', expect.arrayContaining([['<', ['get', 't'], now]]))
+
+    map.setLayoutProperty.mockClear()
+    view.rerender(<MapView {...view.props} apiMode records={[]} atlas={config({ visible: data.points.slice(0, 2) })} />)
+    expect(map.setLayoutProperty).toHaveBeenCalledWith('atlas-replay-glow', 'visibility', 'none')
+    expect(map.setLayoutProperty).toHaveBeenCalledWith('atlas-core', 'visibility', 'visible')
+    expect(map.sources.get('atlas-groups')!.setData).toHaveBeenLastCalledWith({ type: 'FeatureCollection', features: data.points.slice(0, 2) })
   })
 })
