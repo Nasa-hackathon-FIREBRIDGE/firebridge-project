@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
+import { HISTORICAL_MAX_WINDOW_DAYS } from '@firebridge/contracts';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { env } from '../../src/config/env.js';
@@ -88,9 +89,25 @@ describe('historical routing and immutable analysis identity', () => {
     expect(result.statusCode).toBe(400);
     expect(result.json().error.code).toBe('UNSUPPORTED_HISTORICAL_SELECTION');
   });
-  it('bounds the historical date window', async () => {
-    const result = await post({ ...body, start_date: '2000-01-01' });
+  it.each(['2014-01-01', '2000-01-01'])('queues the longer historical window starting %s', async (start) => {
+    const request = { ...body, start_date: start, end_date_exclusive: '2026-11-11' };
+    const result = await post(request);
+    expect(result.statusCode).toBe(202);
+    expect(result.json().data).toMatchObject({ start_date: start, end_date_exclusive: request.end_date_exclusive });
+    const repeat = await post(request);
+    expect(repeat.statusCode).toBe(200);
+    expect(repeat.json().data.id).toBe(result.json().data.id);
+  });
+  it('accepts the exact historical window limit', async () => {
+    const end = new Date(Date.parse(body.start_date) + HISTORICAL_MAX_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+    expect((await post({ ...body, end_date_exclusive: end })).statusCode).toBe(202);
+  });
+  it('rejects one day beyond the historical window limit before creating work', async () => {
+    const end = new Date(Date.parse(body.start_date) + (HISTORICAL_MAX_WINDOW_DAYS + 1) * 86400000).toISOString().slice(0, 10);
+    const result = await post({ ...body, end_date_exclusive: end });
     expect(result.statusCode).toBe(400);
     expect(result.json().error.code).toBe('HISTORICAL_WINDOW_TOO_LARGE');
+    expect(result.json().message).toBe('Select at most 10980 days per historical analysis.');
+    expect((await pool.query('SELECT count(*) AS n FROM firebridge.analyses WHERE end_date_exclusive=$1', [end])).rows[0].n).toBe('0');
   });
 });
