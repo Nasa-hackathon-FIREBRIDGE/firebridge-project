@@ -10,7 +10,7 @@ export interface HealthReady {
 }
 export interface PolygonGeometry { type: 'Polygon'; coordinates: number[][][] }
 export interface MultiPolygonGeometry { type: 'MultiPolygon'; coordinates: number[][][][] }
-export interface CreateAreaRequest { geometry: PolygonGeometry; name: string; version: string; display_timezone: string; provenance: string }
+export interface CreateAreaRequest { geometry: PolygonGeometry | MultiPolygonGeometry; name: string; version: string; display_timezone: string; provenance: string }
 export interface AreaView {
   id: string; name: string; version: string; geometry_sha256: string; display_timezone: string; provenance: string; created_at: string;
   geometry: PolygonGeometry | MultiPolygonGeometry; surface_km2?: number;
