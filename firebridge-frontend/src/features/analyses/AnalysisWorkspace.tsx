@@ -418,9 +418,9 @@ export default function AnalysisWorkspace() {
               onClear={onClear}
               error={drawingError}
               filters={filters}
+              onFiltersChange={changeFilters}
               onSetup={focusSetup}
             />
-            <TemporalPanel analysisId={resultId} filters={filters} onChange={changeFilters} compact />
           </div>
           <aside className="flex min-w-0 flex-col gap-4" aria-label="Analysis setup and summary">
             <InsightsRail analysisId={resultId} onOpenOverview={() => selectSection('analysis-overview')} />
