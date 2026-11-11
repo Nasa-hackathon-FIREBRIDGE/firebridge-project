@@ -201,7 +201,7 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
     map.addControl(new maplibregl.AttributionControl({ compact: false }), 'bottom-right')
     mapRef.current = map
 
-    const imagerySources = () => (current.kind === 'esri' || current.kind === 'raster' ? Object.keys(current.style.sources) : [])
+    const imagerySources = () => (current.kind === 'raster' ? Object.keys(current.style.sources) : [])
     // Slow or failing imagery never replaces the map: the grid underneath shows through while tiles are asked for again.
     const scheduleRetry = () => {
       if (disposed || retryId !== undefined) return
@@ -243,7 +243,7 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
     const ensureLayers = () => {
       if (disposed) return
       loaded = true
-      const imagery = basemapRef.current === 'real' && (current.kind === 'esri' || current.kind === 'raster') ? current.style.layers : null
+      const imagery = basemapRef.current === 'real' && current.kind === 'raster' ? current.style.layers : null
       basemapLayerIds.current = basemapRef.current === 'schematic' ? ['background', 'astra-graticule'] : current.kind === 'style-url' ? (map.getStyle?.().layers ?? []).map((layer) => layer.id) : imagery ? [...imagery.map((layer) => layer.id), 'astra-graticule'] : []
       if (current.kind === 'schematic' || !current.sourceId || tilesLoaded) window.clearTimeout(timeoutId)
       setStyleLoaded(true)
@@ -551,7 +551,7 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
       {pickActive && onPlacePicked && (
         <PlacePicker picker={picker} maxAreaKm2={maxAreaKm2} onClose={() => setPickActive(false)} onUse={(place) => { setPickActive(false); onPlacePicked(place) }} />
       )}
-      <div className="map-scale"><MapPinned size={12} /> {apiMode ? 'Study area' : 'Northern Morocco'} · WGS 84{basemap === 'real' && selection.kind === 'esri' ? ' · Esri World Imagery' : ''}<span ref={coordinatesRef} className="map-coordinates" aria-hidden="true" /></div>
+      <div className="map-scale"><MapPinned size={12} /> {apiMode ? 'Study area' : 'Northern Morocco'} · WGS 84<span ref={coordinatesRef} className="map-coordinates" aria-hidden="true" /></div>
       {children}
       </div>
       {footer}
