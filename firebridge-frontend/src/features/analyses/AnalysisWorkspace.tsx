@@ -79,7 +79,18 @@ function humanInterval(start: string, endExclusive: string) {
 
 const nextDay = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
 
+type FreshStart = { freshStart?: number } | null
+
+/** "New analysis" navigates with a fresh-start marker. The workspace remounts in the same render that drops
+ * the previous selection from the URL, so no draft, date, tab or map view of the old analysis carries over. */
 export default function AnalysisWorkspace() {
+  const marker = (useLocation().state as FreshStart)?.freshStart
+  const [session, setSession] = useState(marker ?? 0)
+  if (marker !== undefined && marker !== session) setSession(marker)
+  return <Workspace key={session} />
+}
+
+function Workspace() {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
   const navigate = useNavigate()
@@ -257,6 +268,12 @@ export default function AnalysisWorkspace() {
       selectSection('workspace-top')
     }
   }
+  // A pushed entry, so Back returns to the analysis that was open.
+  const startFresh = (event: React.MouseEvent) => {
+    event.preventDefault()
+    navigate({ pathname: location.pathname }, { state: { freshStart: Date.now() } satisfies FreshStart })
+    window.scrollTo(0, 0)
+  }
 
   return (
     <CopilotProvider analysisId={resultId} releaseId={analysis.data?.release_id} section={activeSection} nav={copilotNav}>
@@ -303,7 +320,7 @@ export default function AnalysisWorkspace() {
             <Link2 size={14} />
             Copy workspace link
           </Button>
-          <a href="#request-analysis" onClick={setupAction} className="ui-button ui-button--primary">
+          <a href={analysisId ? location.pathname : '#request-analysis'} onClick={analysisId ? startFresh : setupAction} className="ui-button ui-button--primary">
             {analysisId ? <Plus size={15} aria-hidden="true" /> : null}
             {analysisId ? 'New analysis' : 'Set up an analysis'}
             {!analysisId && <ArrowDown size={14} />}
