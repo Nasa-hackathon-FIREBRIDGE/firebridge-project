@@ -12,6 +12,8 @@ import { MapWorkspaceControls, type DrawShape } from './MapWorkspaceControls'
 import { useAnalysisTiles } from '../features/maps/useAnalysisTiles'
 import type { DetectionFeature } from '../features/observations/types'
 import { useAtlasLayers, type AtlasLayerConfig } from '../features/atlas/useAtlasLayers'
+import { PlacePicker, type PickedPlace } from '../features/places/PlacePicker'
+import { usePlacePicker } from '../features/places/usePlacePicker'
 
 export type BasemapMode = 'real' | 'schematic'
 
@@ -83,9 +85,15 @@ interface MapViewProps {
   children?: ReactNode
   /** Controls docked under the map, inside the frame. */
   footer?: ReactNode
+  /** Choosing a country, region, province or forest as the study area; the toolbar offers it when set. */
+  onPlacePicked?: (place: PickedPlace) => void
+  /** The server's largest accepted study area, so the picker can say when a place is too large. */
+  maxAreaKm2?: number
+  /** Told when choosing a place starts and stops, so the limits are fetched only when needed. */
+  onPickingChange?: (picking: boolean) => void
 }
 
-export function MapView({ records, nativeRecords, selectedId, onSelect, area, showDetections, showArea, onShowArea, onShowDetections, clearDrawingToken, onAreaDrawn, onAreaRejected, onClearArea, styleUrl, basemapProvider, styleTimeoutMs = STYLE_LOAD_TIMEOUT_MS, fullHeight = false, apiMode = false, apiAnalysisId, promptDraw = false, atlas, children, footer }: MapViewProps) {
+export function MapView({ records, nativeRecords, selectedId, onSelect, area, showDetections, showArea, onShowArea, onShowDetections, clearDrawingToken, onAreaDrawn, onAreaRejected, onClearArea, styleUrl, basemapProvider, styleTimeoutMs = STYLE_LOAD_TIMEOUT_MS, fullHeight = false, apiMode = false, apiAnalysisId, promptDraw = false, atlas, children, footer, onPlacePicked, maxAreaKm2, onPickingChange }: MapViewProps) {
   const env = envBasemapConfig()
   const configured = useMemo(() => resolveBasemap(styleUrl ?? env.styleUrl, basemapProvider ?? env.provider), [styleUrl, basemapProvider, env.styleUrl, env.provider])
   const [choice, setChoice] = useState<BasemapChoice>(() => configured.key === 'nasa-satellite' ? 'satellite' : 'configured')
@@ -118,7 +126,13 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
   const basemapRef = useRef<BasemapMode>(basemap)
   const drawActiveRef = useRef(drawActive)
   const drawShapeRef = useRef<DrawShape>(drawShape)
-  useAtlasLayers(mapRef, styleLoaded, styleRevision, atlas, drawActive)
+  const [pickActive, setPickActiveState] = useState(false)
+  const setPickActive = (value: boolean) => {
+    setPickActiveState(value)
+    onPickingChange?.(value)
+  }
+  const picker = usePlacePicker(mapRef, styleLoaded, styleRevision, pickActive && !!onPlacePicked)
+  useAtlasLayers(mapRef, styleLoaded, styleRevision, atlas, drawActive || pickActive)
 
   const featureCollection = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point, { id: string; selected: boolean; sensor: string }>>(() => ({
     type: 'FeatureCollection',
@@ -445,7 +459,8 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
       {!apiMode && records.length === 0 && <div className="map-empty" role="status"><strong>No demo records match the current filters</strong><span>Adjust the date range, platforms, search, FRP minimum or area.</span></div>}
       {apiMode && apiAnalysisId && showDetections && apiTileState !== 'ready' && <div className="map-empty" role={apiTileState === 'error' ? 'alert' : 'status'}><strong>{apiTileState === 'error' ? 'Analysis tiles could not be loaded' : apiTileState === 'empty' ? 'No detections in the visible tiles' : 'Loading analysis tiles…'}</strong><span>{apiTileState === 'error' ? 'Check analysis availability or request limits. Hide and re-enable the layer to retry.' : 'Tile counts are aggregated records, not observation coverage.'}</span></div>}
       <MapWorkspaceControls panel={panel} onPanel={setPanel} choice={choice} onChoice={setChoice} selection={selection} configured={configured.key !== 'nasa-satellite'}
-        drawActive={drawActive} onDraw={(shape) => setDrawControl({ clearToken: clearDrawingToken, active: true, shape })} promptDraw={promptDraw}
+        drawActive={drawActive || pickActive} onDraw={(shape) => { setPickActive(false); setDrawControl({ clearToken: clearDrawingToken, active: true, shape }) }} promptDraw={promptDraw}
+        onPick={onPlacePicked ? () => { setDrawControl({ clearToken: clearDrawingToken, active: false, shape: drawShape }); setPickActive(true) } : undefined}
         onClear={() => { setDrawControl({ clearToken: clearDrawingToken, active: false, shape: drawShape }); onClearArea?.() }}
         onZoom={zoom} onFit={resetView} onNorth={() => mapRef.current?.easeTo({ bearing: 0, pitch: 0, duration: reducedMotion() ? 0 : 250 })}
         onFullscreen={() => { void toggleFullscreen() }} fullscreen={fullscreen}
@@ -461,6 +476,9 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
           {drawShape === 'polygon' && <button type="button" className="map-draw-button map-draw-finish" onClick={finishDrawing} disabled={vertexCount < 3} title={vertexCount < 3 ? 'Add at least 3 vertices to finish' : 'Finish drawing'}>Finish drawing</button>}
           <button type="button" className="map-draw-button" data-draw-cancel onClick={() => { setVertexCount(0); setDrawControl({ clearToken: clearDrawingToken, active: false, shape: drawShape }) }}>Cancel</button>
         </div>
+      )}
+      {pickActive && onPlacePicked && (
+        <PlacePicker picker={picker} maxAreaKm2={maxAreaKm2} onClose={() => setPickActive(false)} onUse={(place) => { setPickActive(false); onPlacePicked(place) }} />
       )}
       <div className="map-scale"><MapPinned size={12} /> {apiMode ? 'Study area' : 'Northern Morocco'} · WGS 84{basemap === 'real' && selection.kind === 'esri' ? ' · Esri World Imagery' : ''}<span ref={coordinatesRef} className="map-coordinates" aria-hidden="true" /></div>
       {children}
