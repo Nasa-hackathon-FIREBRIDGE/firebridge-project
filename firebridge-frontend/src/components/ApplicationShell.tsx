@@ -15,6 +15,7 @@ import {
   Home,
   Layers2,
   LayoutDashboard,
+  Library,
   Map,
   Menu,
   Plus,
@@ -27,6 +28,7 @@ import {
 import { ChatWidget } from './ChatWidget'
 import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { LogoMark, Wordmark } from './brand/Logo'
+import { SHOW_DEMONSTRATION } from '../config/features'
 
 type NavItem = { to: string; label: string; icon: LucideIcon }
 
@@ -38,9 +40,10 @@ const workspace: NavItem[] = [
 const data: NavItem[] = [
   { to: '/catalog', label: 'Data catalogue', icon: Database },
   { to: '/evidence', label: 'Data & methods', icon: BookOpen },
+  { to: '/sources', label: 'Sources & credits', icon: Library },
   { to: '/api-analysis', label: 'Results explorer', icon: Layers2 },
 ]
-const demonstrations: NavItem[] = [
+const demonstrations: NavItem[] = !SHOW_DEMONSTRATION ? [] : [
   { to: '/demo', label: 'Overview', icon: Compass },
   { to: '/explore', label: 'Explore map', icon: Map },
   { to: '/compare', label: 'Compare sensors', icon: Layers2 },
@@ -52,7 +55,8 @@ const demonstrations: NavItem[] = [
 ]
 const system: NavItem[] = [
   { to: '/ingestion', label: 'Ingestion administration', icon: ShieldCheck },
-  { to: '/settings', label: 'Preferences', icon: Settings2 },
+  // Preferences only configure the synthetic demonstration, so they share its switch.
+  ...(SHOW_DEMONSTRATION ? [{ to: '/settings', label: 'Preferences', icon: Settings2 }] : []),
 ]
 const researchPaths = new Set(['/dashboard', '/analyses', '/api-analysis', '/catalog', '/ingestion'])
 
@@ -237,14 +241,14 @@ export function ApplicationShell({
         <nav className="relative flex flex-1 flex-col gap-6 overflow-y-auto px-4 pb-4 pt-2 scrollbar-none" aria-label="Primary navigation">
           {group('Workspace', workspace)}
           {group('Data', data)}
-          <details key={demo ? 'demo' : 'research'} className="group/demo flex flex-col" open={demo}>
+          {SHOW_DEMONSTRATION && <details key={demo ? 'demo' : 'research'} className="group/demo flex flex-col" open={demo}>
             <summary className="mb-1.5 flex cursor-pointer list-none items-center gap-2 rounded-md px-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-fg-3 hover:text-fg-2 [&::-webkit-details-marker]:hidden">
               Demonstration
               <span className="rounded-full border border-snpp/30 bg-snpp/10 px-1.5 py-px font-sans text-[9.5px] tracking-wider text-snpp">SYNTHETIC</span>
               <ChevronDown size={13} className="ml-auto transition-transform group-open/demo:rotate-180" aria-hidden="true" />
             </summary>
             <div className="flex flex-col gap-0.5">{links(demonstrations)}</div>
-          </details>
+          </details>}
           {group('System', system)}
         </nav>
         {sidebarFooter && <div className="relative border-t border-white/[0.06] p-4">{sidebarFooter}</div>}
