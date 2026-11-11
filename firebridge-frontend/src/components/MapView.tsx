@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import maplibreWorker from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
@@ -11,6 +11,7 @@ import { envBasemapConfig, resolveBasemap, selectBasemap, type BasemapChoice, ty
 import { MapWorkspaceControls, type DrawShape } from './MapWorkspaceControls'
 import { useAnalysisTiles } from '../features/maps/useAnalysisTiles'
 import type { DetectionFeature } from '../features/observations/types'
+import { useAtlasLayers, type AtlasLayerConfig } from '../features/atlas/useAtlasLayers'
 
 export type BasemapMode = 'real' | 'schematic'
 
@@ -76,9 +77,15 @@ interface MapViewProps {
   onShowDetections?: (visible: boolean) => void
   /** Highlights the drawing toolbar when no study area exists yet. */
   promptDraw?: boolean
+  /** Every detection drawn client-side, with lenses, time window and picking. */
+  atlas?: AtlasLayerConfig
+  /** Overlays drawn over the map, inside the frame so fullscreen keeps them. */
+  children?: ReactNode
+  /** Controls docked under the map, inside the frame. */
+  footer?: ReactNode
 }
 
-export function MapView({ records, nativeRecords, selectedId, onSelect, area, showDetections, showArea, onShowArea, onShowDetections, clearDrawingToken, onAreaDrawn, onAreaRejected, onClearArea, styleUrl, basemapProvider, styleTimeoutMs = STYLE_LOAD_TIMEOUT_MS, fullHeight = false, apiMode = false, apiAnalysisId, promptDraw = false }: MapViewProps) {
+export function MapView({ records, nativeRecords, selectedId, onSelect, area, showDetections, showArea, onShowArea, onShowDetections, clearDrawingToken, onAreaDrawn, onAreaRejected, onClearArea, styleUrl, basemapProvider, styleTimeoutMs = STYLE_LOAD_TIMEOUT_MS, fullHeight = false, apiMode = false, apiAnalysisId, promptDraw = false, atlas, children, footer }: MapViewProps) {
   const env = envBasemapConfig()
   const configured = useMemo(() => resolveBasemap(styleUrl ?? env.styleUrl, basemapProvider ?? env.provider), [styleUrl, basemapProvider, env.styleUrl, env.provider])
   const [choice, setChoice] = useState<BasemapChoice>(() => configured.key === 'nasa-satellite' ? 'satellite' : 'configured')
@@ -111,6 +118,7 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
   const basemapRef = useRef<BasemapMode>(basemap)
   const drawActiveRef = useRef(drawActive)
   const drawShapeRef = useRef<DrawShape>(drawShape)
+  useAtlasLayers(mapRef, styleLoaded, styleRevision, atlas, drawActive)
 
   const featureCollection = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point, { id: string; selected: boolean; sensor: string }>>(() => ({
     type: 'FeatureCollection',
@@ -421,7 +429,8 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
   }
 
   return (
-    <div ref={frameRef} className={`map-frame ${fullHeight ? 'map-frame-full' : ''}`} data-basemap={basemap}>
+    <div ref={frameRef} className={`map-frame ${fullHeight ? 'map-frame-full' : ''} ${footer ? 'map-frame-docked' : ''}`} data-basemap={basemap} data-atlas={atlas ? (atlas.replay ? "replay" : "atlas") : undefined}>
+      <div className="map-stage">
       <div ref={containerRef} className="map-canvas" aria-label={apiMode ? 'Interactive map of the selected analysis and study area' : basemap === 'real' ? 'Interactive map of synthetic demonstration detections' : 'Interactive schematic map of synthetic demonstration detections (no real basemap)'} />
       {basemap === 'schematic' && (
         <div className="map-basemap-banner" role="status">
@@ -441,7 +450,7 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
         onZoom={zoom} onFit={resetView} onNorth={() => mapRef.current?.easeTo({ bearing: 0, pitch: 0, duration: reducedMotion() ? 0 : 250 })}
         onFullscreen={() => { void toggleFullscreen() }} fullscreen={fullscreen}
         showArea={showArea} onShowArea={onShowArea} showDetections={showDetections} onShowDetections={onShowDetections}
-        showBasemap={showBasemap} onShowBasemap={setShowBasemap} apiMode={apiMode} recordMode={nativeRecords !== undefined} />
+        showBasemap={showBasemap} onShowBasemap={setShowBasemap} apiMode={apiMode} recordMode={nativeRecords !== undefined} atlasMode={!!atlas} />
       {drawActive && (
         <div className="map-draw-bar" role="group" aria-label="Area drawing">
           <span className="map-draw-hint" role="status">
@@ -454,6 +463,9 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
         </div>
       )}
       <div className="map-scale"><MapPinned size={12} /> {apiMode ? 'Study area' : 'Northern Morocco'} · WGS 84{basemap === 'real' && selection.kind === 'esri' ? ' · Esri World Imagery' : ''}<span ref={coordinatesRef} className="map-coordinates" aria-hidden="true" /></div>
+      {children}
+      </div>
+      {footer}
     </div>
   )
 }
