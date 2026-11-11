@@ -17,7 +17,8 @@ afterEach(() => { cleanup(); client?.clear(); api.defaults.adapter = original })
 function mount(filters = emptyObservationFilters) {
   const requests: Record<string, unknown>[] = []
   api.defaults.adapter = async (config) => {
-    requests.push(config.params)
+    // Only record-page requests matter here; analysis metadata and summaries are always read.
+    if (/\/detections/.test(config.url ?? '') && config.params?.limit !== 5000) requests.push(config.params)
     return { config, status: 200, statusText: 'OK', headers: {}, data: envelope(resultFixtures.detections) }
   }
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
