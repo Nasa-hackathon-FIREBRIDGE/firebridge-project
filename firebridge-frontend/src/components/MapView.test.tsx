@@ -475,44 +475,36 @@ describe('Finish drawing control', () => {
   })
 })
 
-describe('Optional Esri World Imagery provider (mocked MapLibre; no real tiles)', () => {
-  it('uses a raster style with Esri attribution and no schematic banner', () => {
-    renderMap({ basemapProvider: 'esri-world-imagery' })
-    const style = lastMap().options.style as { sources: Record<string, { type: string; attribution: string; tiles: string[] }> }
-    const source = Object.values(style.sources)[0]
-    expect(source.type).toBe('raster')
-    expect(source.attribution).toMatch(/Esri/)
-    expect(source.tiles[0]).toContain('services.arcgisonline.com')
-    expect(screen.queryByText(/SCHEMATIC VIEW/)).toBeNull()
-  })
-
+describe('Basemap provider configuration and imagery resilience (mocked MapLibre; no real tiles)', () => {
   it('lets an explicit style URL take precedence over the provider', () => {
-    renderMap({ styleUrl: STYLE, basemapProvider: 'esri-world-imagery' })
+    renderMap({ styleUrl: STYLE, basemapProvider: 'nasa-gibs' })
     expect(lastMap().options.style).toBe(STYLE)
   })
 
-  it('rejects unknown providers and stays on the schematic', () => {
-    renderMap({ basemapProvider: 'someone-else' })
-    expect(typeof lastMap().options.style).toBe('object')
-    expect(screen.getByText(/map provider is not supported/)).toBeTruthy()
-    expect(screen.getByText(/SCHEMATIC VIEW/)).toBeTruthy()
+  it('rejects unknown providers, including the retired Esri option, and stays on the schematic', () => {
+    for (const provider of ['someone-else', 'esri-world-imagery']) {
+      renderMap({ basemapProvider: provider })
+      expect(typeof lastMap().options.style).toBe('object')
+      expect(screen.getByText(/map provider is not supported/)).toBeTruthy()
+      expect(screen.getByText(/SCHEMATIC VIEW/)).toBeTruthy()
+      cleanup()
+    }
   })
 
   it('keeps the imagery after repeated tile failures before any tile loads', () => {
-    renderMap({ basemapProvider: 'esri-world-imagery' })
+    renderMap({ basemapProvider: 'nasa-gibs' })
     act(() => lastMap().emit('style.load'))
-    for (let index = 0; index < 3; index += 1) act(() => lastMap().emit('error', { sourceId: 'astra-esri-world-imagery', error: new Error('net') }))
-    expect(screen.getByText('Esri World Imagery is slow to arrive')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Use NASA satellite' })).toBeTruthy()
+    for (let index = 0; index < 3; index += 1) act(() => lastMap().emit('error', { sourceId: 'firebridge-nasa-imagery', error: new Error('net') }))
+    expect(screen.getByText('NASA satellite is slow to arrive')).toBeTruthy()
     expect(lastMap().setStyle).not.toHaveBeenCalled()
   })
 
   it('quietly asks again for tiles that fail after the imagery has loaded', () => {
     vi.useFakeTimers()
-    renderMap({ basemapProvider: 'esri-world-imagery' })
+    renderMap({ basemapProvider: 'nasa-gibs' })
     act(() => lastMap().emit('style.load'))
-    act(() => lastMap().emit('data', { sourceId: 'astra-esri-world-imagery', dataType: 'source', tile: {} }))
-    act(() => lastMap().emit('error', { sourceId: 'astra-esri-world-imagery', error: new Error('tile 500') }))
+    act(() => lastMap().emit('data', { sourceId: 'firebridge-nasa-imagery', dataType: 'source', tile: {} }))
+    act(() => lastMap().emit('error', { sourceId: 'firebridge-nasa-imagery', error: new Error('tile 500') }))
     expect(screen.queryByText(/slow to arrive/)).toBeNull()
     act(() => { vi.advanceTimersByTime(4_000) })
     expect(lastMap().refreshTiles).toHaveBeenCalledTimes(1)
@@ -522,12 +514,12 @@ describe('Optional Esri World Imagery provider (mocked MapLibre; no real tiles)'
   })
 
   it('records an area drawn before any imagery arrived as unverified', () => {
-    const { props } = renderMap({ basemapProvider: 'esri-world-imagery' })
+    const { props } = renderMap({ basemapProvider: 'nasa-gibs' })
     act(() => lastMap().emit('style.load'))
     const ring = [[-6, 34], [-5, 34], [-5, 35], [-6, 34]]
     act(() => lastDraw().finish('early', { type: 'Polygon', coordinates: [ring] }))
     expect(props.onAreaDrawn).toHaveBeenLastCalledWith({ type: 'Polygon', coordinates: [ring] }, 'schematic')
-    act(() => lastMap().emit('data', { sourceId: 'astra-esri-world-imagery', dataType: 'source', tile: {} }))
+    act(() => lastMap().emit('data', { sourceId: 'firebridge-nasa-imagery', dataType: 'source', tile: {} }))
     act(() => lastDraw().finish('later', { type: 'Polygon', coordinates: [ring] }))
     expect(props.onAreaDrawn).toHaveBeenLastCalledWith({ type: 'Polygon', coordinates: [ring] }, 'real')
   })
