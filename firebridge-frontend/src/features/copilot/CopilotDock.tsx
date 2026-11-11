@@ -65,6 +65,8 @@ function ActionButtons({ actions }: { actions: CopilotAction[] }) {
 }
 
 function Trust({ answer }: { answer: ExplainerAnswer }) {
+  // A refusal is a fixed message: there is nothing to check and no model answer to credit.
+  if (answer.generated_from === 'refusal') return null
   const rerouted = answer.attempts.filter((a) => a.outcome !== 'ok').map((a) => shortModel(a.model))
   const tools = toolSummary(answer.tool_calls)
   const verified = answer.verification.status === 'verified'
