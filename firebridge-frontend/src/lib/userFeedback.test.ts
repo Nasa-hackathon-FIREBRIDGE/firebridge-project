@@ -59,4 +59,16 @@ describe('Authored user-facing error communication', () => {
     expect(safeReference('https://private/path?token=secret')).toBeUndefined()
     expect(safeReference('a'.repeat(101))).toBeUndefined()
   })
+  it('explains the historical window limit without displaying arbitrary server messages', () => {
+    const feedback = userFeedback(
+      new ApiClientError('private server detail', 'HISTORICAL_WINDOW_TOO_LARGE', 400),
+      'analysis',
+      'write',
+    )
+    expect(feedback.title).toBe('The historical date range is too long')
+    expect(feedback.message).toContain('10,980 days (about 30 years)')
+    expect(feedback.message).toContain('split it into separate analyses')
+    expect(feedback.message).not.toContain('private server detail')
+    expect(feedback.retryable).toBe(false)
+  })
 })
