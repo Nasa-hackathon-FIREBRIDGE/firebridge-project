@@ -17,6 +17,8 @@ export interface CatalogView {
   scope_key: string
   sources: CatalogSource[]
   releases: ReleaseSummary[]
+  /** Server limits for a study area; absent on older servers. */
+  limits?: { max_aoi_vertices: number; max_aoi_area_km2: number }
 }
 
 export const catalog = {
