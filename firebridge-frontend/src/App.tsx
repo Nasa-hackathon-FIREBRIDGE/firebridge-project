@@ -13,6 +13,7 @@ import type { ActivitySummary, AnalysisSelection, Detection, ReportEvidence, Sen
 import { ApplicationShell } from './components/ApplicationShell'
 import { SystemStatus } from './components/SystemStatus'
 import { PageHeader } from './components/workspace/PageHeader'
+import { SHOW_DEMONSTRATION } from './config/features'
 
 const HomePage = lazy(() => import('./pages/HomePage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
@@ -27,6 +28,7 @@ import type { BasemapMode } from './components/MapView'
 import { SensorSelector } from './components/SensorSelector'
 import { NO_RECORDS_LABEL, selectedWithoutRecords } from './platforms'
 const EvidencePage = lazy(() => import('./pages/EvidencePage'))
+const SourcesPage = lazy(() => import('./pages/SourcesPage'))
 const MapView = lazy(() => import('./components/MapView').then((module) => ({ default: module.MapView })))
 const AnalysisWorkspace = lazy(() => import('./features/analyses/AnalysisWorkspace'))
 
@@ -75,16 +77,22 @@ function AppPages() {
       <Route path="/api-analysis" element={<Suspense fallback={<p role="status">Chargement…</p>}><ApiAnalysisPage /></Suspense>} />
       <Route path="/ingestion" element={<Suspense fallback={<p role="status">Chargement…</p>}><IngestionPage /></Suspense>} />
       <Route path="/" element={<HomePage />} />
-      <Route path="/demo" element={<WorkspacePage page="overview" />} />
-      <Route path="/explore" element={<WorkspacePage page="explore" />} />
-      <Route path="/compare" element={<WorkspacePage page="compare" />} />
-      <Route path="/calendar" element={<WorkspacePage page="calendar" />} />
-      <Route path="/weather" element={<WorkspacePage page="weather" />} />
-      <Route path="/reports" element={<WorkspacePage page="reports" />} />
-      <Route path="/explain" element={<WorkspacePage page="explain" />} />
-      <Route path="/alerts" element={<WorkspacePage page="alerts" />} />
+      {/* Synthetic demonstration: hidden while SHOW_DEMONSTRATION is false (URLs redirect Home). */}
+      {SHOW_DEMONSTRATION && (
+        <>
+          <Route path="/demo" element={<WorkspacePage page="overview" />} />
+          <Route path="/explore" element={<WorkspacePage page="explore" />} />
+          <Route path="/compare" element={<WorkspacePage page="compare" />} />
+          <Route path="/calendar" element={<WorkspacePage page="calendar" />} />
+          <Route path="/weather" element={<WorkspacePage page="weather" />} />
+          <Route path="/reports" element={<WorkspacePage page="reports" />} />
+          <Route path="/explain" element={<WorkspacePage page="explain" />} />
+          <Route path="/alerts" element={<WorkspacePage page="alerts" />} />
+          <Route path="/settings" element={<WorkspacePage page="settings" />} />
+        </>
+      )}
       <Route path="/evidence" element={<EvidencePage />} />
-      <Route path="/settings" element={<WorkspacePage page="settings" />} />
+      <Route path="/sources" element={<SourcesPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
