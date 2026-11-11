@@ -19,7 +19,7 @@ export interface Verification {
 export interface ExplainerAnswer {
   message_id: number
   answer: string
-  generated_from: 'llm' | 'fallback'
+  generated_from: 'llm' | 'fallback' | 'refusal'
   model: string | null
   citations: { id: string; text: string }[]
   verification: Verification
@@ -81,6 +81,30 @@ export function refsOf(value: unknown): ExplainerRefs {
   }
 }
 
+/** An answer in the shape the copilot renders, whatever the agent left out (a refusal carries no
+ *  references, an old history entry no attempts). */
+export function answerOf(value: Record<string, unknown>): ExplainerAnswer {
+  const list = <T,>(v: unknown, keep: (item: unknown) => boolean = isRecord) => (Array.isArray(v) ? (v.filter(keep) as T[]) : [])
+  const verification = isRecord(value.verification) ? value.verification : {}
+  const from = value.generated_from
+  return {
+    message_id: typeof value.message_id === 'number' ? value.message_id : 0,
+    answer: typeof value.answer === 'string' ? value.answer : '',
+    generated_from: from === 'fallback' || from === 'refusal' ? from : 'llm',
+    model: typeof value.model === 'string' ? value.model : null,
+    citations: list<{ id: string; text: string }>(value.citations).filter((c) => text(c.id)).map((c) => ({ id: c.id, text: text(c.text) ? c.text : '' })),
+    verification: {
+      status: verification.status === 'unverified_numbers' ? 'unverified_numbers' : 'verified',
+      numbers_checked: typeof verification.numbers_checked === 'number' ? verification.numbers_checked : 0,
+      unsupported_numbers: list<string>(verification.unsupported_numbers, text),
+    },
+    tool_calls: list<ExplainerAnswer['tool_calls'][number]>(value.tool_calls).filter((c) => text(c.name)),
+    attempts: list<ExplainerAnswer['attempts'][number]>(value.attempts),
+    references: refsOf(value.references),
+    retry_after: typeof value.retry_after === 'number' ? value.retry_after : null,
+  }
+}
+
 async function post<T>(path: string, body: unknown, valid: (v: Record<string, unknown>) => boolean): Promise<T> {
   const response = await api.post<ApiEnvelope<T>>(`/explainer${path}`, body, SLOW)
   return checked(unwrap(response.data), valid)
@@ -107,6 +131,6 @@ export const explainer = {
     const response = await api.get<ApiEnvelope<ExplainerSession>>(`/explainer/sessions/${encodeURIComponent(sessionId)}`, { timeout: 15_000 })
     return checked(unwrap(response.data), (v) => text(v.id) && Array.isArray(v.messages))
   },
-  ask: (sessionId: string, content: string, context: ExplainerContext) =>
-    post<ExplainerAnswer>(`/sessions/${encodeURIComponent(sessionId)}/messages`, { content, context }, (v) => text(v.answer) && isRecord(v.verification)),
+  ask: async (sessionId: string, content: string, context: ExplainerContext) =>
+    answerOf(await post<Record<string, unknown>>(`/sessions/${encodeURIComponent(sessionId)}/messages`, { content, context }, (v) => text(v.answer))),
 }
