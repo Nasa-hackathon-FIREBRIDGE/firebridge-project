@@ -1,4 +1,5 @@
 import type { StyleSpecification } from 'maplibre-gl'
+import { cachedImagery } from './features/maps/imageryCache'
 
 export const ESRI_PROVIDER_ID = 'esri-world-imagery'
 export const ESRI_SOURCE_ID = 'astra-esri-world-imagery'
@@ -9,7 +10,7 @@ export const NO_BASEMAP_REASON = 'Offline coordinate grid selected. No backgroun
 export const NASA_SOURCE_ID = 'firebridge-nasa-imagery'
 export const NASA_ATTRIBUTION = '<a href="https://earthobservatory.nasa.gov/features/BlueMarble">NASA Blue Marble</a> / <a href="https://nasa-gibs.github.io/gibs-api-docs/">NASA GIBS</a>'
 export const OSM_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
-const gibs = (layer: string, level: number, extension: string) => `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/GoogleMapsCompatible_Level${level}/{z}/{y}/{x}.${extension}`
+const gibs = (layer: string, level: number, extension: string) => cachedImagery(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/GoogleMapsCompatible_Level${level}/{z}/{y}/{x}.${extension}`)
 
 export type BasemapSelection = { label: string; description: string; sourceId?: string } & (
   | { kind: 'schematic'; key: string; reason: string }
