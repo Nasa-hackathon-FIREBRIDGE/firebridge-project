@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ESRI_ATTRIBUTION, ESRI_PROVIDER_ID, NASA_SOURCE_ID, resolveBasemap, selectBasemap } from './basemap'
+import { NASA_SOURCE_ID, resolveBasemap, selectBasemap } from './basemap'
 
 describe('resolveBasemap', () => {
   it('defaults to real public NASA satellite imagery without requiring a key', () => {
@@ -18,23 +18,19 @@ describe('resolveBasemap', () => {
     expect(selectBasemap('streets', hybrid)).toMatchObject({ key: 'osm-streets', sourceId: 'firebridge-streets' })
   })
 
-  it('selects Esri World Imagery only when explicitly requested, with attribution', () => {
+  it('no longer offers proprietary Esri imagery, even when configured', () => {
     const selection = resolveBasemap(undefined, ' Esri-World-Imagery ')
-    expect(selection.kind).toBe('esri')
-    if (selection.kind !== 'esri') return
-    const source = Object.values(selection.style.sources)[0] as { attribution: string; type: string }
-    expect(source.type).toBe('raster')
-    expect(source.attribution).toBe(ESRI_ATTRIBUTION)
-    expect(ESRI_PROVIDER_ID).toBe('esri-world-imagery')
+    expect(selection.kind).toBe('schematic')
+    expect(selection.kind === 'schematic' && selection.reason).toMatch(/map provider is not supported/)
   })
 
   it('gives VITE_MAP_STYLE_URL precedence over the provider', () => {
-    const selection = resolveBasemap('https://styles.example.test/s.json', 'esri-world-imagery')
+    const selection = resolveBasemap('https://styles.example.test/s.json', 'nasa-gibs')
     expect(selection).toMatchObject({ kind: 'style-url', url: 'https://styles.example.test/s.json' })
   })
-  it('provides a genuine NASA alternative when a configured Esri provider fails', () => {
-    const configured = resolveBasemap('', 'esri-world-imagery')
-    expect(selectBasemap('configured', configured).kind).toBe('esri')
+  it('provides a genuine NASA alternative when a configured style fails', () => {
+    const configured = resolveBasemap('https://styles.example.test/s.json', '')
+    expect(selectBasemap('configured', configured).kind).toBe('style-url')
     expect(selectBasemap('satellite', configured)).toMatchObject({ kind: 'raster', sourceId: NASA_SOURCE_ID, key: 'nasa-satellite' })
   })
 
