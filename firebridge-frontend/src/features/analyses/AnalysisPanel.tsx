@@ -2,6 +2,7 @@ import { UserInputError } from '../../lib/userFeedback'
 import { ApiClientError } from '../../lib/axios'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { AnalysisView } from '@firebridge/contracts'
+import { HISTORICAL_MAX_WINDOW_DAYS } from '@firebridge/contracts/analysis-limits'
 import { useCreateAnalysis } from '../../hooks/useFirebridge'
 import { createIdempotencyKey } from '../../services/analyses.service'
 import { ApiError, Empty, Status } from './Feedback'
@@ -147,6 +148,7 @@ export function AnalysisPanel({
             <p className="fb-muted">
               Native detections v1 · Standard data only · No grid. The end date is excluded from the
               interval.
+              {' '}Historical requests support up to {HISTORICAL_MAX_WINDOW_DAYS.toLocaleString('en-US')} days (about 30 years).
             </p>
             <Button type="submit" variant="primary" className="fw-primary-submit" disabled={!!disabledReason} disabledReason={disabledReason} loading={create.isPending}>
               {create.isPending ? 'Submitting analysis…' : 'Request analysis'}
