@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runBridge } from '../bridge/engine/index.ts'
 import { driftingSeasons } from '../bridge/test-fixtures'
 import type { BridgeState } from '../bridge/useBridgeReport'
-import type { ExplainerAnswer, ExplainerSummary } from '../../services/explainer.service'
+import { answerOf, type ExplainerAnswer, type ExplainerSummary } from '../../services/explainer.service'
 
 const ANALYSIS = '13ad2e0c-cd43-4ee9-bcc6-fd8b273beb70'
 const report = runBridge({ detections: driftingSeasons(), start: '2019-01-01', endExclusive: '2025-01-01' })
@@ -130,14 +130,30 @@ describe('FIREBRIDGE copilot', () => {
     expect(screen.getByRole('dialog', { name: 'FIREBRIDGE copilot' })).toBeInTheDocument()
   })
 
+  it('shows a refusal as plain text, and an answer with missing parts never breaks the workspace', async () => {
+    // What the agent sends when the model declines: no references at all.
+    const refusal = { message_id: 9, answer: 'I can only help with this FIREBRIDGE fire analysis.', generated_from: 'refusal', model: 'qwen/qwen3.8-27b', citations: [], verification: { status: 'verified', numbers_checked: 0, unsupported_numbers: [] }, tool_calls: [], attempts: [], references: {}, refusal: 'out_of_scope' }
+    expect(answerOf(refusal)).toMatchObject({ generated_from: 'refusal', references: refs() })
+    expect(answerOf({ answer: 'Partial' })).toMatchObject({ generated_from: 'llm', citations: [], tool_calls: [], attempts: [], references: refs(), verification: { status: 'verified', numbers_checked: 0, unsupported_numbers: [] } })
+    api.ask.mockResolvedValue(answerOf(refusal))
+    renderCopilot()
+    fireEvent.click(await screen.findByRole('button', { name: /Ask why/ }))
+    const panel = screen.getByRole('dialog', { name: 'FIREBRIDGE copilot' })
+    expect(await within(panel).findByText(refusal.answer)).toBeInTheDocument()
+    expect(within(panel).queryByText(/checked against the evidence|answered by/)).toBeNull()
+    expect(screen.getByRole('button', { name: /Ask why/ })).toBeInTheDocument() // the workspace is still there
+  })
+
   it('does not upload an analysis the agent already has, and resumes the conversation', async () => {
     api.known.mockResolvedValue({ analysis_id: ANALYSIS, title: 't', sources: ['firebridge_api', 'bridge_report'], facts: [] })
     window.localStorage.setItem(`fb-copilot-session:${ANALYSIS}:en`, 'r'.repeat(32))
-    api.session.mockResolvedValue({ id: 'r'.repeat(32), analysis_id: ANALYSIS, language: 'en', messages: [{ id: 1, role: 'user', content: 'Earlier question', meta: {} }, { id: 2, role: 'assistant', content: 'Earlier answer [F19]', meta: { references: { months: ['2022-07'] }, verification: { status: 'verified', numbers_checked: 0, unsupported_numbers: [] } } }] })
+    api.session.mockResolvedValue({ id: 'r'.repeat(32), analysis_id: ANALYSIS, language: 'en', messages: [{ id: 1, role: 'user', content: 'Earlier question', meta: {} }, { id: 2, role: 'assistant', content: 'Earlier answer [F19]', meta: { references: { months: ['2022-07'] }, verification: { status: 'verified', numbers_checked: 0, unsupported_numbers: [] } } }, { id: 3, role: 'user', content: 'Weather?', meta: { refused: 'out_of_scope' } }, { id: 4, role: 'assistant', content: 'I can only help with this analysis.', meta: { generated_from: 'refusal', model: 'qwen/qwen3.8-27b', references: {}, refused: 'out_of_scope' } }] })
     renderCopilot()
     fireEvent.click(await screen.findByRole('button', { name: 'Ask FIREBRIDGE about this analysis' }))
     expect(await screen.findByText('Earlier question')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'July 2022 in the calendar' })).toBeInTheDocument()
+    expect(screen.getByText('I can only help with this analysis.')).toBeInTheDocument()
+    expect(screen.queryByText(/qwen3\.8-27b/)).toBeNull() // a past refusal is not credited to a model
     expect(api.analysis).not.toHaveBeenCalled()
     expect(api.createSession).not.toHaveBeenCalled()
   })
