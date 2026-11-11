@@ -11,6 +11,14 @@ import { Button } from '../../components/ui/Button'
 import { CopyableId } from '../../components/ui/CopyableId'
 import { SquareDashedMousePointer } from 'lucide-react'
 
+/** Starting values for the area form; a new key resets the form to them. */
+export interface AreaSuggestion {
+  key: number
+  name?: string
+  provenance?: string
+  timezone?: string
+}
+
 export function AreaPanel({
   id,
   onSelect,
@@ -18,6 +26,7 @@ export function AreaPanel({
   onGeometryText,
   onStartDrawing,
   onSavingState,
+  suggestion,
 }: {
   id?: string
   onSelect: (id: string) => void
@@ -25,6 +34,7 @@ export function AreaPanel({
   onGeometryText: (value: string) => void
   onStartDrawing?: () => void
   onSavingState?: (pending: boolean) => void
+  suggestion?: AreaSuggestion
 }) {
   const create = useCreateArea()
   const area = useArea(id)
@@ -85,17 +95,18 @@ export function AreaPanel({
         <span className="fb-step">01</span>
         <div>
           <h2 id="area-heading">Define an area</h2>
-          <p>Draw a rectangle or polygon on the map, or paste GeoJSON.</p>
+          <p>Draw on the map, pick a country, region or forest, or paste GeoJSON.</p>
         </div>
       </div>
       {onStartDrawing && <Button variant="primary" onClick={onStartDrawing}><SquareDashedMousePointer size={16} aria-hidden="true" />Draw on map</Button>}
-      <p className="fw-helper">{geometryText ? 'Draft geometry is available. Name and save the area before requesting an analysis.' : 'Draw your area on the map, then name and save it.'}</p>
+      <p className="fw-helper">{geometryText ? 'Draft geometry is available. Name and save the area before requesting an analysis.' : 'Draw your area or pick a place on the map, then name and save it.'}</p>
       <details className="fb-editor" open={!id}>
         <summary>
           {id ? 'Define another study area' : 'Create a study boundary'}
-          <span>Polygon / WGS 84</span>
+          <span>Polygon or MultiPolygon · WGS 84</span>
         </summary>
         <form
+          key={suggestion?.key ?? 0}
           id="area-create-form"
           className="fb-form"
           onSubmit={(event) => {
@@ -105,7 +116,7 @@ export function AreaPanel({
           <fieldset disabled={create.isPending}>
               <label>
                 Area name
-                <input name="name" required maxLength={500} placeholder="Name your study area" />
+                <input name="name" required maxLength={500} placeholder="Name your study area" defaultValue={suggestion?.name} />
               </label>
             <Button variant="primary" type="submit" className="fw-primary-submit" loading={create.isPending}>{create.isPending ? 'Saving area…' : 'Save area'}</Button>
             <details ref={metadataEditor} className="fw-advanced" onInvalidCapture={event => { event.currentTarget.open = true }}><summary>Area metadata · version, timezone and provenance</summary>
@@ -121,7 +132,7 @@ export function AreaPanel({
                 <input
                   name="timezone"
                   aria-label="Display timezone"
-                  defaultValue="Africa/Casablanca"
+                  defaultValue={suggestion?.timezone ?? 'Africa/Casablanca'}
                   required
                   maxLength={100}
                   aria-invalid={error instanceof UserInputError && error.field === 'timezone'}
@@ -142,7 +153,7 @@ export function AreaPanel({
                 Provenance
                 <input
                   name="provenance"
-                  defaultValue="user-provided geometry"
+                  defaultValue={suggestion?.provenance ?? 'user-provided geometry'}
                   required
                   maxLength={500}
                 />
@@ -151,10 +162,10 @@ export function AreaPanel({
             </details>
             <details ref={geoEditor} className="fw-advanced"><summary>Paste GeoJSON · advanced</summary>
             <label>
-              GeoJSON Polygon
+              GeoJSON Polygon or MultiPolygon
               <textarea
                 name="geometry"
-                aria-label="GeoJSON Polygon"
+                aria-label="GeoJSON geometry"
                 aria-describedby={
                   error instanceof UserInputError && error.field === 'geometry'
                     ? 'geometry-help geometry-error'
