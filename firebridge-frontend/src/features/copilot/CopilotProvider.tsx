@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ApiClientError } from '../../lib/axios'
-import { explainer, refsOf, type ExplainerAnswer, type ExplainerContext } from '../../services/explainer.service'
+import { answerOf, explainer, type ExplainerAnswer, type ExplainerContext } from '../../services/explainer.service'
 import { useBridgeReport } from '../bridge/useBridgeReport'
 import type { CopilotNav } from './actions'
 import { CopilotContext, SECTION_LABELS, type Briefing, type CopilotMessage, type CopilotState } from './context'
@@ -40,19 +40,9 @@ const localId = () => `m${++counter}`
 
 function messageFromHistory(m: { id: number; role: 'user' | 'assistant'; content: string; meta: Record<string, unknown> }): CopilotMessage {
   if (m.role === 'user') return { id: `h${m.id}`, role: 'user', content: m.content }
-  const meta = m.meta
-  const answer: ExplainerAnswer = {
-    message_id: m.id,
-    answer: m.content,
-    generated_from: meta.generated_from === 'fallback' ? 'fallback' : 'llm',
-    model: typeof meta.model === 'string' ? meta.model : null,
-    citations: Array.isArray(meta.citations) ? (meta.citations as string[]).map((id) => ({ id, text: '' })) : [],
-    verification: (meta.verification as ExplainerAnswer['verification']) ?? { status: 'verified', numbers_checked: 0, unsupported_numbers: [] },
-    tool_calls: Array.isArray(meta.tool_calls) ? (meta.tool_calls as ExplainerAnswer['tool_calls']) : [],
-    attempts: [],
-    references: refsOf(meta.references),
-    retry_after: null,
-  }
+  // History keeps cited fact ids only; their text comes from the analysis facts.
+  const citations = Array.isArray(m.meta.citations) ? m.meta.citations.filter((id) => typeof id === 'string').map((id) => ({ id, text: '' })) : []
+  const answer = answerOf({ ...m.meta, message_id: m.id, answer: m.content, citations, attempts: [], retry_after: null })
   return { id: `h${m.id}`, role: 'assistant', content: m.content, answer }
 }
 
