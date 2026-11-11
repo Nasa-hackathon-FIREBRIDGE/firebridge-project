@@ -2,7 +2,7 @@
  * Areas service — Phase 2
  *
  * Responsibilities:
- *  1. Convert incoming GeoJSON Polygon coordinates to WKT.
+ *  1. Convert incoming GeoJSON Polygon or MultiPolygon coordinates to WKT.
  *  2. Compute canonical SHA-256 geometry hash for idempotent reuse.
  *  3. Validate geometry via PostGIS (ST_IsValid, non-empty, true geodesic ST_Area via WGS84 geography).
  *  4. Atomically insert or retrieve equivalent area: UNIQUE(geometry_sha256, version).
@@ -23,6 +23,9 @@ import {
   type AreaListQuery
 } from '../validators/areas.validator.js';
 
+type PolygonInput = { type: 'Polygon'; coordinates: number[][][] };
+type AreaGeometry = AreaCreateInput['geometry'];
+
 export interface AreaResult {
   area: AreaRecord;
   created: boolean;
@@ -41,23 +44,38 @@ export function polygonCoordsToWkt(coordinates: number[][][]): string {
   return `POLYGON(${rings.join(', ')})`;
 }
 
+/** WKT for a normalised area: POLYGON, or MULTIPOLYGON(((…)), ((…))) for several parts. */
+export function areaToWkt(geometry: AreaGeometry): string {
+  if (geometry.type === 'Polygon') return polygonCoordsToWkt(geometry.coordinates);
+  return `MULTIPOLYGON(${geometry.coordinates.map((polygon) => polygonCoordsToWkt(polygon).slice('POLYGON'.length)).join(', ')})`;
+}
+
 /**
- * Computes a stable, canonical SHA-256 of the GeoJSON Polygon geometry.
+ * Computes a stable, canonical SHA-256 of the GeoJSON geometry.
  * Coordinates are rounded to 8 decimal places (approx. 1.1 mm precision)
  * to absorb serialization jitter while preserving genuine geographic distinctions.
+ * Polygons hash exactly as they always have, so existing areas keep their identity.
  */
-export function computeGeometrySha256(geometry: AreaCreateInput['geometry']): string {
-  const normalised = {
-    type: geometry.type,
-    coordinates: normalizePolygon(geometry).coordinates.map((ring) =>
-      ring.map((pos) => pos.map((v) => Math.round(v * 1e8) / 1e8))
-    )
-  };
+export function computeGeometrySha256(geometry: AreaGeometry): string {
+  const round = (polygon: number[][][]) => polygon.map((ring) => ring.map((pos) => pos.map((v) => Math.round(v * 1e8) / 1e8)));
+  const area = normalizeArea(geometry);
+  const normalised = area.type === 'Polygon'
+    ? { type: area.type, coordinates: round(area.coordinates) }
+    : { type: area.type, coordinates: area.coordinates.map(round) };
   return createHash('sha256').update(JSON.stringify(normalised)).digest('hex');
 }
 
+/** Each part normalised and put in a canonical order; a single-part MultiPolygon is the same area as its Polygon. */
+export function normalizeArea(geometry: AreaGeometry): AreaGeometry {
+  if (geometry.type === 'Polygon') return normalizePolygon(geometry);
+  if (geometry.coordinates.length === 1) return normalizePolygon({ type: 'Polygon', coordinates: geometry.coordinates[0]! });
+  const parts = geometry.coordinates.map((coordinates) => normalizePolygon({ type: 'Polygon', coordinates }).coordinates);
+  parts.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return { type: 'MultiPolygon', coordinates: parts };
+}
+
 /** Unwrap short edges before planar validation; align holes with the exterior. */
-export function normalizePolygon(geometry: AreaCreateInput['geometry']): AreaCreateInput['geometry'] {
+export function normalizePolygon(geometry: PolygonInput): PolygonInput {
   const unwrap = (ring: number[][]): number[][] => {
     const result: number[][] = [];
     for (const position of ring) {
@@ -104,8 +122,8 @@ export const areasService = {
   async createArea(input: AreaCreateInput): Promise<AreaResult> {
     const { geometry, name, version, display_timezone, provenance } = input;
 
-    // 1. Convert GeoJSON Polygon -> WKT
-    const geomWkt = polygonCoordsToWkt(normalizePolygon(geometry).coordinates);
+    // 1. Convert GeoJSON Polygon / MultiPolygon -> WKT
+    const geomWkt = areaToWkt(normalizeArea(geometry));
 
     // 2. Validate geometry via PostGIS using geodesic WGS84 geography measurement
     const validation = await areasRepository.validateGeometry(geomWkt, env.MAX_AOI_AREA_KM2);
