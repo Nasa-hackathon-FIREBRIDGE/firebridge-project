@@ -20,10 +20,17 @@ import {
 import AnalysisWorkspace from './AnalysisWorkspace'
 
 // WebGL is tested separately. These tests exercise real components, hooks and Axios services.
+const pickedRegion = {
+  geometry: { type: 'MultiPolygon' as const, coordinates: [[[[-7, 33], [-6, 33], [-6, 34], [-7, 33]]], [[[-6.5, 34.2], [-6.4, 34.2], [-6.4, 34.3], [-6.5, 34.2]]]] },
+  name: 'Rabat-Salé-Kenitra, Morocco',
+  provenance: 'geoBoundaries gbOpen MAR ADM1 (ODbL 1.0) · 1',
+  timezone: 'Africa/Casablanca',
+}
 vi.mock('../../components/MapView', () => ({
-  MapView: ({ apiAnalysisId, footer }: { apiAnalysisId?: string; footer?: unknown }) => (
+  MapView: ({ apiAnalysisId, footer, onPlacePicked }: { apiAnalysisId?: string; footer?: unknown; onPlacePicked?: (place: typeof pickedRegion) => void }) => (
     <div data-testid="api-map">
       {footer ? 'Fire atlas' : apiAnalysisId ? `API layer ${apiAnalysisId}` : 'No API tiles requested'}
+      {onPlacePicked && <button type="button" onClick={() => onPlacePicked(pickedRegion)}>Pick Rabat</button>}
     </div>
   ),
 }))
@@ -266,10 +273,10 @@ describe('API workspace integration with isolated HTTP responses', () => {
     mount()
     fireEvent.change(screen.getByLabelText('Area name'), { target: { value: 'Invalid draft' } })
     fireEvent.click(screen.getByText('Paste GeoJSON · advanced'))
-    fireEvent.change(screen.getByLabelText('GeoJSON Polygon'), { target: { value: 'not JSON' } })
+    fireEvent.change(screen.getByLabelText('GeoJSON geometry'), { target: { value: 'not JSON' } })
     fireEvent.click(screen.getByText('Paste GeoJSON · advanced'))
     fireEvent.click(screen.getByRole('button', { name: 'Save area' }))
-    const geometry = screen.getByLabelText('GeoJSON Polygon')
+    const geometry = screen.getByLabelText('GeoJSON geometry')
     expect(geometry.getAttribute('aria-invalid')).toBe('true')
     expect(document.activeElement).toBe(geometry)
     expect(geometry.closest('details')?.open).toBe(true)
@@ -292,12 +299,29 @@ describe('API workspace integration with isolated HTTP responses', () => {
     expect(screen.getByText(/^Filters affect matching loaded\/paginated map records/)).toBeVisible()
     expect(await screen.findByText('No API tiles requested')).toBeTruthy()
   })
+  it('turns a place picked on the map into a named area, saved with its source and time zone', async () => {
+    const requests = installApi({ ready: true })
+    mount()
+    fireEvent.click(await screen.findByRole('button', { name: 'Pick Rabat' }))
+    expect(screen.getByLabelText('Area name')).toHaveValue('Rabat-Salé-Kenitra, Morocco')
+    expect(screen.getByLabelText('Display timezone')).toHaveValue('Africa/Casablanca')
+    expect(screen.getByLabelText('Provenance')).toHaveValue('geoBoundaries gbOpen MAR ADM1 (ODbL 1.0) · 1')
+    expect(JSON.parse((screen.getByLabelText('GeoJSON geometry') as HTMLTextAreaElement).value)).toEqual(pickedRegion.geometry)
+    fireEvent.click(screen.getByRole('button', { name: 'Save area' }))
+    await screen.findByText('Area saved. Ready for analysis.')
+    expect(requests.find((r) => r.url === '/areas')?.body).toMatchObject({
+      name: 'Rabat-Salé-Kenitra, Morocco',
+      geometry: pickedRegion.geometry,
+      display_timezone: 'Africa/Casablanca',
+      provenance: 'geoBoundaries gbOpen MAR ADM1 (ODbL 1.0) · 1',
+    })
+  })
   it('creates an area, submits the exact analysis defaults, shows partial components and queues an export', async () => {
     const requests = installApi({ ready: true })
     mount()
     expect(screen.queryByRole('button', { name: /Copy accepted/ })).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Area name'), { target: { value: 'My study area' } })
-    fireEvent.change(screen.getByLabelText('GeoJSON Polygon'), {
+    fireEvent.change(screen.getByLabelText('GeoJSON geometry'), {
       target: { value: JSON.stringify(areaFixture.geometry) },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save area' }))
@@ -386,7 +410,7 @@ describe('API workspace integration with isolated HTTP responses', () => {
     const requests = installApi({ ready: true })
     mount()
     fireEvent.change(screen.getByLabelText('Area name'), { target: { value: 'Timezone validation QA' } })
-    fireEvent.change(screen.getByLabelText('GeoJSON Polygon'), { target: { value: JSON.stringify(areaFixture.geometry) } })
+    fireEvent.change(screen.getByLabelText('GeoJSON geometry'), { target: { value: JSON.stringify(areaFixture.geometry) } })
     fireEvent.click(screen.getByText('Area metadata · version, timezone and provenance'))
     fireEvent.change(screen.getByLabelText('Display timezone'), { target: { value: 'Invalid/Zone' } })
     fireEvent.click(screen.getByText('Area metadata · version, timezone and provenance'))
@@ -399,7 +423,7 @@ describe('API workspace integration with isolated HTTP responses', () => {
     const requests = installApi()
     mount()
     fireEvent.change(screen.getByLabelText('Area name'), { target: { value: 'Required metadata QA' } })
-    fireEvent.change(screen.getByLabelText('GeoJSON Polygon'), { target: { value: JSON.stringify(areaFixture.geometry) } })
+    fireEvent.change(screen.getByLabelText('GeoJSON geometry'), { target: { value: JSON.stringify(areaFixture.geometry) } })
     fireEvent.change(screen.getByLabelText('Version'), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save area' }))
     expect(screen.getByLabelText('Version').closest('details')).toHaveAttribute('open')
@@ -446,7 +470,7 @@ describe('API workspace integration with isolated HTTP responses', () => {
     }
     mount()
     fireEvent.change(screen.getByLabelText('Area name'), { target: { value: 'Area' } })
-    fireEvent.change(screen.getByLabelText('GeoJSON Polygon'), {
+    fireEvent.change(screen.getByLabelText('GeoJSON geometry'), {
       target: { value: JSON.stringify(areaFixture.geometry) },
     })
     const form = screen.getByRole('button', { name: 'Save area' }).closest('form')!
