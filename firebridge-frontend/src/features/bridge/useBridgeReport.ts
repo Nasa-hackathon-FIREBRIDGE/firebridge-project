@@ -60,11 +60,10 @@ export function computeBridge(input: BridgeInput): Promise<BridgeReport> {
   })
 }
 
-/** Every native detection of the saved analysis, harmonization study included. */
-export function useBridgeReport(analysisId?: string): BridgeState {
-  const analysis = useAnalysis(analysisId)
+/** Every native detection of the saved analysis, paged in once and shared by the sensor bridge
+ *  and the fire atlas. */
+export function useAllDetections(analysisId?: string) {
   const summary = useNativeSummary(analysisId)
-  const calendar = useNativeCalendar(analysisId)
   const total = useMemo(() => {
     const sources = summary.data?.native_detections_by_source
     if (!sources) return null
@@ -82,19 +81,28 @@ export function useBridgeReport(analysisId?: string): BridgeState {
   })
   const loaded = pages.data?.pages.reduce((sum, page) => sum + page.features.length, 0) ?? 0
   useEffect(() => {
-    if (pages.hasNextPage && !pages.isFetchingNextPage && !pages.isError && loaded < MAX_BRIDGE_DETECTIONS) void pages.fetchNextPage()
+    if (pages.hasNextPage && !pages.isFetchingNextPage && !pages.isError && loaded < MAX_BRIDGE_DETECTIONS) void pages.fetchNextPage({ cancelRefetch: false })
   }, [pages, loaded])
-
   const complete = pages.isSuccess && !pages.hasNextPage
+  const features = useMemo(() => (complete ? pages.data!.pages.flatMap((page) => page.features) : null), [complete, pages.data])
+  return { summary, pages, total, tooLarge, loaded, complete, features }
+}
+
+/** Every native detection of the saved analysis, harmonization study included. */
+export function useBridgeReport(analysisId?: string): BridgeState {
+  const analysis = useAnalysis(analysisId)
+  const calendar = useNativeCalendar(analysisId)
+  const { summary, pages, total, tooLarge, loaded, complete, features } = useAllDetections(analysisId)
+
   const calendarSettled = calendar.isSuccess || calendar.isError
   const start = analysis.data?.start_date
   const endExclusive = analysis.data?.end_date_exclusive
-  const ready = complete && calendarSettled && !!start && !!endExclusive
+  const ready = complete && !!features && calendarSettled && !!start && !!endExclusive
   const report = useQuery({
     queryKey: ['firebridge', 'results', analysisId ?? '', 'bridge-report', loaded, calendar.isSuccess],
     queryFn: () =>
       computeBridge({
-        detections: pages.data!.pages.flatMap((page) => page.features.map(toRaw)),
+        detections: features!.map(toRaw),
         start: start!,
         endExclusive: endExclusive!,
         calendar: calendar.data?.periods,
