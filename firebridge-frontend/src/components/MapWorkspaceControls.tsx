@@ -7,14 +7,14 @@ export type DrawShape = 'rectangle' | 'polygon'
 export function MapWorkspaceControls({ panel, onPanel, choice, onChoice, selection, configured,
   drawActive, onDraw, onClear, onZoom, onFit, onNorth, onFullscreen, fullscreen,
   showArea, onShowArea, showDetections, onShowDetections, showBasemap, onShowBasemap,
-  apiMode, recordMode, promptDraw = false,
+  apiMode, recordMode, atlasMode = false, promptDraw = false,
 }: {
   panel: 'layers' | 'basemap' | 'legend' | null; onPanel: (panel: 'layers' | 'basemap' | 'legend' | null) => void
   choice: BasemapChoice; onChoice: (choice: BasemapChoice) => void; selection: BasemapSelection; configured: boolean
   drawActive: boolean; onDraw: (shape: DrawShape) => void; onClear: () => void; onZoom: (amount: number) => void
   onFit: () => void; onNorth: () => void; onFullscreen: () => void; fullscreen: boolean
   showArea: boolean; onShowArea?: (visible: boolean) => void; showDetections: boolean; onShowDetections?: (visible: boolean) => void
-  showBasemap: boolean; onShowBasemap: (visible: boolean) => void; apiMode: boolean; recordMode: boolean
+  showBasemap: boolean; onShowBasemap: (visible: boolean) => void; apiMode: boolean; recordMode: boolean; atlasMode?: boolean
   promptDraw?: boolean
 }) {
   const basemapButton = useRef<HTMLButtonElement>(null)
@@ -41,9 +41,9 @@ export function MapWorkspaceControls({ panel, onPanel, choice, onChoice, selecti
         </select></label><p>{selection.description}</p><p className="map-context-caveat">Background context only. It does not change or date-match the wildfire observation records.</p>
       </> : panel === 'layers' ? <>
         <label className="map-layer-row"><input type="checkbox" checked={showBasemap} onChange={(event) => onShowBasemap(event.target.checked)} /><span><strong>{selection.label}</strong><small>Geographic context · independent imagery dates</small></span></label>
-        <label className="map-layer-row"><input type="checkbox" checked={showDetections} disabled={!onShowDetections} onChange={(event) => onShowDetections?.(event.target.checked)} /><span><strong>{apiMode ? 'Native wildfire detections' : 'Synthetic demonstration records'}</strong><small>{apiMode ? recordMode ? 'Loaded server pages only' : 'Saved analysis · aggregated MVT' : 'Local fixtures · not satellite observations'}</small></span></label>
+        <label className="map-layer-row"><input type="checkbox" checked={showDetections} disabled={!onShowDetections} onChange={(event) => onShowDetections?.(event.target.checked)} /><span><strong>{apiMode ? 'Native wildfire detections' : 'Synthetic demonstration records'}</strong><small>{apiMode ? atlasMode ? 'Every detection · fire atlas lenses' : recordMode ? 'Loaded server pages only' : 'Saved analysis · aggregated MVT' : 'Local fixtures · not satellite observations'}</small></span></label>
         <label className="map-layer-row"><input type="checkbox" checked={showArea} disabled={!onShowArea} onChange={(event) => onShowArea?.(event.target.checked)} /><span><strong>Study area boundary</strong><small>WGS 84 · user-provided geometry</small></span></label>
-      </> : <div className="map-context-legend"><span><i className="legend-dot legend-viirs" />{apiMode ? recordMode ? 'Loaded native record' : 'Aggregated records · size = count' : 'VIIRS synthetic record'}</span>{!apiMode && <span><i className="legend-dot legend-modis" />MODIS synthetic record</span>}<span><i className="legend-dot legend-selected" />Selected record</span><span><i className="legend-line" />Study area boundary</span><p>Detection records do not identify unique confirmed fire incidents.</p></div>}
+      </> : <div className="map-context-legend"><span><i className="legend-dot legend-viirs" />{apiMode ? atlasMode ? 'Native detections · styled by the lens below the map' : recordMode ? 'Loaded native record' : 'Aggregated records · size = count' : 'VIIRS synthetic record'}</span>{!apiMode && <span><i className="legend-dot legend-modis" />MODIS synthetic record</span>}<span><i className="legend-dot legend-selected" />Selected record</span><span><i className="legend-line" />Study area boundary</span><p>Detection records do not identify unique confirmed fire incidents.</p></div>}
     </aside>}
 
     {/* Navigation: top-right, icon buttons with hover labels */}
