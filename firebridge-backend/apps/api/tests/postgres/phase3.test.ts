@@ -4,6 +4,7 @@ import { createApp } from '../../src/app.js';
 import { nativeIds, seedNativeResults } from '../helpers/native-fixture.js';
 import { ids } from '../helpers/database.js';
 import { disconnectDatabase } from '@firebridge/database';
+import { HISTORICAL_MAX_WINDOW_DAYS } from '@firebridge/contracts';
 import { disconnectRedis } from '../../src/config/redis.js';
 
 describe('Phase 3 native results on PostgreSQL/PostGIS', () => {
@@ -118,6 +119,28 @@ describe('Phase 3 native results on PostgreSQL/PostGIS', () => {
     expect(data.coverage.fraction).toBeNull();
     expect(data.report_counts_by_review_status).toBeNull();
     expect(data.limitations).toContain('DETECTIONS_ARE_NOT_UNIQUE_INCIDENTS');
+  });
+  it.each([
+    ['2014-01-01', '2026-11-11', 4697],
+    ['2000-01-01', '2026-11-11', 9811],
+    ['2000-01-01', new Date(Date.parse('2000-01-01') + HISTORICAL_MAX_WINDOW_DAYS * 86400000).toISOString().slice(0, 10), HISTORICAL_MAX_WINDOW_DAYS]
+  ])('serves a longer daily calendar from %s to %s', async (start, end, days) => {
+    await pool.query('UPDATE firebridge.analyses SET start_date=$1,end_date_exclusive=$2 WHERE id=$3', [start, end, nativeIds.analysis]);
+    const response = await get('calendar');
+    expect(response.statusCode).toBe(200);
+    const periods = response.json().data.periods;
+    expect(periods).toHaveLength(days);
+    expect(periods[0].start).toBe(start + 'T00:00:00.000Z');
+    expect(periods[periods.length - 1].end_exclusive).toBe(end + 'T00:00:00.000Z');
+    expect(periods[0].counts_by_source).toContainEqual(expect.objectContaining({ source_id: 'terra', count: null, count_status: 'unknown' }));
+    expect(periods.find((period: { start: string }) => period.start.startsWith('2024-01-17')).counts_by_source)
+      .toContainEqual(expect.objectContaining({ source_id: 'terra', count: '2', count_status: 'complete' }));
+  });
+  it('still bounds daily calendar output for oversized saved intervals', async () => {
+    await pool.query("UPDATE firebridge.analyses SET start_date='1990-01-01' WHERE id=$1", [nativeIds.analysis]);
+    const response = await get('calendar');
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error.code).toBe('SCOPE_TOO_LARGE');
   });
   it('includes empty days with zero only for verified complete source inventory', async () => {
     const res = await get('calendar');
