@@ -427,4 +427,34 @@
     .fb-shell .map-frame .map-draw-tool { padding: 0 10px; }
     .fb-shell .map-frame .map-draw-bar { left: 8px; right: 8px; translate: none; transform: none; flex-wrap: wrap; }
   }
+
+  /* ── Fire atlas ─────────────────────────────────────────────────────────── */
+  .map-stage { position: absolute; inset: 0; }
+  .map-frame.map-frame-docked { display: flex; flex-direction: column; }
+  .map-frame.map-frame-docked > .map-stage { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; }
+  .map-frame.map-frame-docked > .atlas-deck { flex: none; }
+  .fb-shell .fbx-workspace .fb-map-panel .map-frame.map-frame-docked {
+    height: clamp(600px, calc(100dvh - 230px), 960px); min-height: 600px;
+  }
+  @media (max-width: 720px) {
+    .fb-shell .fbx-workspace .fb-map-panel .map-frame.map-frame-docked { height: auto; min-height: 0; }
+    .map-frame.map-frame-docked > .map-stage { flex: none; height: 440px; }
+  }
+  .map-frame.map-frame-docked:fullscreen { height: 100dvh; }
+  .atlas-popup { z-index: 14; }
+  .atlas-popup .maplibregl-popup-content {
+    padding: 14px 16px; border-radius: 16px; color: var(--color-fg);
+    border: 1px solid rgb(255 255 255 / 0.1);
+    background: color-mix(in oklab, var(--color-ink-900) 92%, transparent);
+    backdrop-filter: blur(12px); box-shadow: 0 24px 48px -20px rgb(0 0 0 / 0.95);
+    animation: scale-in 0.22s var(--ease-out-expo) both;
+  }
+  .atlas-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+  .atlas-popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+  .atlas-popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color: var(--color-ink-900); }
+  .atlas-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+  .atlas-popup.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+  .atlas-popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color: var(--color-ink-900); }
+  .atlas-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--color-ink-900); }
+  .atlas-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--color-ink-900); }
 }
