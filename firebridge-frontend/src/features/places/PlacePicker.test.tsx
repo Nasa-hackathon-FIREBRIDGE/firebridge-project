@@ -111,8 +111,12 @@ describe('choosing a zone on the map', () => {
   it('selects by clicking the map, and explains what cannot be analysed', async () => {
     render(<Harness onUse={vi.fn()} />)
     await bar().findByText('Click a country on the map, or search for it.')
+    // A click can only pick an outline that is already drawn: wait for each layer before clicking,
+    // as a person would (on a slow machine the click otherwise lands before the data arrives).
+    await waitFor(() => expect(map.sources.get('places-countries')?.data?.features).toHaveLength(2))
     map.click({ id: 'MAR', source: 'places-countries' })
     await bar().findByText('Click a region on the map, or search.')
+    await waitFor(() => expect(map.sources.get('places-units')?.data?.features).toHaveLength(2))
     map.click({ id: 'gb-2', source: 'places-units' })
     expect(bar().getByText('Souss-Massa')).toBeInTheDocument()
 
