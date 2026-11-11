@@ -33,7 +33,8 @@ it('preserves drawer Tab wrapping and the explicit close action', async () => {
   fireEvent.click(menu)
   const dialog = screen.getByRole('dialog')
   const first = within(dialog).getByRole('link', { name: 'FIREBRIDGE home' })
-  const last = within(dialog).getByRole('link', { name: 'Preferences' })
+  const navLinks = within(dialog).getAllByRole('link')
+  const last = navLinks[navLinks.length - 1]
   last.focus(); fireEvent.keyDown(document, { key: 'Tab' }); expect(first).toHaveFocus()
   first.focus(); fireEvent.keyDown(document, { key: 'Tab', shiftKey: true }); expect(last).toHaveFocus()
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close navigation' }))
@@ -46,5 +47,9 @@ it('keeps desktop navigation and published/synthetic scope without modal or noti
   expect(screen.getByRole('link', { name: 'Analysis workspace' })).toHaveAttribute('href', '/analyses')
   expect(screen.getByText(/Test releases can contain synthetic records/)).toBeVisible()
   expect(screen.queryByText('Demo assistant')).not.toBeInTheDocument()
+  // The synthetic demonstration and its Preferences page are hidden from the public app.
+  expect(screen.queryByText('Demonstration')).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Preferences' })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Sources & credits' })).toHaveAttribute('href', '/sources')
   expect(screen.queryByRole('button', { name: 'Dismiss notification' })).not.toBeInTheDocument()
 })
