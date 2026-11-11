@@ -1,4 +1,4 @@
-import { Crosshair, Layers2, Map, Maximize, Minimize, Minus, Pentagon, Plus, RectangleHorizontal, RotateCcw, Trash2, X, ListFilter } from 'lucide-react'
+import { Crosshair, Globe2, Layers2, Map, Maximize, Minimize, Minus, Pentagon, Plus, RectangleHorizontal, RotateCcw, Trash2, X, ListFilter } from 'lucide-react'
 import type { BasemapChoice, BasemapSelection } from '../basemap'
 import { useRef } from 'react'
 
@@ -7,7 +7,7 @@ export type DrawShape = 'rectangle' | 'polygon'
 export function MapWorkspaceControls({ panel, onPanel, choice, onChoice, selection, configured,
   drawActive, onDraw, onClear, onZoom, onFit, onNorth, onFullscreen, fullscreen,
   showArea, onShowArea, showDetections, onShowDetections, showBasemap, onShowBasemap,
-  apiMode, recordMode, atlasMode = false, promptDraw = false,
+  apiMode, recordMode, atlasMode = false, promptDraw = false, onPick,
 }: {
   panel: 'layers' | 'basemap' | 'legend' | null; onPanel: (panel: 'layers' | 'basemap' | 'legend' | null) => void
   choice: BasemapChoice; onChoice: (choice: BasemapChoice) => void; selection: BasemapSelection; configured: boolean
@@ -16,6 +16,8 @@ export function MapWorkspaceControls({ panel, onPanel, choice, onChoice, selecti
   showArea: boolean; onShowArea?: (visible: boolean) => void; showDetections: boolean; onShowDetections?: (visible: boolean) => void
   showBasemap: boolean; onShowBasemap: (visible: boolean) => void; apiMode: boolean; recordMode: boolean; atlasMode?: boolean
   promptDraw?: boolean
+  /** Choose a country, region, province or forest instead of drawing. */
+  onPick?: () => void
 }) {
   const basemapButton = useRef<HTMLButtonElement>(null)
   const layersButton = useRef<HTMLButtonElement>(null)
@@ -59,9 +61,10 @@ export function MapWorkspaceControls({ panel, onPanel, choice, onChoice, selecti
     {/* Drawing: bottom-centre, labelled. Replaced by the drawing bar while a shape is in progress. */}
     {!drawActive && (
       <div className="map-draw-toolbar" role="group" aria-label="Draw a study area" data-prompt={promptDraw || undefined}>
-        {promptDraw && <span className="map-draw-prompt">Start here · draw your study area</span>}
+        {promptDraw && <span className="map-draw-prompt">{onPick ? "Start here · draw an area or pick a place" : "Start here · draw your study area"}</span>}
         <button type="button" className="map-draw-tool" aria-label="Draw rectangle" onClick={() => { onPanel(null); onDraw('rectangle') }}><RectangleHorizontal size={16} aria-hidden="true" />Rectangle</button>
         <button type="button" className="map-draw-tool" aria-label="Draw polygon" onClick={() => { onPanel(null); onDraw('polygon') }}><Pentagon size={16} aria-hidden="true" />Polygon</button>
+        {onPick && <button type="button" className="map-draw-tool" aria-label="Choose a country, region or forest" onClick={() => { onPanel(null); onPick() }}><Globe2 size={16} aria-hidden="true" />Place</button>}
         <span className="map-control-separator" aria-hidden="true" />
         <button type="button" className="map-draw-tool map-draw-tool--icon" aria-label="Clear selected area" data-tip="Clear area" onClick={onClear}><Trash2 size={16} aria-hidden="true" /></button>
       </div>
