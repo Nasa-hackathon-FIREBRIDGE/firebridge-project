@@ -15,6 +15,8 @@ import { useAtlas } from '../atlas/useAtlas'
 import { AtlasDeck } from '../atlas/AtlasDeck'
 import { AtlasLegend, AtlasLoading, AtlasPopup, AtlasTooltip, ReplayClock } from '../atlas/AtlasOverlays'
 import { TemporalPanel } from '../observations/TemporalPanel'
+import { useCatalog } from '../../hooks/useCatalog'
+import type { PickedPlace } from '../places/PlacePicker'
 
 const MapView = lazy(() =>
   import('../../components/MapView').then((module) => ({ default: module.MapView })),
@@ -35,6 +37,7 @@ export function SpatialPanel({
   error,
   filters = emptyObservationFilters,
   onFiltersChange,
+  onPlace,
 }: {
   area: AreaOfInterest | null
   analysisId?: string
@@ -47,10 +50,14 @@ export function SpatialPanel({
   error: unknown
   filters?: ObservationFilters
   onFiltersChange?: (value: ObservationFilters) => void
+  /** A country, region, province or forest chosen on the map as the study area. */
+  onPlace?: (place: PickedPlace) => void
   /** Retained for callers; the map now guides drawing directly. */
   onSetup?: () => void
 }) {
   const analysis = useAnalysis(analysisId)
+  const [picking, setPicking] = useState(false)
+  const limits = useCatalog(undefined, { enabled: !!onPlace && picking, staleTime: 60_000 }).data?.limits
   const all = useAllDetections(analysisId)
   const start = analysis.data?.start_date
   const endExclusive = analysis.data?.end_date_exclusive
@@ -120,6 +127,9 @@ export function SpatialPanel({
                 onAreaDrawn={onDraw}
                 onAreaRejected={onReject}
                 onClearArea={onClear}
+                onPlacePicked={onPlace}
+                onPickingChange={setPicking}
+                maxAreaKm2={limits?.max_aoi_area_km2}
                 promptDraw={!area && !analysisId}
                 atlas={atlas && showLayer ? atlas.layer : undefined}
                 footer={atlas ? <AtlasDeck atlas={atlas} /> : undefined}
