@@ -21,9 +21,9 @@ import AnalysisWorkspace from './AnalysisWorkspace'
 
 // WebGL is tested separately. These tests exercise real components, hooks and Axios services.
 vi.mock('../../components/MapView', () => ({
-  MapView: ({ apiAnalysisId }: { apiAnalysisId?: string }) => (
+  MapView: ({ apiAnalysisId, footer }: { apiAnalysisId?: string; footer?: unknown }) => (
     <div data-testid="api-map">
-      {apiAnalysisId ? `API layer ${apiAnalysisId}` : 'No API tiles requested'}
+      {footer ? 'Fire atlas' : apiAnalysisId ? `API layer ${apiAnalysisId}` : 'No API tiles requested'}
     </div>
   ),
 }))
@@ -215,7 +215,9 @@ describe('API workspace integration with isolated HTTP responses', () => {
     current = { ...current, status: 'partial', job: null }
     await act(async () => { await clients.at(-1)!.refetchQueries({ queryKey: apiKeys.analysis(analysisId), exact: true }) })
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Analysis preparation' })).not.toBeInTheDocument())
-    expect(screen.getByTestId('api-map')).toHaveTextContent(`API layer ${analysisId}`)
+    // Server tiles while every detection loads, then the in-browser fire atlas.
+    expect(screen.getByTestId('api-map')).toHaveTextContent(new RegExp(`API layer ${analysisId}|Fire atlas`))
+    await waitFor(() => expect(screen.getByTestId('api-map')).toHaveTextContent('Fire atlas'))
   })
   it.each([
     { status: 'ready' as const, job: null },
