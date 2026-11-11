@@ -1,27 +1,11 @@
-import type { PolygonGeometry } from '@firebridge/contracts'
+import type { MultiPolygonGeometry, PolygonGeometry } from '@firebridge/contracts'
 import { UserInputError } from '../../lib/userFeedback'
 
 const geometryError = (message: string) => new UserInputError(message, 'geometry')
 
-/** Preserve holes/elevation and antimeridian edges; PostGIS owns topology and budgets. */
-export function parseAreaGeometry(input: string): PolygonGeometry {
-  let value: unknown
-  try {
-    value = JSON.parse(input)
-  } catch {
-    throw geometryError('Enter valid GeoJSON geometry JSON.')
-  }
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    !('type' in value) ||
-    value.type !== 'Polygon' ||
-    !('coordinates' in value) ||
-    !Array.isArray(value.coordinates) ||
-    !value.coordinates.length
-  )
-    throw geometryError('Provide a GeoJSON Polygon geometry with at least one ring.')
-  for (const ring of value.coordinates) {
+function checkRings(rings: unknown) {
+  if (!Array.isArray(rings) || !rings.length) throw geometryError('Each polygon needs at least one ring.')
+  for (const ring of rings) {
     if (!Array.isArray(ring) || ring.length < 4)
       throw geometryError('Each ring needs at least three vertices and a closing position.')
     for (const p of ring) {
@@ -46,7 +30,23 @@ export function parseAreaGeometry(input: string): PolygonGeometry {
     if (new Set(ring.slice(0, -1).map((p: number[]) => `${p[0]},${p[1]}`)).size < 3)
       throw geometryError('Each ring needs three distinct vertices.')
   }
-  return value as PolygonGeometry
+}
+
+/** Preserve holes/elevation and antimeridian edges; PostGIS owns topology and budgets. */
+export function parseAreaGeometry(input: string): PolygonGeometry | MultiPolygonGeometry {
+  let value: unknown
+  try {
+    value = JSON.parse(input)
+  } catch {
+    throw geometryError('Enter valid GeoJSON geometry JSON.')
+  }
+  const type = value && typeof value === 'object' && 'type' in value ? value.type : undefined
+  const coordinates = value && typeof value === 'object' && 'coordinates' in value ? value.coordinates : undefined
+  if ((type !== 'Polygon' && type !== 'MultiPolygon') || !Array.isArray(coordinates) || !coordinates.length)
+    throw geometryError('Provide a GeoJSON Polygon or MultiPolygon geometry with at least one ring.')
+  if (type === 'Polygon') checkRings(coordinates)
+  else for (const polygon of coordinates) checkRings(polygon)
+  return value as PolygonGeometry | MultiPolygonGeometry
 }
 export function validDateRange(start: string, end: string): boolean {
   const valid = (s: string) =>

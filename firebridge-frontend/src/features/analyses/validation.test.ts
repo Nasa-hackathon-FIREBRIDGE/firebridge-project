@@ -24,6 +24,16 @@ describe('Area and interval input boundaries', () => {
     }
     expect(parseAreaGeometry(JSON.stringify(geometry))).toEqual(geometry)
   })
+  it('accepts a region made of several parts', () => {
+    const geometry = {
+      type: 'MultiPolygon',
+      coordinates: [
+        [[[2, 43], [3, 43], [3, 44], [2, 43]]],
+        [[[5, 43], [6, 43], [6, 44], [5, 43]]],
+      ],
+    }
+    expect(parseAreaGeometry(JSON.stringify(geometry))).toEqual(geometry)
+  })
   it.each([
     '{',
     '{}',
@@ -31,6 +41,9 @@ describe('Area and interval input boundaries', () => {
     '{"type":"Polygon","coordinates":[]}',
     '{"type":"Polygon","coordinates":[[[0,0],[1,0],[0,1],[1,1]]]}',
     '{"type":"Polygon","coordinates":[[[181,0],[1,0],[0,1],[181,0]]]}',
+    '{"type":"MultiPolygon","coordinates":[]}',
+    '{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[0,1],[0,0]]],[]]}',
+    '{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[0,1],[1,1]]]]}',
   ])('rejects malformed geometry: %s', (input) => {
     expect(() => parseAreaGeometry(input)).toThrow()
   })
