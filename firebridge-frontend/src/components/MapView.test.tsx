@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     layers = new Set<string>()
     remove = vi.fn()
     resize = vi.fn()
+    refreshTiles = vi.fn()
     setStyle = vi.fn((style: unknown) => {
       this.options.style = style
       this.sources.clear()
@@ -59,7 +60,7 @@ const mocks = vi.hoisted(() => {
     addSource(id: string, definition?: unknown) { this.sources.set(id, { setData: vi.fn() }); this.sourceDefinitions.set(id, definition) }
     removeSource(id: string) { this.sources.delete(id) }
     removeLayer(id: string) { this.layers.delete(id) }
-    getSource(id: string) { return this.sources.get(id) }
+    getSource(id: string) { return this.sources.get(id) ?? ((this.options.style as { sources?: Record<string, unknown> } | undefined)?.sources?.[id] ? { setData: vi.fn() } : undefined) }
     addLayer(layer: { id: string }) { this.layers.add(layer.id) }
     getLayer(id: string) { return this.layers.has(id) ? { id } : undefined }
   }
@@ -165,6 +166,22 @@ describe('MapView with mocked MapLibre', () => {
     expect(screen.queryByText('Loading basemap…')).toBeNull()
   })
 
+  it('does not give up on imagery while the map is hidden, since a hidden map requests no tiles', () => {
+    vi.useFakeTimers()
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    renderMap({ styleUrl: STYLE, styleTimeoutMs: 500 })
+    act(() => { vi.advanceTimersByTime(5000) })
+    expect(screen.queryByText(/SCHEMATIC VIEW/)).toBeNull()
+
+    visibility.mockReturnValue('visible')
+    act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+    act(() => { vi.advanceTimersByTime(400) })
+    expect(screen.queryByText(/SCHEMATIC VIEW/)).toBeNull()
+    act(() => { vi.advanceTimersByTime(200) })
+    expect(screen.getByText(/did not load in time/)).toBeTruthy()
+    visibility.mockRestore()
+  })
+
   it('ignores post-load errors such as a single failed tile', () => {
     renderMap({ styleUrl: STYLE })
     act(() => lastMap().emit('style.load'))
@@ -248,14 +265,28 @@ describe('MapView with mocked MapLibre', () => {
   })
 
   it('resizes the map when its container changes size', () => {
-    let trigger: () => void = () => {}
+    let trigger: (entries: unknown[]) => void = () => {}
     const disconnect = vi.fn()
-    vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { trigger = callback } observe() {} disconnect = disconnect })
+    vi.stubGlobal('ResizeObserver', class { constructor(callback: (entries: unknown[]) => void) { trigger = callback } observe() {} disconnect = disconnect })
     const { unmount } = renderMap()
-    trigger()
+    trigger([{ contentRect: { width: 800, height: 500 } }])
     expect(lastMap().resize).toHaveBeenCalled()
     unmount()
     expect(disconnect).toHaveBeenCalled()
+  })
+
+  it('waits for imagery while the map sits in a hidden tab, and starts counting once it is shown', () => {
+    vi.useFakeTimers()
+    let trigger: (entries: unknown[]) => void = () => {}
+    vi.stubGlobal('ResizeObserver', class { constructor(callback: (entries: unknown[]) => void) { trigger = callback } observe() {} disconnect() {} })
+    renderMap({ styleUrl: STYLE, styleTimeoutMs: 500 })
+    act(() => trigger([{ contentRect: { width: 0, height: 0 } }]))
+    act(() => { vi.advanceTimersByTime(5000) })
+    expect(screen.queryByText(/SCHEMATIC VIEW/)).toBeNull()
+
+    act(() => trigger([{ contentRect: { width: 800, height: 500 } }]))
+    act(() => lastMap().emit('style.load'))
+    expect(screen.queryByText(/SCHEMATIC VIEW/)).toBeNull()
   })
 })
 
@@ -276,15 +307,43 @@ describe('MapView real-API layer integration (mocked renderer)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset map orientation' }))
     expect(map.easeTo).toHaveBeenCalledWith(expect.objectContaining({ bearing: 0, pitch: 0 }))
   })
-  it('distinguishes failed satellite imagery from API data and offers explicit recovery choices', () => {
+  it('keeps failing satellite imagery in place, retries it on its own, and recovers without a click', () => {
+    vi.useFakeTimers()
     renderMap({ apiMode: true, records: [], basemapProvider: 'nasa-gibs' })
     act(() => lastMap().emit('style.load'))
-    act(() => { for (let i = 0; i < 3; i++) lastMap().emit('error', { sourceId: 'firebridge-nasa-imagery', error: new Error('offline') }) })
-    expect(screen.getByText(/NASA satellite tiles could not be loaded/)).toBeTruthy()
-    expect(screen.getByText(/SCHEMATIC VIEW — not satellite imagery/)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Retry background' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Try streets' })).toBeTruthy()
+    const map = lastMap()
+    expect(map.layers.has('astra-graticule')).toBe(true) // the grid sits under the imagery
+    act(() => { for (let i = 0; i < 3; i++) map.emit('error', { sourceId: 'firebridge-nasa-imagery', error: new Error('offline') }) })
+    expect(screen.getByText('NASA satellite is slow to arrive')).toBeTruthy()
+    expect(screen.getByText(/keeps trying on its own/)).toBeTruthy()
+    expect(screen.queryByText(/SCHEMATIC VIEW/)).toBeNull()
     expect(screen.queryByText('Analysis tiles could not be loaded')).toBeNull()
+    expect(map.setStyle).not.toHaveBeenCalled()
+
+    act(() => { vi.advanceTimersByTime(4_000) })
+    expect(map.refreshTiles).toHaveBeenCalledWith('firebridge-nasa-imagery')
+    act(() => { vi.advanceTimersByTime(8_000) })
+    expect(map.refreshTiles).toHaveBeenCalledTimes(2) // backing off while nothing arrives
+    act(() => { window.dispatchEvent(new Event('online')) })
+    expect(map.refreshTiles).toHaveBeenCalledTimes(3)
+
+    act(() => map.emit('data', { sourceId: 'firebridge-nasa-imagery', dataType: 'source', tile: {} }))
+    expect(screen.queryByText('NASA satellite is slow to arrive')).toBeNull()
+  })
+
+  it('offers a manual retry and another background while imagery is slow', () => {
+    vi.useFakeTimers()
+    renderMap({ apiMode: true, records: [], basemapProvider: 'nasa-gibs', styleTimeoutMs: 500 })
+    act(() => lastMap().emit('style.load'))
+    act(() => { vi.advanceTimersByTime(600) })
+    const map = lastMap()
+    expect(screen.getByText('NASA satellite is slow to arrive')).toBeTruthy()
+    expect(map.refreshTiles).toHaveBeenCalledTimes(1) // asked again as soon as the deadline passed
+    fireEvent.click(screen.getByRole('button', { name: 'Try now' }))
+    expect(map.refreshTiles).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Use street map' }))
+    expect(map.setStyle).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/slow to arrive/)).toBeNull()
   })
   it('switches between native record inspection and aggregate tiles without recreating the map', () => {
     const nativeRecords: import('../features/observations/types').DetectionFeature[] = resultFixtures.detections.features.map((feature) => ({
@@ -439,21 +498,38 @@ describe('Optional Esri World Imagery provider (mocked MapLibre; no real tiles)'
     expect(screen.getByText(/SCHEMATIC VIEW/)).toBeTruthy()
   })
 
-  it('falls back after repeated tile failures before any tile loads', () => {
+  it('keeps the imagery after repeated tile failures before any tile loads', () => {
     renderMap({ basemapProvider: 'esri-world-imagery' })
     act(() => lastMap().emit('style.load'))
     for (let index = 0; index < 3; index += 1) act(() => lastMap().emit('error', { sourceId: 'astra-esri-world-imagery', error: new Error('net') }))
-    expect(screen.getByText(/imagery tiles could not be loaded/i)).toBeTruthy()
-    expect(lastMap().setStyle).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Esri World Imagery is slow to arrive')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use NASA satellite' })).toBeTruthy()
+    expect(lastMap().setStyle).not.toHaveBeenCalled()
   })
 
-  it('keeps the imagery and warns when tiles fail after some loaded', () => {
+  it('quietly asks again for tiles that fail after the imagery has loaded', () => {
+    vi.useFakeTimers()
     renderMap({ basemapProvider: 'esri-world-imagery' })
     act(() => lastMap().emit('style.load'))
     act(() => lastMap().emit('data', { sourceId: 'astra-esri-world-imagery', dataType: 'source', tile: {} }))
     act(() => lastMap().emit('error', { sourceId: 'astra-esri-world-imagery', error: new Error('tile 500') }))
-    expect(screen.getByText('Some imagery tiles failed to load')).toBeTruthy()
+    expect(screen.queryByText(/slow to arrive/)).toBeNull()
+    act(() => { vi.advanceTimersByTime(4_000) })
+    expect(lastMap().refreshTiles).toHaveBeenCalledTimes(1)
+    act(() => { vi.advanceTimersByTime(60_000) })
+    expect(lastMap().refreshTiles).toHaveBeenCalledTimes(1) // tiles had loaded, so no endless loop
     expect(lastMap().setStyle).not.toHaveBeenCalled()
+  })
+
+  it('records an area drawn before any imagery arrived as unverified', () => {
+    const { props } = renderMap({ basemapProvider: 'esri-world-imagery' })
+    act(() => lastMap().emit('style.load'))
+    const ring = [[-6, 34], [-5, 34], [-5, 35], [-6, 34]]
+    act(() => lastDraw().finish('early', { type: 'Polygon', coordinates: [ring] }))
+    expect(props.onAreaDrawn).toHaveBeenLastCalledWith({ type: 'Polygon', coordinates: [ring] }, 'schematic')
+    act(() => lastMap().emit('data', { sourceId: 'astra-esri-world-imagery', dataType: 'source', tile: {} }))
+    act(() => lastDraw().finish('later', { type: 'Polygon', coordinates: [ring] }))
+    expect(props.onAreaDrawn).toHaveBeenLastCalledWith({ type: 'Polygon', coordinates: [ring] }, 'real')
   })
 })
 
