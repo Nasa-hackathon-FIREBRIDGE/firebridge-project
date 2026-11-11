@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+  HISTORICAL_MAX_WINDOW_DAYS,
   nativeProcessingLevels,
   nativePartitionSources,
   relevantNativePartitions,
@@ -421,8 +422,8 @@ export class NativeResultsService {
           start: left < s.filter.start ? s.filter.start : left,
           end_exclusive: current.toISOString() > s.filter.end ? s.filter.end : current.toISOString()
         });
-        if (buckets.length > 3660)
-          throw new ApiError(422, 'SCOPE_TOO_LARGE', 'Request at most 3660 calendar periods.');
+        if (buckets.length > HISTORICAL_MAX_WINDOW_DAYS)
+          throw new ApiError(422, 'SCOPE_TOO_LARGE', `Request at most ${HISTORICAL_MAX_WINDOW_DAYS} calendar periods.`);
       }
       const supported = s.ready && !s.unsupported.length;
       const rows = supported ? await db.counts(s.filter, resolution) : [];
