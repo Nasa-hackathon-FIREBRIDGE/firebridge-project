@@ -1,4 +1,4 @@
-/** GeoJSON Polygon input in WGS84. The total vertex/surface limits come from env.
+/** GeoJSON Polygon or MultiPolygon input in WGS84. The total vertex/surface limits come from env.
  * Short edges are unwrapped, validated, and split at the dateline before storage.
  * Self-intersections and empty geometry are rejected by PostGIS; surface uses geography.
  */
@@ -59,21 +59,36 @@ const linearRingSchema = z
  * The vertex limit applies to all rings combined.
  * PostGIS ST_IsValid enforces structural validity (self-intersection, etc.).
  */
-const polygonGeometrySchema = z
+const polygonCoordinatesSchema = z.array(linearRingSchema).min(1, 'Polygon must have at least one ring (exterior).');
+
+const polygonGeometrySchema = z.object({ type: z.literal('Polygon'), coordinates: polygonCoordinatesSchema }).strict();
+
+/** Several polygons (islands, separate patches of one region or forest), stored as one area. */
+const multiPolygonGeometrySchema = z
   .object({
-    type: z.literal('Polygon'),
-    coordinates: z
-      .array(linearRingSchema)
-      .min(1, 'Polygon must have at least one ring (exterior).')
+    type: z.literal('MultiPolygon'),
+    coordinates: z.array(polygonCoordinatesSchema).min(1, 'MultiPolygon must have at least one polygon.')
   })
-  .strict()
-  .refine((geometry) => geometry.coordinates.reduce((sum, ring) => sum + ring.length, 0) <= env.MAX_AOI_VERTICES, 'Polygon exceeds the total vertex limit.');
+  .strict();
+
+const vertexCount = (rings: number[][][]) => rings.reduce((sum, ring) => sum + ring.length, 0);
+
+/** The vertex limit applies to every ring of every part combined. */
+const areaGeometrySchema = z
+  .discriminatedUnion('type', [polygonGeometrySchema, multiPolygonGeometrySchema])
+  .refine(
+    (geometry) =>
+      (geometry.type === 'Polygon'
+        ? vertexCount(geometry.coordinates)
+        : geometry.coordinates.reduce((sum, polygon) => sum + vertexCount(polygon), 0)) <= env.MAX_AOI_VERTICES,
+    'Area exceeds the total vertex limit.'
+  );
 
 // ─── Area create schema ───────────────────────────────────────────────────────
 
 export const areaCreateSchema = z
   .object({
-    geometry: polygonGeometrySchema,
+    geometry: areaGeometrySchema,
     name: z.string().trim().min(1).max(500),
     version: z.string().trim().min(1).max(100),
     display_timezone: z.string().trim().min(1).max(100).refine((value) => {
