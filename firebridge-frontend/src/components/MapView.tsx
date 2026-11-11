@@ -10,6 +10,7 @@ import { validatePolygon } from '../geometry'
 import { envBasemapConfig, resolveBasemap, selectBasemap, type BasemapChoice, type BasemapSelection } from '../basemap'
 import { MapWorkspaceControls, type DrawShape } from './MapWorkspaceControls'
 import { useAnalysisTiles } from '../features/maps/useAnalysisTiles'
+import { registerImageryProtocol } from '../features/maps/imageryCache'
 import type { DetectionFeature } from '../features/observations/types'
 import { useAtlasLayers, type AtlasLayerConfig } from '../features/atlas/useAtlasLayers'
 import { PlacePicker, type PickedPlace } from '../features/places/PlacePicker'
@@ -108,7 +109,8 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
   const drawRef = useRef<TerraDraw | null>(null)
   const callbacks = useRef({ onSelect, onAreaDrawn, onAreaRejected })
   const [fallbackReason, setFallbackReason] = useState<string | null>(selection.kind === 'schematic' ? selection.reason : null)
-  const [tileIssue, setTileIssue] = useState(false)
+  const [imageryDelayed, setImageryDelayed] = useState(false)
+  const retryImagery = useRef<(() => void) | null>(null)
   const [vertexCount, setVertexCount] = useState(0)
   const [styleLoaded, setStyleLoaded] = useState(false)
   const [styleRevision, setStyleRevision] = useState(0)
@@ -172,7 +174,10 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
     let tilesLoaded = false
     let tileErrors = 0
     let current = selectionRef.current
+    let retryId: number | undefined
+    let attempt = 0
 
+    registerImageryProtocol()
     const map = new maplibregl.Map({
       container,
       style: current.kind === 'style-url' ? current.url : current.kind === 'schematic' ? schematicStyle : current.style,
@@ -196,9 +201,35 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
     map.addControl(new maplibregl.AttributionControl({ compact: false }), 'bottom-right')
     mapRef.current = map
 
+    const imagerySources = () => (current.kind === 'esri' || current.kind === 'raster' ? Object.keys(current.style.sources) : [])
+    // Slow or failing imagery never replaces the map: the grid underneath shows through while tiles are asked for again.
+    const scheduleRetry = () => {
+      if (disposed || retryId !== undefined) return
+      retryId = window.setTimeout(refreshImagery, Math.min(30_000, 4_000 * 2 ** attempt))
+    }
+    const refreshImagery = () => {
+      window.clearTimeout(retryId)
+      retryId = undefined
+      if (disposed || basemapRef.current === 'schematic' || !current.sourceId) return
+      attempt += 1
+      for (const id of imagerySources()) if (map.getSource(id)) map.refreshTiles(id)
+      if (!tilesLoaded) scheduleRetry()
+    }
+    const markDelayed = () => {
+      setImageryDelayed(true)
+      refreshImagery()
+    }
+    const stopRetrying = () => {
+      window.clearTimeout(retryId)
+      retryId = undefined
+      attempt = 0
+      setImageryDelayed(false)
+    }
+
     const switchToFallback = (reason: string) => {
       if (disposed || basemapRef.current === 'schematic') return
       window.clearTimeout(timeoutId)
+      stopRetrying()
       basemapRef.current = 'schematic'
       loaded = false
       setStyleLoaded(false)
@@ -212,14 +243,16 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
     const ensureLayers = () => {
       if (disposed) return
       loaded = true
-      basemapLayerIds.current = basemapRef.current === 'schematic' ? ['background', 'astra-graticule'] : current.kind === 'style-url' ? (map.getStyle?.().layers ?? []).map((layer) => layer.id) : current.kind === 'schematic' ? [] : current.style.layers.map((layer) => layer.id)
+      const imagery = basemapRef.current === 'real' && (current.kind === 'esri' || current.kind === 'raster') ? current.style.layers : null
+      basemapLayerIds.current = basemapRef.current === 'schematic' ? ['background', 'astra-graticule'] : current.kind === 'style-url' ? (map.getStyle?.().layers ?? []).map((layer) => layer.id) : imagery ? [...imagery.map((layer) => layer.id), 'astra-graticule'] : []
       if (current.kind === 'schematic' || !current.sourceId || tilesLoaded) window.clearTimeout(timeoutId)
       setStyleLoaded(true)
       setStyleRevision((value) => value + 1)
       if (current.kind === 'style-url') setImageryReady(true)
-      if (basemapRef.current === 'schematic' && !map.getSource('astra-graticule')) {
+      if ((basemapRef.current === 'schematic' || imagery) && !map.getSource('astra-graticule')) {
         map.addSource('astra-graticule', { type: 'geojson', data: graticule(apiMode) })
-        map.addLayer({ id: 'astra-graticule', type: 'line', source: 'astra-graticule', paint: { 'line-color': '#2a3e4d', 'line-width': 0.8 } })
+        // Under satellite imagery the grid only shows where tiles have not arrived.
+        map.addLayer({ id: 'astra-graticule', type: 'line', source: 'astra-graticule', paint: { 'line-color': '#2a3e4d', 'line-width': 0.8 } }, imagery?.find((layer) => layer.type === 'raster')?.id)
       }
       if (!map.getSource('astra-study-area')) {
         map.addSource('astra-study-area', { type: 'geojson', data: sourceData.current.areaFeature })
@@ -258,7 +291,7 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
           draw.setMode('view')
           setDrawControl((current) => ({ ...current, active: false }))
           const result = validatePolygon(feature?.geometry)
-          if (result.ok) callbacks.current.onAreaDrawn(result.geometry, basemapRef.current)
+          if (result.ok) callbacks.current.onAreaDrawn(result.geometry, basemapRef.current === 'real' && (!current.sourceId || tilesLoaded) ? 'real' : 'schematic')
           else callbacks.current.onAreaRejected?.(result.reason)
         })
         draw.on('change', () => {
@@ -273,7 +306,7 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
     map.on('style.load', ensureLayers)
     map.on('data', (event) => {
       const data = event as { sourceId?: string; dataType?: string; tile?: unknown }
-      if (data.sourceId === current.sourceId && data.dataType === 'source' && data.tile) { tilesLoaded = true; setTileIssue(false); setImageryReady(true); window.clearTimeout(timeoutId) }
+      if (data.sourceId === current.sourceId && data.dataType === 'source' && data.tile) { tilesLoaded = true; attempt = 0; setImageryDelayed(false); setImageryReady(true); window.clearTimeout(timeoutId) }
     })
     map.on('error', (event) => {
       if (disposed) return
@@ -282,31 +315,53 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
         switchToFallback('Configured basemap access was denied. Check its browser-safe API token and allowed origins, or choose another background map.')
         return
       }
-      if (current.sourceId && (event as { sourceId?: string }).sourceId === current.sourceId) {
-        tileErrors += 1
-        if (!tilesLoaded && tileErrors >= 3) switchToFallback(`${current.label} tiles could not be loaded (network unavailable or blocked).`)
-        else if (tilesLoaded) setTileIssue(true)
+      const sourceId = (event as { sourceId?: string }).sourceId
+      if (sourceId && imagerySources().includes(sourceId)) {
+        if (sourceId === current.sourceId) tileErrors += 1
+        if (!tilesLoaded && tileErrors >= 3) setImageryDelayed(true)
+        scheduleRetry()
         return
       }
       if (!loaded && basemapRef.current === 'real') {
         switchToFallback('The configured basemap style could not be loaded. Check your connection or use the schematic view.')
       }
     })
+    // A map in a hidden tab panel or a background browser tab requests no tiles, so the deadline only runs while it is on screen.
+    let size: { width: number; height: number } | null = null
+    const onScreen = () => document.visibilityState !== 'hidden' && (!size || (size.width > 0 && size.height > 0))
+    const waiting = () => basemapRef.current !== 'schematic' && (!loaded || (!!current.sourceId && !tilesLoaded))
     const armTimeout = () => {
       window.clearTimeout(timeoutId)
-      if (current.kind !== 'schematic') timeoutId = window.setTimeout(() => {
-        if (!loaded || (current.sourceId && !tilesLoaded)) switchToFallback('The selected basemap did not load in time. Choose another background map or retry.')
+      if (current.kind !== 'schematic' && onScreen()) timeoutId = window.setTimeout(() => {
+        if (!waiting()) return
+        if (loaded) markDelayed()
+        else switchToFallback('The selected basemap did not load in time. Choose another background map or retry.')
       }, styleTimeoutMs)
     }
+    let shown = onScreen()
+    const screenChanged = () => {
+      if (disposed || onScreen() === shown) return
+      shown = !shown
+      if (waiting()) armTimeout()
+      if (shown && retryId !== undefined) refreshImagery()
+    }
+    const retryNow = () => {
+      attempt = 0
+      refreshImagery()
+    }
+    const backOnline = () => { if (retryId !== undefined) retryNow() }
+    retryImagery.current = retryNow
+    document.addEventListener('visibilitychange', screenChanged)
+    window.addEventListener('online', backOnline)
     armTimeout()
     switchStyle.current = (next) => {
       current = next
       loaded = false
       tilesLoaded = false
       tileErrors = 0
+      stopRetrying()
       setStyleLoaded(false)
       setImageryReady(false)
-      setTileIssue(false)
       setFallbackReason(next.kind === 'schematic' ? next.reason : null)
       basemapRef.current = next.kind === 'schematic' ? 'schematic' : 'real'
       drawRef.current?.stop()
@@ -315,12 +370,22 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
       map.setStyle(next.kind === 'style-url' ? next.url : next.kind === 'schematic' ? schematicStyle : next.style)
     }
 
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { if (!disposed) map.resize() })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver((entries) => {
+      if (disposed) return
+      const box = entries[entries.length - 1]?.contentRect
+      if (box) size = { width: box.width, height: box.height }
+      map.resize()
+      screenChanged()
+    })
     observer?.observe(container)
 
     return () => {
       disposed = true
+      document.removeEventListener('visibilitychange', screenChanged)
+      window.removeEventListener('online', backOnline)
       window.clearTimeout(timeoutId)
+      window.clearTimeout(retryId)
+      retryImagery.current = null
       switchStyle.current = null
       observer?.disconnect()
       drawRef.current?.stop()
@@ -433,7 +498,7 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
     // Terra Draw finishes on its Enter key handler, which listens on the map canvas.
     mapRef.current?.getCanvas().dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }))
   }
-  const loading = basemap === 'real' && (!styleLoaded || !imageryReady) && showBasemap
+  const loading = basemap === 'real' && (!styleLoaded || !imageryReady) && showBasemap && !imageryDelayed
   async function toggleFullscreen() {
     try {
       if (document.fullscreenElement === frameRef.current) await document.exitFullscreen()
@@ -455,7 +520,13 @@ export function MapView({ records, nativeRecords, selectedId, onSelect, area, sh
       )}
       {loading && <div className="map-loading" role="status">Loading basemap…</div>}
       {controlError && <div className="map-control-error" role="status">{controlError}<button type="button" onClick={() => setControlError('')} aria-label="Dismiss map control message">×</button></div>}
-      {tileIssue && basemap === 'real' && <div className="map-basemap-banner map-tile-issue" role="status"><strong>Some imagery tiles failed to load</strong><span>Detections remain usable; check your network connection.</span></div>}
+      {imageryDelayed && basemap === 'real' && showBasemap && (
+        <div className="map-basemap-banner map-imagery-delayed" role="status">
+          <strong>{selection.label} is slow to arrive</strong>
+          <span>Detections stay usable meanwhile, and the map keeps trying on its own.</span>
+          <div className="map-recovery-actions"><button type="button" onClick={() => retryImagery.current?.()}>Try now</button><button type="button" onClick={() => setChoice(selection.key.startsWith('nasa-') ? 'streets' : 'satellite')}>Use {selection.key.startsWith('nasa-') ? 'street map' : 'NASA satellite'}</button></div>
+        </div>
+      )}
       {!apiMode && records.length === 0 && <div className="map-empty" role="status"><strong>No demo records match the current filters</strong><span>Adjust the date range, platforms, search, FRP minimum or area.</span></div>}
       {apiMode && apiAnalysisId && showDetections && apiTileState !== 'ready' && <div className="map-empty" role={apiTileState === 'error' ? 'alert' : 'status'}><strong>{apiTileState === 'error' ? 'Analysis tiles could not be loaded' : apiTileState === 'empty' ? 'No detections in the visible tiles' : 'Loading analysis tiles…'}</strong><span>{apiTileState === 'error' ? 'Check analysis availability or request limits. Hide and re-enable the layer to retry.' : 'Tile counts are aggregated records, not observation coverage.'}</span></div>}
       <MapWorkspaceControls panel={panel} onPanel={setPanel} choice={choice} onChoice={setChoice} selection={selection} configured={configured.key !== 'nasa-satellite'}
