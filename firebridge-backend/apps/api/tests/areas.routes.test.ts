@@ -377,22 +377,65 @@ describe('POST /api/v1/areas — invalid inputs', () => {
     expect(response.json().code).toBe('VALIDATION_ERROR');
   });
 
-  it('returns HTTP 400 when geometry type is not Polygon', async () => {
+  it('accepts a MultiPolygon: a region or forest made of several parts', async () => {
+    const create = vi.spyOn(areasService, 'createArea').mockResolvedValue(AREA_RECORD);
+    const geometry = {
+      type: 'MultiPolygon',
+      coordinates: [
+        [[[2.0, 43.0], [3.0, 43.0], [3.0, 44.0], [2.0, 44.0], [2.0, 43.0]]],
+        [[[5.0, 43.0], [6.0, 43.0], [6.0, 44.0], [5.0, 44.0], [5.0, 43.0]]]
+      ]
+    };
+    const app = await buildApp();
+    const response = await app.inject({ method: 'POST', url: '/api/v1/areas', payload: { ...VALID_BODY, geometry } });
+
+    expect(response.statusCode).toBe(201);
+    expect(create).toHaveBeenCalledWith({ ...VALID_BODY, geometry });
+  });
+
+  it('returns HTTP 400 when geometry is neither a Polygon nor a MultiPolygon', async () => {
     const app = await buildApp();
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/areas',
-      payload: {
-        ...VALID_BODY,
-        geometry: {
-          type: 'MultiPolygon', // only Polygon is accepted at the API boundary
-          coordinates: [[[[2.0, 43.0], [3.0, 43.0], [3.0, 44.0], [2.0, 44.0], [2.0, 43.0]]]]
-        }
-      }
+      payload: { ...VALID_BODY, geometry: { type: 'LineString', coordinates: [[2.0, 43.0], [3.0, 44.0]] } }
     });
 
     expect(response.statusCode).toBe(400);
     expect(response.json().code).toBe('VALIDATION_ERROR');
+  });
+
+  it('returns HTTP 400 when the parts of a MultiPolygon together exceed the vertex limit', async () => {
+    const create = vi.spyOn(areasService, 'createArea');
+    // Two parts of 2,600 positions each: each fits alone, together they exceed 5,000.
+    const part = (x: number) => {
+      const ring = Array.from({ length: 2599 }, (_, i) => {
+        const angle = (2 * Math.PI * i) / 2599;
+        return [x + Math.cos(angle) * 0.4, 43.5 + Math.sin(angle) * 0.4];
+      });
+      return [[...ring, ring[0]!]];
+    };
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/areas',
+      payload: { ...VALID_BODY, geometry: { type: 'MultiPolygon', coordinates: [part(2.5), part(5.5)] } }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('VALIDATION_ERROR');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('returns HTTP 400 for a MultiPolygon with no parts', async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/areas',
+      payload: { ...VALID_BODY, geometry: { type: 'MultiPolygon', coordinates: [] } }
+    });
+
+    expect(response.statusCode).toBe(400);
   });
 
   it('returns HTTP 400 when service rejects a self-intersecting polygon', async () => {
