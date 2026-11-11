@@ -24,11 +24,12 @@ import type { AreaOfInterest } from '../../types'
 import { ObservationsPanel } from '../observations/ObservationsPanel'
 import { ProvenancePanel } from '../observations/ProvenancePanel'
 import { ContextPanel } from '../observations/ContextPanel'
-import { AreaPanel } from './AreaPanel'
+import { AreaPanel, type AreaSuggestion } from './AreaPanel'
 import { AnalysisPanel } from './AnalysisPanel'
 import { ExportPanel } from './ExportPanel'
 import { HealthStatus } from './HealthStatus'
 import { SpatialPanel } from './SpatialPanel'
+import type { PickedPlace } from '../places/PlacePicker'
 import { parseAreaGeometry } from './validation'
 import { UserInputError } from '../../lib/userFeedback'
 import { ApiError, Status } from './Feedback'
@@ -110,6 +111,8 @@ export default function AnalysisWorkspace() {
   const areaId = selectedAnalysis?.area_id ?? accepted?.areaId ?? (params.get('area') || undefined)
   const area = useArea(areaId)
   const [geometryText, setGeometryText] = useState('')
+  // A place picked on the map arrives named: the area form starts from its name, source and time zone.
+  const [areaSuggestion, setAreaSuggestion] = useState<AreaSuggestion | null>(null)
   const [drawingError, setDrawingError] = useState<unknown>(null)
   const [clearToken, setClearToken] = useState(0)
   const [showLayer, setShowLayer] = useState(true)
@@ -182,6 +185,7 @@ export default function AnalysisWorkspace() {
   const onDraw = useCallback(
     (geometry: GeoJSON.Polygon) => {
       setGeometryText(JSON.stringify(geometry, null, 2))
+      setAreaSuggestion((current) => (current ? { key: current.key + 1 } : current))
       setDrawingError(null)
       setParams({})
       // Guide straight to the next action: name and save the drawn area.
@@ -194,9 +198,26 @@ export default function AnalysisWorkspace() {
     },
     [setParams],
   )
+  const onPlace = useCallback(
+    (place: PickedPlace) => {
+      setGeometryText(JSON.stringify(place.geometry))
+      setAreaSuggestion((current) => ({ key: (current?.key ?? 0) + 1, name: place.name, provenance: place.provenance, timezone: place.timezone }))
+      setDrawingError(null)
+      setParams({})
+      // The area is already named: the next step is saving it.
+      requestAnimationFrame(() => {
+        if (setupPanel.current) setupPanel.current.open = true
+        const editor = document.querySelector<HTMLDetailsElement>('#study-area .fb-editor')
+        if (editor) editor.open = true
+        document.querySelector<HTMLButtonElement>('#study-area .fw-primary-submit')?.focus({ preventScroll: true })
+      })
+    },
+    [setParams],
+  )
   const onReject = useCallback((reason: string) => setDrawingError(new UserInputError(reason)), [])
   const onClear = useCallback(() => {
     setGeometryText('')
+    setAreaSuggestion((current) => (current ? { key: current.key + 1 } : current))
     setParams({})
     setClearToken((value) => value + 1)
   }, [setParams])
@@ -419,6 +440,7 @@ export default function AnalysisWorkspace() {
               error={drawingError}
               filters={filters}
               onFiltersChange={changeFilters}
+              onPlace={onPlace}
               onSetup={focusSetup}
             />
           </div>
@@ -460,6 +482,7 @@ export default function AnalysisWorkspace() {
                     onGeometryText={setGeometryText}
                     onStartDrawing={startDrawing}
                     onSavingState={setAreaSaving}
+                    suggestion={areaSuggestion ?? undefined}
                   />
                 </div>
                 <div id="request-analysis">
