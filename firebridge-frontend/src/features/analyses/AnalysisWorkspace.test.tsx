@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import type { AnalysisView } from '@firebridge/contracts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -61,7 +61,16 @@ function mount(search = '') {
     </QueryClientProvider>,
   )
 }
-function LocationProbe() { const location = useLocation(); return <output aria-label="Current workspace URL">{location.pathname}{location.search}{location.hash}</output> }
+function LocationProbe() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  return (
+    <>
+      <output aria-label="Current workspace URL">{location.pathname}{location.search}{location.hash}</output>
+      <button type="button" onClick={() => navigate(-1)}>Browser back</button>
+    </>
+  )
+}
 function installApi({ ready = false, missing = false, failed = false, expired = false } = {}) {
   const requests: { url: string; body: unknown; key: unknown }[] = []
   api.defaults.adapter = async (config) => {
@@ -393,6 +402,30 @@ describe('API workspace integration with isolated HTTP responses', () => {
     expect(mapTab).toHaveFocus()
     expect(screen.getByRole('status', { name: 'Current workspace URL' })).toHaveTextContent(`/analyses?analysis=${analysisId}`)
     expect(screen.getByTestId('api-map')).toBe(map)
+  })
+  it('opens a fresh workspace from "New analysis", and Back returns to the previous analysis', async () => {
+    installApi({ ready: true })
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    mount(`?analysis=${analysisId}`)
+    await screen.findByRole('heading', { level: 1, name: 'TEST ONLY area' })
+    fireEvent.change(screen.getByLabelText('Start date (UTC)'), { target: { value: '2024-03-01' } })
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }))
+    const map = screen.getByTestId('api-map')
+
+    fireEvent.click(screen.getByRole('link', { name: 'New analysis' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Analysis workspace' })).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Current workspace URL' })).toHaveTextContent(/^\/analyses$/)
+    expect(screen.getByRole('tab', { name: 'Map workspace' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('api-map')).not.toBe(map)
+    expect(screen.getByText('No API tiles requested')).toBeInTheDocument()
+    expect(screen.getByLabelText('Start date (UTC)')).toHaveValue('')
+    expect(screen.getByLabelText('Area name')).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Set up an analysis' })).toBeInTheDocument()
+    expect(scrollTo).toHaveBeenCalledWith(0, 0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browser back' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'TEST ONLY area' })).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Current workspace URL' })).toHaveTextContent(`/analyses?analysis=${analysisId}#analysis-overview`)
   })
   it('keeps invalid interval reasons visible without requesting an analysis', async () => {
     const requests = installApi({ ready: true })
