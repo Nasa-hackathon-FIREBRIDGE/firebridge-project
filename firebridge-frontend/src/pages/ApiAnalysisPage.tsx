@@ -26,16 +26,16 @@ import { ArrowUpRight, Database } from 'lucide-react'
 import { PageHeader } from '../components/workspace/PageHeader'
 
 const panels = {
-  summary: { label: 'Résumé', component: SummaryPanel },
-  detections: { label: 'Détections', component: DetectionsPanel },
-  calendar: { label: 'Calendrier', component: CalendarPanel },
+  summary: { label: 'Summary', component: SummaryPanel },
+  detections: { label: 'Detections', component: DetectionsPanel },
+  calendar: { label: 'Calendar', component: CalendarPanel },
   provenance: { label: 'Provenance', component: ProvenancePanel },
-  coverage: { label: 'Couverture', component: CoveragePanel },
-  cell: { label: 'Cellule', component: CellPanel },
-  comparison: { label: 'Comparaison', component: ComparisonPanel },
-  weather: { label: 'Météo', component: WeatherPanel },
-  reports: { label: 'Rapports', component: ReportsPanel },
-  explanation: { label: 'Explication', component: ExplanationRequestPanel },
+  coverage: { label: 'Coverage', component: CoveragePanel },
+  cell: { label: 'Grid cell', component: CellPanel },
+  comparison: { label: 'Comparison', component: ComparisonPanel },
+  weather: { label: 'Weather', component: WeatherPanel },
+  reports: { label: 'Reports', component: ReportsPanel },
+  explanation: { label: 'Explanation', component: ExplanationRequestPanel },
 }
 type ResultTab = keyof typeof panels
 const resultTabs = Object.keys(panels) as ResultTab[]
@@ -47,7 +47,7 @@ export default function ApiAnalysisPage() {
     <div className="page-content api-workspace platform-results-page">
       <PageHeader eyebrow="RESEARCH / STRUCTURED RESULTS" title="Results explorer" description="Inspect saved observations, prepared scientific results and source metadata. Test datasets retain their synthetic labels." action={id ? <Link className="button button-secondary" to={`/analyses?analysis=${encodeURIComponent(id)}`}>Open map workspace<ArrowUpRight size={14} /></Link> : undefined} />
       <section className="panel api-section platform-analysis-loader">
-        <h2>Choisir une analyse enregistrée</h2>
+        <h2>Choose a saved analysis</h2>
         <form
           className="api-form"
           onSubmit={(e) => {
@@ -56,17 +56,17 @@ export default function ApiAnalysisPage() {
           }}
         >
           <label>
-            Identifiant d’analyse
-            <input name="analysis" required pattern={uuidPattern} placeholder="UUID de l’analyse" />
+            Analysis ID
+            <input name="analysis" required pattern={uuidPattern} placeholder="Analysis UUID" />
           </label>
-          <button className="button button-primary">Ouvrir l’analyse</button>
+          <button className="button button-primary">Open analysis</button>
         </form>
         <CreateAnalysis onCreated={setId} />
       </section>
       {id ? (
         <AnalysisResults key={id} id={id} />
       ) : (
-        <div className="platform-empty-register"><Database size={30} /><h2>Open a saved analysis</h2><p>Ouvrir une analyse existante ou en créer une sur une zone déjà enregistrée.</p><small>Records, calendar, coverage and context are loaded only as you open their tabs.</small></div>
+        <div className="platform-empty-register"><Database size={30} /><h2>Open a saved analysis</h2><p>Open an existing analysis, or create one on an area that is already saved.</p><small>Records, calendar, coverage and context are loaded only as you open their tabs.</small></div>
       )}
     </div>
   )
@@ -80,7 +80,7 @@ function CreateAnalysis({ onCreated }: { onCreated: (id: string) => void }) {
   const dateErrorId = useId()
   return (
     <details>
-      <summary>Créer une analyse native sur une zone existante</summary>
+      <summary>Create a native analysis on a saved area</summary>
       <form
         className="api-form"
         onSubmit={(e) => {
@@ -96,7 +96,7 @@ function CreateAnalysis({ onCreated }: { onCreated: (id: string) => void }) {
           if (!validDateRange(input.start_date, input.end_date_exclusive)) {
             setFormError(
               new UserInputError(
-                'Choisissez une fin exclusive strictement après le premier jour UTC.',
+                'Choose an exclusive end date strictly after the first UTC day.',
                 'end',
               ),
             )
@@ -116,28 +116,28 @@ function CreateAnalysis({ onCreated }: { onCreated: (id: string) => void }) {
         }}
       >
         <label>
-          Zone enregistrée (UUID)
+          Saved area (UUID)
           <input name="area" required pattern={uuidPattern} />
         </label>
         <label>
-          Premier jour UTC
+          First UTC day
           <input name="start" type="date" required onChange={() => setFormError(null)} />
         </label>
         <label>
-          Fin exclusive UTC
+          Exclusive UTC end
           <input
             ref={endInput}
             name="end"
             type="date"
             required
-            aria-label="Fin exclusive UTC"
+            aria-label="Exclusive UTC end"
             aria-invalid={!!formError}
             aria-describedby={formError ? dateErrorId : undefined}
             onChange={() => setFormError(null)}
           />
           {formError && (
             <span id={dateErrorId} className="fb-field-error">
-              La date de fin est exclue. Elle doit être après le premier jour UTC.
+              The end date is excluded. It must be after the first UTC day.
             </span>
           )}
         </label>
@@ -146,14 +146,14 @@ function CreateAnalysis({ onCreated }: { onCreated: (id: string) => void }) {
           disabled={mutation.isPending}
           aria-busy={mutation.isPending}
         >
-          Créer l’analyse
+          Create analysis
         </button>
       </form>
       <ApiErrorMessage operation="write" error={formError} />
       <ApiErrorMessage operation="write" error={mutation.error} />
       <p>
-        La zone doit avoir été créée au préalable. La période est [début, fin exclusive[ ; la
-        dernière date n’est pas incluse.
+        The area must already be saved. The period is [start, exclusive end): the
+        last date is not included.
       </p>
     </details>
   )
@@ -169,24 +169,24 @@ function AnalysisResults({ id }: { id: string }) {
   }
   return (
     <div className="api-stack">
-      {analysis.isPending && <p role="status">Chargement de l’analyse…</p>}
+      {analysis.isPending && <p role="status">Loading the analysis…</p>}
       <ApiErrorMessage error={analysis.error} />
       {analysis.data && (
         <>
           <section className="panel api-section">
             <Facts
               values={{
-                Analyse: id,
-                État: analysis.data.status,
-                'Version satellite': analysis.data.release_id,
-                'Premier jour': analysis.data.start_date,
-                'Fin exclusive': analysis.data.end_date_exclusive,
+                Analysis: id,
+                Status: analysis.data.status,
+                'Satellite release': analysis.data.release_id,
+                'First day': analysis.data.start_date,
+                'Exclusive end': analysis.data.end_date_exclusive,
               }}
             />
           </section>
           {['queued', 'running'].includes(analysis.data.status) ? (
             <p role="status">
-              Analyse en attente de traitement. Le worker doit être lancé pour exécuter sa tâche.
+              The analysis is waiting to be processed. A worker must be running to execute it.
             </p>
           ) : analysis.data.status === 'failed' ? (
             <FeedbackMessage
@@ -199,7 +199,7 @@ function AnalysisResults({ id }: { id: string }) {
               <div
                 className="api-tabs"
                 role="tablist"
-                aria-label="Résultats d’analyse"
+                aria-label="Analysis results"
                 onKeyDown={(event) => {
                   const index = resultTabs.indexOf(tab)
                   const next =
