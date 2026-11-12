@@ -32,7 +32,7 @@ function respond(payload: (url: string, params: Record<string, unknown>) => unkn
     data: {
       schema_version: '1',
       request_id: 'test',
-      warnings: ['Fixture de test'],
+      warnings: ['Test fixture'],
       data: payload(config.url!, config.params ?? {}),
     },
   })
@@ -59,8 +59,8 @@ describe('Connected data screens', () => {
     }))
     render(<SummaryPanel id="a" />, { wrapper })
     await screen.findByText('noaa21')
-    expect(screen.getAllByText('Inconnu / non disponible').length).toBeGreaterThan(0)
-    expect(screen.getByText('Fixture de test')).toBeTruthy()
+    expect(screen.getAllByText('Unknown / not available').length).toBeGreaterThan(0)
+    expect(screen.getByText('Test fixture')).toBeTruthy()
     expect(screen.getByText('DETECTIONS_ARE_NOT_UNIQUE_INCIDENTS')).toBeTruthy()
   })
   it('resets a signed cursor when the user applies new detection filters', async () => {
@@ -72,13 +72,13 @@ describe('Connected data screens', () => {
     render(<DetectionsPanel id="a" />, { wrapper })
     await waitFor(() =>
       expect(
-        (screen.getByRole('button', { name: 'Page suivante' }) as HTMLButtonElement).disabled,
+        (screen.getByRole('button', { name: 'Next page' }) as HTMLButtonElement).disabled,
       ).toBe(false),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Page suivante' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
     await waitFor(() => expect(requests.at(-1)?.cursor).toBe('signed-page2'))
     fireEvent.change(screen.getByLabelText(/Sources \(/), { target: { value: 'terra' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Appliquer les filtres' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }))
     await waitFor(() => expect(requests.at(-1)?.source_ids).toBe('terra'))
     expect(requests.at(-1)?.cursor).toBeUndefined()
   })
@@ -103,13 +103,13 @@ describe('Connected data screens', () => {
     })
     render(<ApiAnalysisPage />, { wrapper })
     expect(calls).toHaveLength(0)
-    fireEvent.change(screen.getByLabelText('Identifiant d’analyse'), {
+    fireEvent.change(screen.getByLabelText('Analysis ID'), {
       target: { value: 'a3000000-0000-4000-8000-000000000001' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir l’analyse' }))
-    await screen.findByRole('region', { name: 'Résumé de l’analyse' })
-    fireEvent.click(screen.getByRole('tab', { name: 'Météo' }))
-    await screen.findByText('État des données :')
+    fireEvent.click(screen.getByRole('button', { name: 'Open analysis' }))
+    await screen.findByRole('region', { name: 'Analysis summary' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Weather' }))
+    await screen.findByText('Data status:')
     expect(calls.filter((url) => url.endsWith('/weather'))).toHaveLength(1)
     expect(calls.some((url) => url.endsWith('/reports'))).toBe(false)
   })
@@ -128,18 +128,18 @@ describe('Connected data screens', () => {
       return { ...analysisFixture, status: 'partial', job: null }
     })
     render(<ApiAnalysisPage />, { wrapper })
-    fireEvent.change(screen.getByLabelText('Identifiant d’analyse'), {
+    fireEvent.change(screen.getByLabelText('Analysis ID'), {
       target: { value: 'a3000000-0000-4000-8000-000000000001' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir l’analyse' }))
-    await screen.findByRole('tab', { name: 'Détections' })
-    fireEvent.click(screen.getByRole('tab', { name: 'Détections' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open analysis' }))
+    await screen.findByRole('tab', { name: 'Detections' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Detections' }))
     fireEvent.change(screen.getByLabelText(/Sources \(/), { target: { value: 'terra' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Appliquer les filtres' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }))
     await waitFor(() => expect(calls.some((call) => call.params.source_ids === 'terra')).toBe(true))
-    fireEvent.click(screen.getByRole('tab', { name: 'Météo' }))
-    await screen.findByText('État des données :')
-    fireEvent.click(screen.getByRole('tab', { name: 'Détections' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Weather' }))
+    await screen.findByText('Data status:')
+    fireEvent.click(screen.getByRole('tab', { name: 'Detections' }))
     expect((screen.getByLabelText(/Sources \(/) as HTMLInputElement).value).toBe('terra')
     expect(calls.filter((call) => call.params.source_ids === 'terra')).toHaveLength(1)
   })
@@ -174,14 +174,14 @@ describe('Connected data screens', () => {
       }
     }
     render(<ApiAnalysisPage />, { wrapper })
-    fireEvent.click(screen.getByText('Créer une analyse native sur une zone existante'))
-    fireEvent.change(screen.getByLabelText('Zone enregistrée (UUID)'), {
+    fireEvent.click(screen.getByText('Create a native analysis on a saved area'))
+    fireEvent.change(screen.getByLabelText('Saved area (UUID)'), {
       target: { value: '11111111-1111-4111-8111-111111111111' },
     })
-    fireEvent.change(screen.getByLabelText('Premier jour UTC'), { target: { value: '2024-01-03' } })
-    const end = screen.getByLabelText('Fin exclusive UTC')
+    fireEvent.change(screen.getByLabelText('First UTC day'), { target: { value: '2024-01-03' } })
+    const end = screen.getByLabelText('Exclusive UTC end')
     fireEvent.change(end, { target: { value: '2024-01-02' } })
-    const form = screen.getByRole('button', { name: 'Créer l’analyse' }).closest('form')!
+    const form = screen.getByRole('button', { name: 'Create analysis' }).closest('form')!
     fireEvent.submit(form)
     expect(posts).toBe(0)
     expect(end.getAttribute('aria-invalid')).toBe('true')
@@ -193,7 +193,7 @@ describe('Connected data screens', () => {
     await act(async () => {
       release()
     })
-    await screen.findByRole('tab', { name: 'Résumé' })
+    await screen.findByRole('tab', { name: 'Summary' })
     expect(posts).toBe(1)
   })
   it('keeps an explanation retry key and displays its fetched result', async () => {
@@ -216,7 +216,7 @@ describe('Connected data screens', () => {
             data: {
               explanation_id: 'explanation-id',
               status: 'template_fallback',
-              output: { summary: 'Synthèse de test' },
+              output: { summary: 'Test summary' },
             },
           },
         }
@@ -239,11 +239,11 @@ describe('Connected data screens', () => {
       }
     }
     render(<ExplanationRequestPanel id="a" />, { wrapper })
-    fireEvent.click(screen.getByRole('button', { name: 'Demander la synthèse' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Request the summary' }))
     await screen.findByRole('alert')
-    fireEvent.click(screen.getByRole('button', { name: 'Demander la synthèse' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Request the summary' }))
     await screen.findByText('explanation-id')
-    await screen.findByText('Synthèse de test')
+    await screen.findByText('Test summary')
     expect(reads).toEqual(['/explanations/explanation-id'])
     expect(keys).toHaveLength(2)
     expect(keys[1]).toBe(keys[0])
@@ -270,10 +270,10 @@ describe('Connected data screens', () => {
     }
     render(<IngestionPage />, { wrapper })
     expect(calls).toBe(0)
-    fireEvent.change(screen.getByLabelText('Jeton d’administration'), {
+    fireEvent.change(screen.getByLabelText('Administration token'), {
       target: { value: 'memory-only-test-token' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Accéder à l’administration' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open administration' }))
     await waitFor(() => expect(calls).toBe(2))
     expect(
       JSON.stringify(
@@ -284,8 +284,8 @@ describe('Connected data screens', () => {
       ),
     ).not.toContain('memory-only-test-token')
     expect(localStorage.length).toBe(0)
-    fireEvent.click(screen.getByRole('button', { name: /Fermer la session/ }))
-    await screen.findByLabelText('Jeton d’administration')
+    fireEvent.click(screen.getByRole('button', { name: /Close the session/ }))
+    await screen.findByLabelText('Administration token')
     expect(client.getQueryCache().getAll()).toHaveLength(0)
     expect(api.defaults.headers.common.Authorization).toBeUndefined()
   })
