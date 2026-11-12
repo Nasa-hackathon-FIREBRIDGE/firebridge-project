@@ -28,7 +28,7 @@ import {
 import { ChatWidget } from './ChatWidget'
 import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { LogoMark, Wordmark } from './brand/Logo'
-import { SHOW_DEMONSTRATION } from '../config/features'
+import { SHOW_DEMONSTRATION, SHOW_INGESTION_ADMIN } from '../config/features'
 
 type NavItem = { to: string; label: string; icon: LucideIcon }
 
@@ -54,7 +54,7 @@ const demonstrations: NavItem[] = !SHOW_DEMONSTRATION ? [] : [
   { to: '/alerts', label: 'Watchlist', icon: AlertTriangle },
 ]
 const system: NavItem[] = [
-  { to: '/ingestion', label: 'Ingestion administration', icon: ShieldCheck },
+  ...(SHOW_INGESTION_ADMIN ? [{ to: '/ingestion', label: 'Ingestion administration', icon: ShieldCheck }] : []),
   // Preferences only configure the synthetic demonstration, so they share its switch.
   ...(SHOW_DEMONSTRATION ? [{ to: '/settings', label: 'Preferences', icon: Settings2 }] : []),
 ]
@@ -249,7 +249,7 @@ export function ApplicationShell({
             </summary>
             <div className="flex flex-col gap-0.5">{links(demonstrations)}</div>
           </details>}
-          {group('System', system)}
+          {system.length > 0 && group('System', system)}
         </nav>
         {sidebarFooter && <div className="relative border-t border-white/[0.06] p-4">{sidebarFooter}</div>}
       </aside>
