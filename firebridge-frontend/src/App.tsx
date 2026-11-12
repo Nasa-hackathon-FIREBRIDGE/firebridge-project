@@ -18,6 +18,7 @@ import { SHOW_DEMONSTRATION, SHOW_INGESTION_ADMIN } from './config/features'
 const HomePage = lazy(() => import('./pages/HomePage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const CatalogPage = lazy(() => import('./pages/CatalogPage'))
+const VisualizationPage = lazy(() => import('./pages/VisualizationPage'))
 const ApiAnalysisPage = lazy(() => import('./pages/ApiAnalysisPage'))
 const IngestionPage = lazy(() => import('./pages/IngestionPage'))
 
@@ -73,6 +74,7 @@ function AppPages() {
     <Routes>
       <Route path="/dashboard" element={<DashboardPage />} />
       <Route path="/catalog" element={<CatalogPage />} />
+      <Route path="/visualization" element={<VisualizationPage />} />
       <Route path="/analyses" element={<AnalysisWorkspace />} />
       <Route path="/api-analysis" element={<Suspense fallback={<p role="status">Loading…</p>}><ApiAnalysisPage /></Suspense>} />
       {/* Operator tool, hidden while SHOW_INGESTION_ADMIN is false (the URL redirects Home). */}

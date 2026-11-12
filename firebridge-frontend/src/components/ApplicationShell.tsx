@@ -39,6 +39,7 @@ const workspace: NavItem[] = [
 ]
 const data: NavItem[] = [
   { to: '/catalog', label: 'Data catalogue', icon: Database },
+  { to: '/visualization', label: 'Data visualization', icon: Activity },
   { to: '/evidence', label: 'Data & methods', icon: BookOpen },
   { to: '/sources', label: 'Sources & credits', icon: Library },
   { to: '/api-analysis', label: 'Results explorer', icon: Layers2 },
@@ -58,7 +59,7 @@ const system: NavItem[] = [
   // Preferences only configure the synthetic demonstration, so they share its switch.
   ...(SHOW_DEMONSTRATION ? [{ to: '/settings', label: 'Preferences', icon: Settings2 }] : []),
 ]
-const researchPaths = new Set(['/dashboard', '/analyses', '/api-analysis', '/catalog', '/ingestion'])
+const researchPaths = new Set(['/dashboard', '/analyses', '/api-analysis', '/catalog', '/visualization', '/ingestion'])
 
 export function ApplicationShell({
   children,
