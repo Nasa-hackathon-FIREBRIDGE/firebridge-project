@@ -50,7 +50,7 @@ describe('SensorSelector', () => {
   })
   it('shows the Suomi-NPP delivery note', () => {
     renderApp()
-    expect(screen.getByText(/Suomi-NPP products to users to cease on 2 Nov 2026 13:00 UTC/)).toBeTruthy()
+    expect(screen.getByText(/ended delivery of Suomi-NPP products to users on 2 Nov 2026 at 15:40 UTC/)).toBeTruthy()
   })
 })
 
