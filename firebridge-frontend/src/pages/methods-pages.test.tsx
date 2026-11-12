@@ -99,7 +99,7 @@ describe('Sources & credits page', () => {
     expect(within(models).getAllByText('Apache-2.0')).toHaveLength(2)
     expect(within(models).getByText('Humain terms')).toBeInTheDocument()
     const code = screen.getByRole('list', { name: 'FIREBRIDGE repositories' })
-    expect(within(code).getAllByText('MIT')).toHaveLength(2)
+    expect(within(code).getAllByText('MIT')).toHaveLength(3)
     expect(within(code).getByRole('link', { name: /web application and API/ })).toHaveAttribute('href', 'https://github.com/Nasa-hackathon-FIREBRIDGE/firebridge-project')
   })
 })
