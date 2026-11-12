@@ -1,58 +1,78 @@
 # FIREBRIDGE
 
-Version d'intégration de l'équipe, destinée au raccordement au pipeline de données.
+**A consistent fire history across changing satellites.** FIREBRIDGE turns NASA
+FIRMS active-fire records from MODIS (Terra, Aqua) and VIIRS (Suomi-NPP, NOAA-20,
+NOAA-21) into an explorable, reproducible calendar of burning activity for any
+area, while keeping every sensor difference visible. Built for the NASA Space
+Apps Challenge 2026, challenge "Harmonization of MODIS and VIIRS Hot Spots".
+
+- Live application: https://astramind.solutions
+- How the data is processed: https://astramind.solutions/evidence
+- Sources, licences and AI use: https://astramind.solutions/sources
+
+| Repository | Contents |
+|---|---|
+| This repository | Web application, API, workers and the in-browser harmonization engine |
+| [FireBridge-data-pipeline](https://github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-data-pipeline) | NASA FIRMS download, audit, indexing and publication |
+| [FireBridge-AI-Agent](https://github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-AI-Agent) | Explanation service behind the copilot |
+
+All three are released under the [MIT licence](LICENSE).
+
+## Layout
+
+This is the team's integration branch, connected to the data pipeline.
 
 ```text
-firebridge-backend/    API Fastify, worker, contrats et base de données
-firebridge-frontend/   Application React et intégration HTTP
+firebridge-backend/    Fastify API, worker, shared contracts and database
+firebridge-frontend/   React application and HTTP integration
 ```
 
-Les deux applications sont incluses dans un seul clone de la branche `staging`.
-Les rapports de travail restent consultables sur les branches de développement.
-Les tests automatisés et la CI restent dans le dépôt pour la maintenance ;
-les fichiers de tests et les Markdown du projet sont exclus des contextes Docker.
+Both applications are included in a single clone of the `staging` branch.
+Work reports remain available on the development branches. Automated tests and
+CI stay in the repository for maintenance; test files and project Markdown are
+excluded from the Docker build contexts.
 
-## Construction Docker
+## Docker build
 
-Depuis `firebridge-backend`, préparer un fichier `.env` privé à partir de
-`.env.example`, puis renseigner les secrets et les URL du déploiement :
+From `firebridge-backend`, create a private `.env` file from `.env.example`,
+then fill in the deployment secrets and URLs:
 
 ```bash
 docker compose config --quiet
 docker compose build api worker frontend
 ```
 
-Le Compose fourni décrit l'environnement de développement. Le démarrage sur
-le VPS doit utiliser la configuration et les réseaux prévus pour la base existante.
+The provided Compose file describes the development environment. Starting on
+the VPS must use the configuration and networks planned for the existing database.
 
-## Raccordement aux données réelles
+## Connecting to the real data
 
-- Référence : `docs/data/NODE_HANDOFF.md` du dépôt
-  [FireBridge-data-pipeline](https://github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-data-pipeline).
-- Vérifier la correspondance des vues `serving` du pipeline avec les repositories
-  du backend, ainsi que les droits de lecture et d'écriture applicatifs.
-- Coordonner les migrations avec le responsable data avant toute application
-  sur sa base. Le compte de lecture du pipeline ne suffit pas pour écrire les
-  zones, analyses et tâches de l'application.
-- Configurer `DOCKER_DATABASE_URL`, `DOCKER_REDIS_URL`, `DEFAULT_SCOPE_KEY`,
-  `FRONTEND_API_URL` et `CORS_ORIGINS` pour le serveur. Les secrets restent dans
-  les `.env` privés ; les URL frontend sont publiques et fixées au build.
-- Pour la production, utiliser `deploy/compose.production.yaml` et les variables
-  privées de `/opt/firebridge/webapp/runtime.env` ; voir [deploy/README.md](deploy/README.md).
-  Le Compose de développement ne doit pas remplacer la stack data existante.
+- Reference: `docs/data/NODE_HANDOFF.md` in the
+  [FireBridge-data-pipeline](https://github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-data-pipeline) repository.
+- Check that the pipeline's `serving` views match the backend repositories, as
+  well as the application's read and write permissions.
+- Coordinate migrations with the data lead before applying anything to their
+  database. The pipeline's read-only account is not enough to write the
+  application's areas, analyses and jobs.
+- Configure `DOCKER_DATABASE_URL`, `DOCKER_REDIS_URL`, `DEFAULT_SCOPE_KEY`,
+  `FRONTEND_API_URL` and `CORS_ORIGINS` for the server. Secrets stay in private
+  `.env` files; frontend URLs are public and fixed at build time.
+- For production, use `deploy/compose.production.yaml` and the private variables
+  in `/opt/firebridge/webapp/runtime.env`; see [deploy/README.md](deploy/README.md).
+  The development Compose file must not replace the existing data stack.
 
-Les images API, worker et frontend ont été construites dans cette structure.
-Les dépendances ont été actualisées avant exposition publique : les audits npm de
-production backend et frontend ne signalent aucune vulnérabilité au 8 novembre 2026.
-Six alertes modérées restent dans les outils de développement backend ; aucune
-alerte élevée ou critique n'est acceptée par la CI.
+The API, worker and frontend images have been built in this structure.
+Dependencies were updated before public exposure: the production npm audits of
+the backend and frontend reported no vulnerabilities on 8 November 2026. Six
+moderate alerts remain in backend development tools; CI accepts no high or
+critical alert.
 
-## Production Contabo
+## Production (Contabo)
 
-- Site : https://astramind.solutions ; API : `/api/v1`.
-- La branche `staging` est déployée après validation par `.github/workflows/webapp.yml`.
-- Configuration, réseau privé, compte SQL limité et fonctionnement CI/CD :
+- Site: https://astramind.solutions; API: `/api/v1`.
+- The `staging` branch is deployed after validation by `.github/workflows/webapp.yml`.
+- Configuration, private network, restricted SQL account and CI/CD operation:
   [deploy/README.md](deploy/README.md).
-- Les images sont construites/testées en CI, puis transférées par un compte SSH
-  dédié. Aucun secret serveur ne fait partie des images ou du dépôt.
-- La base de données et les pipelines existants restent dans leur propre stack.
+- Images are built and tested in CI, then transferred by a dedicated SSH account.
+  No server secret is part of the images or the repository.
+- The database and the existing pipelines stay in their own stack.
