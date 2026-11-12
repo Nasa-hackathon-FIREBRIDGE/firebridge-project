@@ -29,9 +29,11 @@ export const PLATFORMS: PlatformInfo[] = [
   {
     id: 'Suomi-NPP', sensor: 'VIIRS', label: 'Suomi-NPP', nativeProductId: null,
     operationalNote: {
-      effectiveUtc: '2026-11-02T13:00:00Z',
-      before: 'NOAA schedules delivery of Suomi-NPP products to users to cease on 2 Nov 2026 13:00 UTC (NOAA-21 primary, NOAA-20 secondary). Historical records are unaffected.',
-      after: 'NOAA scheduled delivery of Suomi-NPP products to users to cease on 2 Nov 2026 13:00 UTC (NOAA-21 primary, NOAA-20 secondary). Historical records are unaffected.',
+      // NOAA NESDIS notice of 3 Aug 2026 scheduled the end for 13:00 UTC; its Update #4 (2 Nov 2026,
+      // 18:00 UTC) records the actual end of delivery at 15:40 UTC.
+      effectiveUtc: '2026-11-02T15:40:00Z',
+      before: 'NOAA schedules delivery of Suomi-NPP products to users to end on 2 Nov 2026 (NOAA-21 primary, NOAA-20 secondary). Historical records are unaffected.',
+      after: 'NOAA ended delivery of Suomi-NPP products to users on 2 Nov 2026 at 15:40 UTC (NOAA-21 primary, NOAA-20 secondary). Historical records are unaffected.',
     },
   },
   { id: 'NOAA-20', sensor: 'VIIRS', label: 'NOAA-20', nativeProductId: null },
