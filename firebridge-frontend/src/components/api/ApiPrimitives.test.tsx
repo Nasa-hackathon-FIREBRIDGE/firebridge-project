@@ -9,7 +9,7 @@ it('sorts loaded numeric values while keeping unknown values distinct and last',
   fireEvent.click(screen.getByRole('button', { name: /frp mw/ }))
   const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1)
   expect(rows.map((row) => within(row).getAllByRole('cell')[0].textContent)).toEqual(['zero', 'measured', 'unknown'])
-  expect(rows[2].textContent).toContain('Inconnu / non disponible')
+  expect(rows[2].textContent).toContain('Unknown / not available')
 })
 it('searches locally and prevents users from hiding the last visible column', () => {
   render(<Records rows={[{ platform: 'Aqua', count: '12' }, { platform: 'Terra', count: '7' }]} />)
