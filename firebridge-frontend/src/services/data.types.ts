@@ -12,6 +12,8 @@ export type Detail = Record<string, unknown>
 export interface ReleaseSummary {
   id: string; name: string; scope_key: string; dataset_kind: string
   published_at: string; parent_release_id: string | null
+  /** Optional on older servers. The cutoff is exclusive. */
+  stream?: string; observation_cutoff?: string | null; code_version?: string
 }
 export interface ReleaseView extends ReleaseSummary {
   validation_status: string
