@@ -18,7 +18,20 @@ export interface CatalogView {
   sources: CatalogSource[]
   releases: ReleaseSummary[]
   /** Server limits for a study area; absent on older servers. */
-  limits?: { max_aoi_vertices: number; max_aoi_area_km2: number }
+  limits?: { max_aoi_vertices: number; max_aoi_area_km2: number; max_points_per_page?: number }
+  /** Optional on older servers. */
+  metrics?: CatalogMetric[]
+  release_aliases?: ReleaseAlias[]
+}
+
+export interface CatalogMetric {
+  id: string; version: string; unit: string; description: string
+  requires_masks: boolean; requires_model: boolean
+}
+
+/** A named pointer to the current release of one publication policy; `generation` counts its versions. */
+export interface ReleaseAlias {
+  alias: string; release_id: string; generation: string; published_at: string; dataset_kind: string
 }
 
 export const catalog = {
