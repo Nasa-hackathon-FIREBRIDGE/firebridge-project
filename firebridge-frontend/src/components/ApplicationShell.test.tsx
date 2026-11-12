@@ -50,6 +50,8 @@ it('keeps desktop navigation and published/synthetic scope without modal or noti
   // The synthetic demonstration and its Preferences page are hidden from the public app.
   expect(screen.queryByText('Demonstration')).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Preferences' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Ingestion administration' })).not.toBeInTheDocument()
+  expect(screen.queryByText('System')).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Sources & credits' })).toHaveAttribute('href', '/sources')
   expect(screen.queryByRole('button', { name: 'Dismiss notification' })).not.toBeInTheDocument()
 })
