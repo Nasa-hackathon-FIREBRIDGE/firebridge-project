@@ -1,3 +1,4 @@
+import { HISTORICAL_MAX_WINDOW_DAYS } from '@firebridge/contracts/analysis-limits'
 import { lazy, Suspense, useState } from 'react'
 import type { SensorKey } from '../../../lib/sensors'
 import { MODELS, type BridgeReport } from '../engine/index.ts'
@@ -26,7 +27,7 @@ export function HandoverAct({ report, platform }: { report: BridgeReport; platfo
         <p className="m-0 text-[13.5px] text-fg-2">
           A rehearsal needs at least two years in which Aqua and {name} both flew, Aqua in its original overpass regime, before the switch, and six such months after it to check the continuation against. This selection does not have that overlap.
         </p>
-        <Note>Request the same area from 2018 or earlier (up to ten years per analysis) to rehearse the handover.</Note>
+        <Note>Request the same area from 2018 or earlier (one analysis can span up to {HISTORICAL_MAX_WINDOW_DAYS.toLocaleString('en-US')} days, about 30 years) to rehearse the handover.</Note>
       </Act>
     )
 
