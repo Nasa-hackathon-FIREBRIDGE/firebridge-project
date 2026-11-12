@@ -5,13 +5,13 @@ export function ExplanationResult({ id }: { id: string }) {
   const query = useExplanation(id)
 
   return (
-    <ResourcePanel title="Résultat de l’explication" query={query}>
+    <ResourcePanel title="Explanation result" query={query}>
       {(data) => {
         if (['queued', 'running'].includes(data.status)) {
           return (
             <p role="status">
-              Explication en préparation. Le worker doit être lancé
-              pour traiter cette demande.
+              The explanation is being prepared. A worker must be running
+              to process this request.
             </p>
           )
         }
@@ -19,7 +19,7 @@ export function ExplanationResult({ id }: { id: string }) {
         if (['failed', 'rejected', 'cancelled'].includes(data.status)) {
           return (
             <p role="alert">
-              La génération n’a pas abouti. État : {data.status}.
+              Generation did not complete. Status: {data.status}.
             </p>
           )
         }
@@ -31,7 +31,7 @@ export function ExplanationResult({ id }: { id: string }) {
           return <StructuredValue value={data.output} />
         }
 
-        return <p>Aucun résultat disponible pour cet état : {data.status}.</p>
+        return <p>No result is available for this status: {data.status}.</p>
       }}
     </ResourcePanel>
   )
