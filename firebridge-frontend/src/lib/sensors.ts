@@ -22,7 +22,7 @@ export interface SensorMeta {
 export const SENSORS: Record<SensorKey, SensorMeta> = {
   terra: { key: 'terra', label: 'Terra', instrument: 'MODIS', color: '#f2c14e', pixel: '1 km', overpass: '10:30', since: 2000, note: 'Longest record · morning overpass' },
   aqua: { key: 'aqua', label: 'Aqua', instrument: 'MODIS', color: '#38c6f4', pixel: '1 km', overpass: '13:30', since: 2002, note: 'Proposed harmonization reference' },
-  snpp: { key: 'snpp', label: 'Suomi-NPP', instrument: 'VIIRS', color: '#a78bfa', pixel: '375 m', overpass: '13:30', since: 2012, until: 2026, note: 'User delivery scheduled to end 2 Nov 2026' },
+  snpp: { key: 'snpp', label: 'Suomi-NPP', instrument: 'VIIRS', color: '#a78bfa', pixel: '375 m', overpass: '13:30', since: 2012, until: 2026, note: 'User delivery ended 2 Nov 2026' },
   noaa20: { key: 'noaa20', label: 'NOAA-20', instrument: 'VIIRS', color: '#34d399', pixel: '375 m', overpass: '13:30', since: 2018 },
   noaa21: { key: 'noaa21', label: 'NOAA-21', instrument: 'VIIRS', color: '#f472b6', pixel: '375 m', overpass: '13:30', since: 2023 },
   landsat: { key: 'landsat', label: 'Landsat 8/9', instrument: 'OLI', color: '#94a3b8', pixel: '30 m', overpass: '10:00', since: 2022, note: 'Supplementary, US/Canada NRT' },
