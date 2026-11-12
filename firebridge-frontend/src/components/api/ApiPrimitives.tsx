@@ -38,10 +38,10 @@ export function ResourcePanel<T>({
           disabled={query.isFetching}
           onClick={() => void query.refetch()}
         >
-          Actualiser
+          Refresh
         </button>
       </div>
-      {query.isPending && !query.isError && <p role="status">Chargement…</p>}
+      {query.isPending && !query.isError && <p role="status">Loading…</p>}
       {query.isFetching && !query.isPending && <p role="status">Actualisation…</p>}
       <FeedbackMessage
         error={query.error}
@@ -53,7 +53,7 @@ export function ResourcePanel<T>({
         <>
           {status && (
             <p>
-              État des données : <strong>{status}</strong>
+              Data status: <strong>{status}</strong>
             </p>
           )}
           {query.data.warnings.length > 0 && (
@@ -92,7 +92,7 @@ export function Facts({ values }: { values: Record<string, unknown> }) {
 }
 export function Records({
   rows,
-  empty = 'Aucun enregistrement pour cette sélection.',
+  empty = 'No records for this selection.',
 }: {
   rows: object[]
   empty?: string
@@ -141,7 +141,7 @@ export function Records({
                   <td key={key}>
                     {value !== null && typeof value === 'object' ? (
                       <details>
-                        <summary>Voir les détails</summary>
+                        <summary>Show details</summary>
                         <StructuredValue value={value} />
                       </details>
                     ) : typeof value === 'string' && value.length > 120 ? (
@@ -194,7 +194,7 @@ export function Limitations({ data }: { data: { reasons?: string[]; limitations?
   const notes = [...new Set([...(data.reasons ?? []), ...(data.limitations ?? [])])]
   return notes.length ? (
     <details className="api-notes" open>
-      <summary>Limites et interprétation</summary>
+      <summary>Limits and interpretation</summary>
       <ul>
         {notes.map((note) => (
           <li key={note}>{note}</li>
@@ -218,7 +218,7 @@ export function Pager({
         disabled={page.first}
         onClick={page.back}
       >
-        Page précédente
+        Previous page
       </button>
       <button
         type="button"
@@ -228,7 +228,7 @@ export function Pager({
           if (next) page.next(next)
         }}
       >
-        Page suivante
+        Next page
       </button>
     </div>
   )
@@ -270,7 +270,7 @@ export function Filters<T extends object>({
           {field.label}
           {field.options ? (
             <select id={id + field.name} name={field.name} defaultValue={field.value ?? ''}>
-              <option value="">Valeur par défaut</option>
+              <option value="">Default</option>
               {field.options.map((value) => (
                 <option key={value} value={value}>
                   {value}
@@ -289,7 +289,7 @@ export function Filters<T extends object>({
           )}
         </label>
       ))}
-      <button className="button button-primary">Appliquer les filtres</button>
+      <button className="button button-primary">Apply filters</button>
     </form>
   )
 }
