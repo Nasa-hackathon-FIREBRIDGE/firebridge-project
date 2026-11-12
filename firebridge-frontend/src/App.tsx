@@ -13,7 +13,7 @@ import type { ActivitySummary, AnalysisSelection, Detection, ReportEvidence, Sen
 import { ApplicationShell } from './components/ApplicationShell'
 import { SystemStatus } from './components/SystemStatus'
 import { PageHeader } from './components/workspace/PageHeader'
-import { SHOW_DEMONSTRATION } from './config/features'
+import { SHOW_DEMONSTRATION, SHOW_INGESTION_ADMIN } from './config/features'
 
 const HomePage = lazy(() => import('./pages/HomePage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
@@ -74,8 +74,9 @@ function AppPages() {
       <Route path="/dashboard" element={<DashboardPage />} />
       <Route path="/catalog" element={<CatalogPage />} />
       <Route path="/analyses" element={<AnalysisWorkspace />} />
-      <Route path="/api-analysis" element={<Suspense fallback={<p role="status">Chargement…</p>}><ApiAnalysisPage /></Suspense>} />
-      <Route path="/ingestion" element={<Suspense fallback={<p role="status">Chargement…</p>}><IngestionPage /></Suspense>} />
+      <Route path="/api-analysis" element={<Suspense fallback={<p role="status">Loading…</p>}><ApiAnalysisPage /></Suspense>} />
+      {/* Operator tool, hidden while SHOW_INGESTION_ADMIN is false (the URL redirects Home). */}
+      {SHOW_INGESTION_ADMIN && <Route path="/ingestion" element={<Suspense fallback={<p role="status">Loading…</p>}><IngestionPage /></Suspense>} />}
       <Route path="/" element={<HomePage />} />
       {/* Synthetic demonstration: hidden while SHOW_DEMONSTRATION is false (URLs redirect Home). */}
       {SHOW_DEMONSTRATION && (
