@@ -1,4 +1,6 @@
 node_modules
+.qa
+e2e
 .github
 **/tests
 **/*.test.*

@@ -11,6 +11,8 @@
     "lint": "oxlint",
     "test": "vitest run",
     "preview": "vite preview",
+    "pretest:visualization": "npm --prefix \"../firebridge-backend\" run build --workspace @firebridge/contracts",
+    "test:visualization": "tsc -p e2e/tsconfig.json && playwright test --config playwright.visualization.config.ts",
     "places": "node scripts/places/prepare.mjs",
     "places:countries": "node scripts/places/prepare.mjs countries"
   },
