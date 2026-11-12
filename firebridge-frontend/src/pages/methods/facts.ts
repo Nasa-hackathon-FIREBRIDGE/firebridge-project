@@ -7,6 +7,7 @@
  * (`docs/data/HISTORICAL_ANALYSES.md`) and the project overview of the same date. Update the
  * figures together with their date when a newer audit is published; never edit one alone.
  */
+import { HISTORICAL_MAX_WINDOW_DAYS } from '@firebridge/contracts/analysis-limits'
 import type { SensorKey } from '../../lib/sensors'
 
 export const AUDIT_DATE = '9 Nov 2026'
@@ -40,7 +41,8 @@ export const INVALID_FRP_VALUES = 28
 export const EMPTY_WINDOWS = 21
 export const UNLABELLED_MODIS_WINDOWS = 3
 export const ARCHIVE_GIB = 23.29
-export const MAX_ANALYSIS_DAYS = 10_980
+/** The server's own limit, shared through the contracts package so this page cannot drift from it. */
+export const MAX_ANALYSIS_DAYS = HISTORICAL_MAX_WINDOW_DAYS
 export const MOROCCO_2020_SECONDS = 4.7
 export const MOROCCO_2020_BEFORE_SECONDS = 25.5
 
@@ -130,10 +132,12 @@ export const DEVELOPMENT_AI: Citation[] = [
 ]
 
 export const APP_REPO = 'https://github.com/Nasa-hackathon-FIREBRIDGE/firebridge-project'
+export const AGENT_REPO = 'https://github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-AI-Agent'
 
 export const OUR_CODE: Citation[] = [
   { name: 'FIREBRIDGE web application and API', role: 'This website, its API, workers and the in-browser harmonization engine', href: APP_REPO, licence: 'MIT' },
   { name: 'FIREBRIDGE data pipeline', role: 'Download, audit, indexing and publication of the NASA FIRMS archive', href: PIPELINE_REPO, licence: 'MIT' },
+  { name: 'FIREBRIDGE explanation service', role: 'The copilot’s agent: facts computed in code, models that only phrase them, every number checked', href: AGENT_REPO, licence: 'MIT' },
 ]
 
 export interface SoftwareGroup {
