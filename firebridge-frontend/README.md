@@ -1,13 +1,13 @@
 # FIREBRIDGE frontend
 
-Application React/TypeScript, construite avec Vite et servie par Nginx dans Docker.
+React/TypeScript application, built with Vite and served by Nginx in Docker.
 
-- `src/pages` et `src/features` : écrans et fonctionnalités.
-- `src/hooks` : accès aux données avec TanStack Query.
-- `src/services` : appels HTTP Axios vers l'API Fastify.
-- `src/components` : composants partagés et carte MapLibre.
+- `src/pages` and `src/features`: screens and features.
+- `src/hooks`: data access with TanStack Query.
+- `src/services`: Axios HTTP calls to the Fastify API.
+- `src/components`: shared components and the MapLibre map.
 
-Le package `@firebridge/contracts` est fourni par
-`../firebridge-backend/packages/contracts`. Conserver ces noms de dossiers.
-Voir le [README principal](../README.md) pour la construction Docker et la
-configuration de l'API. Les `.env` privés ne sont pas inclus dans le dépôt.
+The `@firebridge/contracts` package comes from
+`../firebridge-backend/packages/contracts`. Keep these folder names.
+See the [main README](../README.md) for the Docker build and API configuration.
+Private `.env` files are not included in the repository.
