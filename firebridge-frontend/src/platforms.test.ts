@@ -58,7 +58,7 @@ describe('platform filtering', () => {
 describe('Suomi-NPP operational note', () => {
   it('uses forward wording before the cutoff and past wording after, without claiming NRT', () => {
     expect(operationalNote('Suomi-NPP', new Date('2026-10-30T00:00:00Z'))).toContain('schedules delivery')
-    expect(operationalNote('Suomi-NPP', new Date('2026-11-03T00:00:00Z'))).toContain('scheduled delivery')
+    expect(operationalNote('Suomi-NPP', new Date('2026-11-03T00:00:00Z'))).toContain('ended delivery')
     expect(operationalNote('Aqua')).toBeNull()
   })
 })
