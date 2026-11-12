@@ -1,14 +1,14 @@
 # FIREBRIDGE backend
 
-API Fastify en TypeScript et worker BullMQ. PostgreSQL/PostGIS conserve les
-données ; Redis porte les files de tâches.
+Fastify API in TypeScript and a BullMQ worker. PostgreSQL/PostGIS stores the
+data; Redis carries the job queues.
 
-- `apps/api/src` : routes, controllers, services et repositories.
-- `apps/worker/src` : dispatcher et traitements asynchrones.
-- `packages/contracts` : contrats partagés avec le frontend.
-- `packages/database` : accès aux données et migrations applicatives.
-- `docker-compose.yml` : définition des services locaux.
+- `apps/api/src`: routes, controllers, services and repositories.
+- `apps/worker/src`: dispatcher and asynchronous processing.
+- `packages/contracts`: contracts shared with the frontend.
+- `packages/database`: data access and application migrations.
+- `docker-compose.yml`: definition of the local services.
 
-Voir le [README principal](../README.md) pour la construction Docker et le
-raccordement au pipeline. La documentation HTTP est générée par l'API sous
-`/api-docs/`. Les `.env` privés ne sont pas inclus dans le dépôt.
+See the [main README](../README.md) for the Docker build and the connection to
+the data pipeline. The API generates its HTTP documentation under `/api-docs/`.
+Private `.env` files are not included in the repository.
