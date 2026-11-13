@@ -56,6 +56,7 @@ export const SECTION_LABELS: Record<string, string> = {
   'workspace-top': 'Map workspace',
   'analysis-overview': 'Overview',
   'fire-calendar': 'Fire calendar',
+  'fire-drivers': 'Fire drivers',
   'sensor-bridge': 'Sensor bridge',
   'observation-records': 'Observations',
   'temporal-analysis': 'Timeline',
