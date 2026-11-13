@@ -6,6 +6,12 @@ React/TypeScript application, built with Vite and served by Nginx in Docker.
 - `src/hooks`: data access with TanStack Query.
 - `src/services`: Axios HTTP calls to the Fastify API.
 - `src/components`: shared components and the MapLibre map.
+- `src/features/bridge`: the in-browser harmonization engine (`engine/`, run in a
+  Web Worker), the fire calendar and the sensor-bridge lab.
+- `src/features/science`: the evidence checks, the cited references and the NASA
+  POWER weather comparison.
+- `src/features/story`: the editorial building blocks of the analysis pages
+  (opening, chapters, margin notes, figures, scroll-driven steps).
 
 The `@firebridge/contracts` package comes from
 `../firebridge-backend/packages/contracts`. Keep these folder names.
