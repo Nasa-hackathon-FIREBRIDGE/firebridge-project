@@ -43,10 +43,11 @@ describe('Data & methods page', () => {
   it('labels each stage honestly and keeps technical detail one click away', () => {
     renderPage(<EvidencePage />)
     const steps = screen.getAllByRole('article')
-    expect(steps).toHaveLength(7)
+    expect(steps).toHaveLength(8)
     expect(within(steps[0]).getByText('In production')).toBeInTheDocument()
     expect(within(steps[5]).getByText('Experimental · not independently validated')).toBeInTheDocument()
-    expect(within(steps[6]).getByText('Live · language model')).toBeInTheDocument()
+    expect(within(steps[6]).getByText(/Mann–Kendall test with Sen’s slope/)).toBeInTheDocument()
+    expect(within(steps[7]).getByText('Live · language model')).toBeInTheDocument()
     expect(within(steps[5]).getByText(/has not been independently validated/)).toBeInTheDocument()
     const summary = within(steps[1]).getByText('How it works')
     fireEvent.click(summary)
@@ -90,6 +91,14 @@ describe('Sources & credits page', () => {
     expect(within(tools).getByText('Data pipeline')).toBeInTheDocument()
     expect(within(screen.getByRole('list', { name: 'What AI did not do' })).getByText(/Every fire record comes from NASA FIRMS/)).toBeInTheDocument()
     expect(within(screen.getByRole('list', { name: 'What the team did' })).getAllByRole('listitem')).toHaveLength(3)
+  })
+
+  it('credits NASA POWER weather and cites the literature by DOI', () => {
+    renderPage(<SourcesPage />)
+    expect(within(screen.getByRole('list', { name: 'Weather data' })).getByRole('link', { name: /NASA POWER/ })).toHaveAttribute('href', 'https://power.larc.nasa.gov/')
+    const literature = screen.getByRole('list', { name: 'Cited literature' })
+    expect(within(literature).getByRole('link', { name: 'doi:10.1016/j.rse.2013.12.008' })).toBeInTheDocument()
+    expect(within(literature).getByText('Turco et al. 2017')).toBeInTheDocument()
   })
 
   it('credits only open imagery, gives every model its licence and links our own code', () => {
