@@ -47,6 +47,10 @@
 
   --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Space Grotesk Variable', 'Space Grotesk', 'Inter Variable', ui-sans-serif, sans-serif;
+  /* Editorial voice of the analysis pages: Inter's display cut (opsz axis), not a serif. */
+  --font-serif: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --color-paper: #f4ede3;
+  --color-paper-2: #cfc6ba;
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
   --radius-xl: 14px;
