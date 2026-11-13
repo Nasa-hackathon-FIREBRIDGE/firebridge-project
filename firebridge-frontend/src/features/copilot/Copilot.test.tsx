@@ -97,13 +97,16 @@ describe('FIREBRIDGE copilot', () => {
     expect(api.analysis).toHaveBeenCalledTimes(1)
     expect(api.analysis.mock.calls[0][1].report.months).toHaveLength(report.months.length)
     expect(api.analysis.mock.calls[0][1].report.episodes.all).toBeUndefined()
+    // The independent checks travel too, without the per-cell map.
+    expect(api.analysis.mock.calls[0][1].report.evidence.seasonality).toBeDefined()
+    expect(api.analysis.mock.calls[0][1].report.evidence.places?.cells).toBeUndefined()
     expect(api.ask).toHaveBeenCalledWith('s'.repeat(32), 'Why July?', { view: 'fire-calendar', label: 'Fire calendar' })
 
     fireEvent.click(within(panel).getByRole('button', { name: 'F25' }))
     expect(within(panel).getByText('July 2022 was unusually high.', { exact: false })).toBeInTheDocument()
 
     fireEvent.click(within(panel).getByRole('button', { name: 'July 2022 in the calendar' }))
-    expect(nav.openSection).toHaveBeenCalledWith('fire-calendar', 'calendar-grid-heading')
+    expect(nav.openSection).toHaveBeenCalledWith('fire-calendar', 'case-file-title')
     fireEvent.click(within(panel).getByRole('button', { name: '15 Jul 2022 on the map' }))
     expect(nav.showInterval).toHaveBeenCalledWith('2022-07-15', '2022-07-16')
     fireEvent.click(within(panel).getByRole('button', { name: 'Open the handover rehearsal' }))
@@ -117,7 +120,7 @@ describe('FIREBRIDGE copilot', () => {
     const briefing = await screen.findByRole('region', { name: 'Briefing' })
     expect(within(briefing).getByText(summary.headline)).toBeInTheDocument()
     expect(within(briefing).getByText('Briefing · 1/2')).toBeInTheDocument()
-    await waitFor(() => expect(nav.openSection).toHaveBeenCalledWith('fire-calendar', 'calendar-grid-heading'))
+    await waitFor(() => expect(nav.openSection).toHaveBeenCalledWith('fire-calendar', 'case-file-title'))
     fireEvent.click(within(briefing).getByRole('button', { name: 'Next finding' }))
     expect(within(briefing).getByText('Aqua drifted')).toBeInTheDocument()
     await waitFor(() => expect(nav.openSection).toHaveBeenCalledWith('sensor-bridge', 'bridge-act-2'))
