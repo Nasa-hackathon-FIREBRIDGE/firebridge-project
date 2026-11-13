@@ -2,6 +2,7 @@ import type { SensorKey } from '../../../lib/sensors'
 import type { BridgeReport } from '../engine/index.ts'
 import { fmtInt, fmtMinutes, fmtRatio, fmtShare, sensorColor, sensorLabel } from '../format'
 import { Act, Legend, LegendItem, Note } from '../ui'
+import { resolutionCheck } from '../../science/checks'
 import { AskWhy } from '../../copilot/AskWhy'
 
 const SEGMENTS = [
@@ -40,6 +41,7 @@ export function GapAct({ report, platform }: { report: BridgeReport; platform: S
   return (
     <Act
       index={1}
+      science={report.evidence ? [resolutionCheck(report, platform)] : undefined}
       eyebrow="The gap, decomposed"
       title={`Why ${name} records ${fmtRatio(gap.ratioDetections)} as many detections as Aqua`}
       action={<AskWhy question={`Is ${name} seeing more fire than Aqua, or just smaller fires?`} label="Ask" />}
