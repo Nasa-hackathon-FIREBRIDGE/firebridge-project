@@ -3,6 +3,7 @@ import type { SensorKey } from '../../../lib/sensors'
 import type { BridgeReport, FrpDistribution } from '../engine/index.ts'
 import { fmtInt, fmtShare, sensorColor, sensorLabel } from '../format'
 import { Act, Legend, LegendItem, Note, Tile } from '../ui'
+import { floorCheck, heavyTailCheck } from '../../science/checks'
 
 const FrpChart = lazy(() => import('../BridgeCharts').then((m) => ({ default: m.FrpChart })))
 const ResponseChart = lazy(() => import('../BridgeCharts').then((m) => ({ default: m.ResponseChart })))
@@ -19,6 +20,7 @@ export function SensitivityAct({ report, platform }: { report: BridgeReport; pla
   return (
     <Act
       index={3}
+      science={report.evidence ? [floorCheck(report, platform), heavyTailCheck(report)] : undefined}
       eyebrow="What MODIS can see"
       title="The detection floor, measured here"
       lede={<>Fire radiative power (FRP) is the heat a fire radiates at the moment of the pass. Comparing the two records shows directly how strong a fire must be before Aqua records it, and how often Aqua also sees what {name} sees.</>}
