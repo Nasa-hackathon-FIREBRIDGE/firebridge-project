@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix='firebridge-image-smoke-') as temporary:
       'DATABASE_URL':f'postgresql://firebridge_webapp:{password}@db:5432/firebridge_phase1_test?schema=public&connection_limit=4',
       'REDIS_URL':f'redis://:{redis_password}@firebridge-webapp-redis:6379/0','NODE_ENV':'production','PORT':'3000','API_HOST':'0.0.0.0',
       'CURSOR_SECRET':secrets.token_hex(32),'PAGINATION_SECRET':secrets.token_hex(32),'DEFAULT_SCOPE_KEY':'container-smoke',
-      'CORS_ORIGINS':'https://astramind.solutions','EXPORT_STORAGE_DIR':'/app/.data/exports','ANALYSIS_WORKER_CONCURRENCY':'1',
+      'CORS_ORIGINS':'https://ogote.com,https://astramind.solutions','EXPORT_STORAGE_DIR':'/app/.data/exports','ANALYSIS_WORKER_CONCURRENCY':'1',
       'EXPORT_WORKER_CONCURRENCY':'1','RECOVERY_ENABLED':'false'}
     (directory/'runtime.env').write_text('\n'.join(k+'='+v for k,v in env.items())+'\n');(directory/'runtime.env').chmod(0o600)
     (directory/'.env').write_text('\n'.join(k.upper()+'_IMAGE=firebridge-webapp-'+k+':'+a.revision for k in ('api','worker','frontend'))+'\n')
