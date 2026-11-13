@@ -231,7 +231,7 @@ export function CopilotProvider({ analysisId, releaseId, section, nav, children 
       ...nav,
       focusMonth: (month: string) => {
         setMonthRequest((r) => ({ month, nonce: (r?.nonce ?? 0) + 1 }))
-        nav.openSection('fire-calendar', 'calendar-grid-heading')
+        nav.openSection('fire-calendar', 'case-file-title')
       },
     }),
     [nav],
