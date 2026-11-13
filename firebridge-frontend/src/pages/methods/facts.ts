@@ -179,3 +179,18 @@ export const SOFTWARE: SoftwareGroup[] = [
     items: [['FastAPI', 'MIT'], ['Uvicorn', 'BSD-3-Clause'], ['Pydantic', 'MIT'], ['aiosqlite', 'MIT']],
   },
 ]
+
+/** Weather beside fire: read in the browser for the Fire drivers page and the calendar's weather check. */
+export const WEATHER: Citation[] = [
+  {
+    name: 'NASA POWER (Prediction Of Worldwide Energy Resources)',
+    role: 'Daily maximum temperature and precipitation at the centre of each analysis’s fire activity, read from the POWER API. Data obtained from the NASA Langley Research Center POWER Project.',
+    href: 'https://power.larc.nasa.gov/',
+    tag: 'NASA LaRC',
+  },
+  {
+    name: 'MERRA-2 reanalysis (Gelaro et al. 2017)',
+    role: 'The NASA GMAO reanalysis behind POWER’s daily meteorology, on a grid of roughly 50 km.',
+    doi: '10.1175/JCLI-D-16-0758.1',
+  },
+]
