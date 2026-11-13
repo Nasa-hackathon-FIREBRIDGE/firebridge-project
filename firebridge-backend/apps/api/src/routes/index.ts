@@ -1,0 +1,48 @@
+import type { FastifyPluginAsync } from 'fastify';
+import { healthRoutes } from './health.routes.js';
+import { catalogRoutes } from './catalog.routes.js';
+import { sourcesRoutes } from './sources.routes.js';
+import { releasesRoutes } from './releases.routes.js';
+import { updatesRoutes } from './updates.routes.js';
+import { areasRoutes } from './areas.routes.js';
+import { analysesRoutes } from './analyses.routes.js';
+import { nativeResultsRoutes } from './native-results.routes.js';
+import { detectionsRoutes } from './detections.routes.js';
+import { tilesRoutes } from './tiles.routes.js';
+import { cellsRoutes } from './cells.routes.js';
+import { weatherRoutes } from './weather.routes.js';
+import { reportsRoutes } from './reports.routes.js';
+import { provenanceRoutes } from './provenance.routes.js';
+import { explanationsRoutes } from './explanations.routes.js';
+import { exportsRoutes } from './exports.routes.js';
+import { jobsRoutes } from './jobs.routes.js';
+import { adminRoutes } from './admin.routes.js';
+import { ingestionRoutes } from './ingestion.routes.js';
+import { contextRoutes } from './context.routes.js';
+import { explainerRoutes } from './explainer.routes.js';
+
+const apiRoutes: FastifyPluginAsync = async (app) => {
+  app.register(healthRoutes, { prefix: '/health' });
+  app.register(catalogRoutes, { prefix: '/catalog' });
+  app.register(sourcesRoutes, { prefix: '/sources' });
+  app.register(releasesRoutes, { prefix: '/releases' });
+  app.register(updatesRoutes, { prefix: '/updates' });
+  app.register(areasRoutes, { prefix: '/areas' });
+  app.register(analysesRoutes, { prefix: '/analyses' });
+  app.register(nativeResultsRoutes, { prefix: '/analyses' });
+  app.register(detectionsRoutes, { prefix: '/detections' });
+  app.register(tilesRoutes, { prefix: '/tiles' });
+  app.register(cellsRoutes, { prefix: '/cells' });
+  app.register(weatherRoutes, { prefix: '/weather' });
+  app.register(reportsRoutes, { prefix: '/reports' });
+  app.register(provenanceRoutes, { prefix: '/provenance' });
+  app.register(explanationsRoutes, { prefix: '/explanations' });
+  app.register(explainerRoutes, { prefix: '/explainer' });
+  app.register(exportsRoutes, { prefix: '/exports' });
+  app.register(jobsRoutes, { prefix: '/jobs' });
+  app.register(adminRoutes, { prefix: '/admin' });
+  app.register(ingestionRoutes);
+  app.register(contextRoutes);
+};
+
+export default apiRoutes;

@@ -1,0 +1,26 @@
+name: firebridge-webapp-checks
+services:
+  db:
+    image: postgis/postgis:16-3.5
+    environment:
+      POSTGRES_USER: firebridge
+      POSTGRES_PASSWORD: fixture-only-webapp-test
+      POSTGRES_DB: firebridge_phase1_test
+    ports: ['127.0.0.1:15543:5432']
+    mem_limit: 768m
+    healthcheck:
+      # The image briefly starts a Unix-socket-only server during initialization.
+      # TCP readiness waits for the final server, avoiding a false healthy signal.
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, firebridge, -d, firebridge_phase1_test]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
+    ports: ['127.0.0.1:16379:6379']
+    mem_limit: 128m
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 30

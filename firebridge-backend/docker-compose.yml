@@ -1,0 +1,155 @@
+name: firebridge-project
+
+x-results-environment: &results-environment
+  TILE_MAX_ZOOM: ${TILE_MAX_ZOOM:-18}
+  TILE_QUERY_TIMEOUT_MS: ${TILE_QUERY_TIMEOUT_MS:-5000}
+  TILE_CACHE_SECONDS: ${TILE_CACHE_SECONDS:-60}
+  TILE_MAX_BYTES: ${TILE_MAX_BYTES:-2097152}
+  TILE_REQUESTS_PER_MINUTE: ${TILE_REQUESTS_PER_MINUTE:-120}
+  EXPORT_REQUESTS_PER_MINUTE: ${EXPORT_REQUESTS_PER_MINUTE:-5}
+  DOWNLOAD_REQUESTS_PER_MINUTE: ${DOWNLOAD_REQUESTS_PER_MINUTE:-30}
+  EXPORT_MAX_ACTIVE: ${EXPORT_MAX_ACTIVE:-2}
+  EXPORT_MAX_PER_HOUR: ${EXPORT_MAX_PER_HOUR:-10}
+  EXPORT_MAX_ROWS: ${EXPORT_MAX_ROWS:-1000000}
+  EXPORT_MAX_BYTES: ${EXPORT_MAX_BYTES:-268435456}
+  EXPORT_MAX_DURATION_SECONDS: ${EXPORT_MAX_DURATION_SECONDS:-300}
+  EXPORT_RETENTION_SECONDS: ${EXPORT_RETENTION_SECONDS:-86400}
+  EXPORT_BATCH_SIZE: ${EXPORT_BATCH_SIZE:-1000}
+  EXPORT_WORKER_CONCURRENCY: ${EXPORT_WORKER_CONCURRENCY:-2}
+  EXPORT_CLEANUP_INTERVAL_SECONDS: ${EXPORT_CLEANUP_INTERVAL_SECONDS:-60}
+  EXPORT_STORAGE_DIR: /app/.data/exports
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: firebridge-postgres
+    environment:
+      POSTGRES_USER: firebridge
+      POSTGRES_PASSWORD: firebridge
+      POSTGRES_DB: firebridge
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U firebridge -d firebridge']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: firebridge-redis
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: firebridge-api
+    environment:
+      <<: *results-environment
+      NODE_ENV: development
+      PORT: 3000
+      API_HOST: 0.0.0.0
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      PAGINATION_SECRET: ${PAGINATION_SECRET:-firebridge-dev-secret-key-32-chars-long}
+      MAX_AOI_VERTICES: ${MAX_AOI_VERTICES:-5000}
+      MAX_AOI_AREA_KM2: ${MAX_AOI_AREA_KM2:-250000}
+      DEFAULT_SCOPE_KEY: ${DEFAULT_SCOPE_KEY:-morocco}
+      CURSOR_SECRET: ${CURSOR_SECRET:?Set CURSOR_SECRET in .env to at least 32 characters}
+      INGESTION_ADMIN_TOKEN: ${INGESTION_ADMIN_TOKEN:-}
+      ANALYSIS_MAX_ATTEMPTS: ${ANALYSIS_MAX_ATTEMPTS:-3}
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://firebridge:firebridge@postgres:5432/firebridge}"
+      REDIS_URL: "${DOCKER_REDIS_URL:-redis://redis:6379}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - exports_data:/app/.data/exports
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: firebridge-worker
+    init: true
+    stop_grace_period: 35s
+    environment:
+      <<: *results-environment
+      NODE_ENV: development
+      REDIS_URL: "${DOCKER_REDIS_URL:-redis://redis:6379}"
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://firebridge:firebridge@postgres:5432/firebridge}"
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-10}
+      ANALYSIS_MAX_ATTEMPTS: ${ANALYSIS_MAX_ATTEMPTS:-3}
+      ANALYSIS_LEASE_SECONDS: ${ANALYSIS_LEASE_SECONDS:-60}
+      ANALYSIS_WORKER_CONCURRENCY: ${ANALYSIS_WORKER_CONCURRENCY:-5}
+      RECOVERY_ENABLED: ${RECOVERY_ENABLED:-false}
+      RECOVERY_CREATED_AFTER: ${RECOVERY_CREATED_AFTER:-}
+      RECOVERY_INTERVAL_MS: ${RECOVERY_INTERVAL_MS:-30000}
+      RECOVERY_STALE_SECONDS: ${RECOVERY_STALE_SECONDS:-120}
+      RECOVERY_BATCH_SIZE: ${RECOVERY_BATCH_SIZE:-20}
+      RECOVERY_MAX_ATTEMPTS: ${RECOVERY_MAX_ATTEMPTS:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - exports_data:/app/.data/exports
+    healthcheck:
+      test: ['CMD', 'node', 'apps/worker/dist/health.js']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ../firebridge-frontend
+      dockerfile: Dockerfile
+      additional_contexts:
+        backend: .
+      args:
+        VITE_API_URL: "${FRONTEND_API_URL:-http://localhost:3000/api/v1}"
+        VITE_MAP_STYLE_URL: "${FRONTEND_MAP_STYLE_URL:-}"
+        VITE_BASEMAP_PROVIDER: "${FRONTEND_BASEMAP_PROVIDER:-}"
+    container_name: firebridge-frontend
+    ports:
+      - '127.0.0.1:5173:80'
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1/']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  exports_data:

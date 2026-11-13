@@ -1,0 +1,25 @@
+/*
+ * Cascade order (lowest → highest):
+ *   theme      Tailwind design tokens
+ *   vendor     MapLibre defaults
+ *   legacy     pre-redesign stylesheets (kept for screens not yet rebuilt)
+ *   components FIREBRIDGE design system (styles/theme.css)
+ *   utilities  Tailwind utilities used by redesigned components
+ */
+@layer theme, vendor, base, legacy, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'maplibre-gl/dist/maplibre-gl.css' layer(vendor);
+@import './styles/legacy-root.css' layer(legacy);
+@import './App.css' layer(legacy);
+@import './components/api/api-workspace.css' layer(legacy);
+@import './features/analyses/workspace.css' layer(legacy);
+@import './astra.css' layer(legacy);
+@import './geospatial.css' layer(legacy);
+@import './platform.css' layer(legacy);
+@import './components/ui/ui.css' layer(legacy);
+@import './components/shell.polish.css' layer(legacy);
+@import './features/analyses/workspace.presentation.css' layer(legacy);
+@import './pages/dashboard.css' layer(legacy);
+@import './styles/theme.css';
+@import './styles/workspace.css';

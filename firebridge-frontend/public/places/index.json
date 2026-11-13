@@ -1,0 +1,11 @@
+{
+  "countries": {
+    "MAR": {
+      "regions": 12,
+      "provinces": 75,
+      "forests": 48,
+      "prepared": "2026-11-11"
+    }
+  },
+  "geoboundaries": "9469f09592ced973a3448cf66b6100b741b64c0d"
+}

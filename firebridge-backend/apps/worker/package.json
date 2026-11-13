@@ -1,0 +1,37 @@
+{
+  "name": "@firebridge/worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/worker.js",
+  "scripts": {
+    "predev": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
+    "dev": "tsx watch src/worker.ts",
+    "prebuild": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/worker.js",
+    "test": "vitest run",
+    "test:postgres": "vitest run --config vitest.postgres.config.ts",
+    "pretest": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
+    "pretest:postgres": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results"
+  },
+  "dependencies": {
+    "@firebridge/database": "^1.0.0",
+    "@firebridge/results": "^1.0.0",
+    "bullmq": "^6.4.2",
+    "dotenv": "^16.4.7",
+    "ioredis": "^5.6.0",
+    "parquetjs-lite": "0.8.7",
+    "pino": "^10.4.0",
+    "zod": "^4.6.7",
+    "@firebridge/contracts": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "tsx": "4.23.15",
+    "vitest": "5.0.5"
+  },
+  "engines": {
+    "node": ">=22.22.2 <23 || >=24.15.0 <25"
+  }
+}

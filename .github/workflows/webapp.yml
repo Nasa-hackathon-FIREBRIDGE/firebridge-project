@@ -1,0 +1,210 @@
+name: Webapp CI/CD
+on:
+  push:
+    branches: [staging]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Build, lint, types and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: app-validate-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:1/build
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            firebridge-backend/package-lock.json
+            firebridge-frontend/package-lock.json
+      - name: Backend checks and security audit
+        working-directory: firebridge-backend
+        run: |
+          npm ci --no-fund
+          npm audit --audit-level=high
+          npm run lint
+          npm run build
+          npm run typecheck
+          npm test
+      - name: Frontend checks and security audit
+        working-directory: firebridge-frontend
+        env:
+          VITE_API_URL: https://ogote.com/api/v1
+        run: |
+          npm ci --no-fund
+          npm audit --audit-level=high
+          npm run lint
+          npm run build
+          npm test
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Nasa-hackathon-FIREBRIDGE/FireBridge-data-pipeline
+          ref: 980a58006432cea3214b8d0b492cf4781322bd1d
+          path: .pipeline-source
+          persist-credentials: false
+      - name: PostgreSQL and Redis integration against the deployed pipeline schema
+        env:
+          PHASE1_TEST_DATABASE_URL: postgresql://firebridge:fixture-only-webapp-test@127.0.0.1:15543/firebridge_phase1_test
+          PHASE1_TEST_REDIS_URL: redis://127.0.0.1:16379
+        run: |
+          docker compose -f deploy/compose.checks.yaml up -d --wait
+          python3 deploy/prepare_database.py --compose deploy/compose.checks.yaml --database firebridge_phase1_test --fixture-pipeline .pipeline-source
+          cd firebridge-backend
+          npm run test:postgres --workspace @firebridge/api
+          npm run test:postgres --workspace @firebridge/worker
+      - name: Stop disposable check services
+        if: always()
+        run: docker compose -f deploy/compose.checks.yaml down -v --remove-orphans
+
+  images:
+    name: Verified production images
+    outputs:
+      api_image: ${{ steps.publish.outputs.api_image }}
+      worker_image: ${{ steps.publish.outputs.worker_image }}
+      frontend_image: ${{ steps.publish.outputs.frontend_image }}
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - name: Scan tracked source for credentials
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          version: v0.76.2
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Build exact production images
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          for kind in api worker; do
+            docker build --file "firebridge-backend/Dockerfile.$kind" \
+              --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+              --label "org.opencontainers.image.revision=$REVISION" \
+              --tag "firebridge-webapp-$kind:$REVISION" firebridge-backend
+          done
+          docker build --file firebridge-frontend/Dockerfile \
+            --build-context backend=firebridge-backend \
+            --build-arg VITE_API_URL=https://ogote.com/api/v1 \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=$REVISION" \
+            --tag "firebridge-webapp-frontend:$REVISION" firebridge-frontend
+      - name: Validate HTTPS configuration with a disposable certificate
+        run: python3 deploy/check_proxy.py --revision '${{ github.sha }}'
+      - name: Scan API runtime image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          version: v0.76.2
+          image-ref: firebridge-webapp-api:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Scan worker runtime image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          version: v0.76.2
+          image-ref: firebridge-webapp-worker:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Scan frontend runtime image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          version: v0.76.2
+          image-ref: firebridge-webapp-frontend:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Scan Redis runtime image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          version: v0.76.2
+          image-ref: redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Nasa-hackathon-FIREBRIDGE/FireBridge-data-pipeline
+          ref: 980a58006432cea3214b8d0b492cf4781322bd1d
+          path: .pipeline-source
+          persist-credentials: false
+      - name: Smoke-test the actual containers and restricted runtime role
+        run: |
+          docker compose -f deploy/compose.checks.yaml up -d --wait
+          python3 deploy/prepare_database.py --compose deploy/compose.checks.yaml --database firebridge_phase1_test --fixture-pipeline .pipeline-source
+          python3 deploy/smoke_images.py --revision '${{ github.sha }}'
+      - name: Publish only verified images
+        id: publish
+        if: github.ref == 'refs/heads/staging' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          REVISION: ${{ github.sha }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          for kind in api worker frontend; do
+            target="ghcr.io/nasa-hackathon-firebridge/firebridge-project-$kind:$REVISION"
+            docker tag "firebridge-webapp-$kind:$REVISION" "$target"
+            docker push "$target"
+            digest=$(docker image inspect "$target" --format '{{index .RepoDigests 0}}')
+            echo "${kind}_image=$digest" >> "$GITHUB_OUTPUT"
+          done
+          docker logout ghcr.io
+      - name: Stop disposable services and remove registry credentials
+        if: always()
+        run: |
+          docker compose -f deploy/compose.checks.yaml down -v --remove-orphans
+          docker logout ghcr.io || true
+
+  deploy:
+    name: Deploy webapp to Contabo
+    needs: images
+    if: github.ref == 'refs/heads/staging' && github.event_name != 'pull_request' && vars.WEBAPP_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: webapp-production
+    concurrency:
+      group: firebridge-webapp-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - name: Pull verified images for this job
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+      - name: Transfer and activate verified app images
+        env:
+          RELEASE_REVISION: ${{ github.sha }}
+          API_SOURCE: ${{ needs.images.outputs.api_image }}
+          WORKER_SOURCE: ${{ needs.images.outputs.worker_image }}
+          FRONTEND_SOURCE: ${{ needs.images.outputs.frontend_image }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: bash deploy/send_release.sh
+      - name: Verify public HTTPS and API readiness
+        run: |
+          curl --fail --retry 8 --retry-delay 5 --retry-all-errors https://ogote.com/ -o /dev/null
+          curl --fail --retry 8 --retry-delay 5 --retry-all-errors https://ogote.com/api/v1/health/ready
+      - name: Remove registry credentials
+        if: always()
+        run: docker logout ghcr.io || true

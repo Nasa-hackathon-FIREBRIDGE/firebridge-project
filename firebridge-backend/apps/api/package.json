@@ -1,0 +1,49 @@
+{
+  "name": "@firebridge/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:postgres": "vitest run --config vitest.postgres.config.ts",
+    "fixtures:phase3": "tsx tests/helpers/seed-native-cli.ts",
+    "fixtures:phase5": "tsx tests/helpers/seed-ingestion-cli.ts",
+    "fixtures:phase6": "tsx tests/helpers/seed-context-cli.ts",
+    "pretest:postgres": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
+    "predev": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
+    "prebuild": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results",
+    "pretest": "npm run build --workspace @firebridge/contracts && npm run build --workspace @firebridge/database && npm run build --workspace @firebridge/results"
+  },
+  "dependencies": {
+    "@firebridge/contracts": "^1.0.0",
+    "@fastify/compress": "^9.3.0",
+    "@fastify/cors": "^11.3.1",
+    "@fastify/formbody": "^9.0.1",
+    "@fastify/helmet": "^13.2.0",
+    "@fastify/swagger": "^9.9.2",
+    "@fastify/swagger-ui": "^6.1.2",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.12.7",
+    "pg": "^8.13.1",
+    "pino": "^10.4.0",
+    "zod": "^4.6.7",
+    "@firebridge/database": "^1.0.0",
+    "ioredis": "^5.11.1",
+    "@firebridge/results": "^1.0.0",
+    "@fastify/rate-limit": "11.2.2"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "@types/pg": "^8.11.10",
+    "@types/node": "^22.19.0",
+    "tsx": "4.23.15",
+    "vitest": "5.0.5"
+  },
+  "engines": {
+    "node": ">=22.22.2 <23 || >=24.15.0 <25"
+  }
+}

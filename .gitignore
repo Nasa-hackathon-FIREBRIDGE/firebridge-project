@@ -1,8 +1,39 @@
+# Generated files and local configuration throughout the combined repository.
 node_modules/
 dist/
-.env
-.env.local
+dist-ssr/
 coverage/
-.vitest/
+.qa/
+.data/
+.env
+.env.*
+!.env.example
+*.log
+*.dump
+*.backup
 .DS_Store
-npm-debug.log*
+
+# Personal documents are not part of the staging delivery.
+documents/
+
+# Detailed work reports remain on development branches.
+/docs/
+/firebridge-backend/docs/
+/firebridge-backend/*.md
+!/firebridge-backend/README.md
+/firebridge-frontend/*.md
+!/firebridge-frontend/README.md
+
+# Private deployment material and accidental terminal artifacts.
+.deploy/
+.tools/
+/firebridge-backend/$*
+/firebridge-backend/backend-inspection.txt
+/firebridge-backend/docker
+/firebridge-backend/Add-Content
+/firebridge-backend/if
+/firebridge-backend/q
+
+# Python deployment helpers
+__pycache__/
+*.py[cod]

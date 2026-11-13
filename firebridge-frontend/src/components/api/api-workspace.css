@@ -1,0 +1,33 @@
+.api-stack { display: grid; gap: 18px; min-width: 0; }
+.api-stack .button, .api-workspace .button { font-size: 12px; min-height: 36px; height: auto; padding: 8px 12px; }
+.api-stack .button-primary, .api-workspace .button-primary { color: #16100d; background: #f87c38; border-color: #f87c38; }
+.api-stack .button-primary:hover:not(:disabled), .api-workspace .button-primary:hover:not(:disabled) { background: #fcb37d; }
+.api-section { min-width: 0; padding: 20px; }
+.api-section h2, .api-section h3 { margin: 0 0 12px; }
+.api-section p, .api-workspace > p { margin: 10px 0; color: var(--muted); line-height: 1.6; }
+.api-workspace .page-heading { margin-bottom: 20px; }
+.api-workspace > .page-heading { display: block; }
+.api-workspace > .page-heading h1 { margin: 8px 0 12px; }
+.api-workspace > .page-heading p { max-width: 900px; line-height: 1.6; }
+.api-facts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); margin: 12px 0; }
+.api-facts div { min-width: 0; }
+.api-facts dt { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+.api-facts dd { margin: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.api-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }
+.api-form label, .api-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px; color: var(--muted); font-size: 13px; }
+.api-form input, .api-form select, .api-form textarea, .api-field select { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: var(--panel-soft); color: var(--text); font: inherit; }
+.api-form textarea { min-height: 80px; resize: vertical; }
+.api-form button { min-height: 40px; }
+.api-table-wrap { max-width: 100%; overflow: auto; margin: 16px 0; }
+.api-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.api-table th, .api-table td { padding: 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; min-width: 110px; max-width: 420px; overflow-wrap: anywhere; }
+.api-table th { color: var(--muted); font-weight: 500; }
+.api-table td { line-height: 1.6; }
+.api-tabs, .api-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.api-workspace details summary, .api-stack details summary { cursor: pointer; padding: 8px 0; }
+.api-error { color: #f3a6a6 !important; overflow-wrap: anywhere; }
+.api-error small { display: block; margin-top: 6px; }
+.api-notes { padding: 10px; border: 1px solid #6b572c; border-radius: 6px; color: #e6c98d; overflow-wrap: anywhere; }
+.api-notes li { margin: 6px 0; }
+.api-form input:focus-visible, .api-form select:focus-visible, .api-form textarea:focus-visible, .api-field select:focus-visible { outline: 2px solid #f87c38; outline-offset: 2px; }
+
