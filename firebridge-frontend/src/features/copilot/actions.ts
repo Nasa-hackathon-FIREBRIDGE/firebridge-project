@@ -20,6 +20,9 @@ const nextDay = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) + 86_
 /** Sections of the analysis an answer can point to: [tab, element to bring into view, label]. */
 export const SECTION_TARGETS: Record<string, [string, string | undefined, string]> = {
   calendar: ['fire-calendar', undefined, 'Open the fire calendar'],
+  drivers: ['fire-drivers', undefined, 'Open the fire drivers'],
+  weather: ['fire-drivers', 'drivers-heading', 'Open fire and weather'],
+  sources: ['source-comparison', 'source-comparison-heading', 'Open the 24-hour sky'],
   gap: ['sensor-bridge', 'bridge-act-1', 'Open the VIIRS–MODIS gap'],
   regime: ['sensor-bridge', 'bridge-act-2', 'Open the overpass drift'],
   replay: ['sensor-bridge', 'bridge-act-4', 'Open the withheld-satellite test'],
