@@ -24,6 +24,21 @@
     box-shadow: 0 10px 30px -18px rgb(0 0 0 / 0.8);
   }
   .fbx-tabs::-webkit-scrollbar { display: none; }
+  /* Shown only while tabs are cut off: a soft fade with an arrow at the hidden end. */
+  .fb-shell .fbx-workspace .fbx-tabs-scroll {
+    position: absolute; top: 9px; bottom: 11px; z-index: 3;
+    display: grid; align-items: center; width: 52px; padding: 0 10px; margin: 0;
+    border: 0; box-shadow: none; color: var(--color-fg); cursor: pointer;
+  }
+  .fb-shell .fbx-workspace .fbx-tabs-scroll--start {
+    left: 9px; justify-items: start; border-radius: 13px 0 0 13px;
+    background: linear-gradient(90deg, var(--color-ink-850) 45%, transparent);
+  }
+  .fb-shell .fbx-workspace .fbx-tabs-scroll--end {
+    right: 9px; justify-items: end; border-radius: 0 13px 13px 0;
+    background: linear-gradient(270deg, var(--color-ink-850) 45%, transparent);
+  }
+  .fb-shell .fbx-workspace .fbx-tabs-scroll:hover { color: var(--color-ember-300); }
   .fb-shell .fbx-workspace .fbx-tabs > button[role='tab'] {
     position: relative; z-index: 1; flex: 0 0 auto;
     display: inline-flex; align-items: center; gap: 8px;
@@ -336,13 +351,22 @@
   .fbx-system-status[open] > summary { margin-bottom: 12px; }
 
   /* ── Map usability (v2): compact header, natural controls, labelled drawing ── */
-  .fb-shell .fbx-workspace .fb-map-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  /* The title and the layer toolbar share a row sized by the panel's own width (it is narrow long
+     before the screen is, beside the sidebar and copilot). The toolbar never takes more than about
+     half the row, so its text wraps instead of squeezing the area name to nothing; in a narrow
+     panel it moves to its own row. */
+  .fb-shell .fbx-workspace .fb-map-panel {
+    display: grid; grid-template-columns: minmax(0, 1fr) fit-content(52%);
+    container: fb-map-panel / inline-size;
+  }
   .fb-shell .fbx-workspace .fb-map-panel > * { grid-column: 1 / -1; }
-  .fb-shell .fbx-workspace .fb-map-panel > .fb-section-heading { grid-column: 1; grid-row: 1; padding: 14px 18px; }
+  .fb-shell .fbx-workspace .fb-map-panel > .fb-section-heading { grid-column: 1; grid-row: 1; min-width: 0; padding: 14px 18px; }
   .fb-shell .fbx-workspace .fb-map-panel > .fb-section-heading .fb-section-action { display: none; }
-  .fb-shell .fbx-workspace .fb-map-panel > .fb-map-toolbar { grid-column: 2; grid-row: 1; align-self: center; padding: 14px 18px 14px 0; gap: 14px; }
-  @media (max-width: 720px) {
-    .fb-shell .fbx-workspace .fb-map-panel > .fb-map-toolbar { grid-column: 1 / -1; grid-row: auto; padding: 0 18px 12px; }
+  .fb-shell .fbx-workspace .fb-map-panel > .fb-map-toolbar { grid-column: 2; grid-row: 1; min-width: 0; align-self: center; justify-content: flex-end; padding: 14px 18px 14px 0; gap: 6px 14px; }
+  .fb-shell .fbx-workspace .fb-map-panel > .fb-map-toolbar > p { min-width: 0; text-align: right; }
+  @container fb-map-panel (max-width: 640px) {
+    .fb-shell .fbx-workspace .fb-map-panel > .fb-map-toolbar { grid-column: 1 / -1; grid-row: auto; justify-content: flex-start; padding: 0 18px 12px; }
+    .fb-shell .fbx-workspace .fb-map-panel > .fb-map-toolbar > p { text-align: left; }
   }
   .fb-shell .fbx-workspace .fb-map-panel .map-frame { height: clamp(480px, calc(100dvh - 270px), 920px); container-type: inline-size; }
   .fb-shell .map-frame .maplibregl-canvas { cursor: grab; }
