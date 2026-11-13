@@ -88,6 +88,20 @@ export function scoreSeries(values: ReadonlyMap<string, number>, minimumYears = 
 const sameSide = (a: number, b: number) => Math.sign(a) === Math.sign(b)
 
 /**
+ * The jury's decision rule for one month, from three standardized deviations: the harmonized
+ * record (H), the median testifying satellite (C, only with two or more witnesses) and the raw
+ * all-satellite total (R). Exported so the verdicts can be re-run under other thresholds or with
+ * a satellite withheld (robustness), with exactly the same rule.
+ */
+export function classifyMonth({ harmonized: H, consensus: C, raw: R, noRecord, threshold }: { harmonized: number | null; consensus: number | null; raw: number | null; noRecord: boolean; threshold: number }): { kind: AnomalyKind | null; reason: MonthAnomaly['reason'] } {
+  if (C !== null && Math.abs(C) >= threshold && (H === null || sameSide(H, C) || Math.abs(H) < 1)) return { kind: C > 0 ? 'unusual-high' : 'unusual-low', reason: null }
+  if (H !== null && Math.abs(H) >= threshold && C !== null && Math.abs(C) >= 1 && sameSide(H, C)) return { kind: H > 0 ? 'unusual-high' : 'unusual-low', reason: null }
+  if (H !== null && Math.abs(H) >= threshold) return { kind: 'disputed', reason: C === null ? 'unconfirmed' : 'outlier' }
+  if (R !== null && Math.abs(R) >= threshold && (C === null || Math.abs(C) < 1 || !sameSide(R, C))) return { kind: 'artifact', reason: noRecord ? 'no-record' : 'fleet-change' }
+  return { kind: null, reason: null }
+}
+
+/**
  * The satellite jury. Each satellite judges a month only against its own past, so differences
  * in sensitivity between satellites cancel out; agreement between independent instruments is
  * the evidence. A month is unusual when the median testifying satellite places it beyond the
@@ -122,20 +136,13 @@ export function satelliteJury(input: { months: readonly string[]; harmonized: Re
         }
       }
     }
-    const H = harmonized.scores.get(month)?.z ?? null
-    const C = consensus && consensus.n >= 2 ? consensus.z : null
-    const R = raw.scores.get(month)?.z ?? null
-    let kind: AnomalyKind | null = null
-    let reason: MonthAnomaly['reason'] = null
-    if (C !== null && Math.abs(C) >= threshold && (H === null || sameSide(H, C) || Math.abs(H) < 1)) kind = C > 0 ? 'unusual-high' : 'unusual-low'
-    else if (H !== null && Math.abs(H) >= threshold && C !== null && Math.abs(C) >= 1 && sameSide(H, C)) kind = H > 0 ? 'unusual-high' : 'unusual-low'
-    else if (H !== null && Math.abs(H) >= threshold) {
-      kind = 'disputed'
-      reason = C === null ? 'unconfirmed' : 'outlier'
-    } else if (R !== null && Math.abs(R) >= threshold && (C === null || Math.abs(C) < 1 || !sameSide(R, C))) {
-      kind = 'artifact'
-      reason = testimony.every((w) => w.state === 'no-record') ? 'no-record' : 'fleet-change'
-    }
+    const { kind, reason } = classifyMonth({
+      harmonized: harmonized.scores.get(month)?.z ?? null,
+      consensus: consensus && consensus.n >= 2 ? consensus.z : null,
+      raw: raw.scores.get(month)?.z ?? null,
+      noRecord: testimony.every((w) => w.state === 'no-record'),
+      threshold,
+    })
     return { month, harmonized: harmonized.scores.get(month) ?? null, raw: raw.scores.get(month) ?? null, witnesses: testimony, consensus, kind, reason, outlier: kind === 'disputed' ? outlier : null }
   })
   return {
