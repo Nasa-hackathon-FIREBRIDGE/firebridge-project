@@ -3,7 +3,8 @@ import { ArrowDown, Filter, Table2 } from 'lucide-react'
 import { SectionHeading } from '../../components/workspace/SectionHeading'
 import { ApiError, Empty, Status } from '../analyses/Feedback'
 import { useDetections, useNativeCalendar, useNativeSummary } from './useResults'
-import { summarizeCounts } from '../../lib/nativeCounts'
+import { summarizeKnownCounts } from '../../lib/nativeCounts'
+import { axisTicks, bucketize } from './activityBuckets'
 import { DetectionDetails } from './DetectionDetails'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { Banner } from '../../components/ui/Banner'
@@ -174,19 +175,25 @@ function NativeActivity({ analysisId, sourceId }: { analysisId?: string; sourceI
     () =>
       calendar.data?.periods.map((period) => ({
         start: period.start,
-        ...summarizeCounts(period.counts_by_source.filter((source) => !sourceId || source.source_id === sourceId)),
+        ...summarizeKnownCounts(period.counts_by_source.filter((source) => !sourceId || source.source_id === sourceId)),
       })) ?? [],
     [calendar.data, sourceId],
   )
-  const max = rows.reduce(
+  const { resolution, buckets } = useMemo(() => bucketize(rows), [rows])
+  const max = buckets.reduce(
     (value, row) => (row.value !== null && row.value > value ? row.value : value),
     1n,
   )
+  // Counts above the bars only while they fit; otherwise they live in each bar's tooltip and label.
+  const showCounts = buckets.length <= 12
+  const ticks = axisTicks(buckets, resolution)
   return (
     <div className="fb-native-activity">
       <div>
         <h3>Native record activity</h3>
-        <p>Full saved interval · selected source inventory. Missing coverage remains unknown.</p>
+        <p>
+          Full saved interval · selected source inventory{resolution === 'day' ? '' : ` · grouped by ${resolution}`}. Missing coverage remains unknown.
+        </p>
       </div>
       <ApiError
         error={calendar.error}
@@ -195,24 +202,21 @@ function NativeActivity({ analysisId, sourceId }: { analysisId?: string; sourceI
         }}
       />
       {analysisId && calendar.isPending && <p role="status">Loading daily record counts…</p>}
-      {rows.length > 0 && (
+      {buckets.length > 0 && (
         <div
-          className="fb-activity-bars"
+          className={`fb-activity-bars${showCounts ? '' : ' fb-activity-bars--dense'}`}
           role="img"
-          aria-label={rows
-            .map(
-              (row) =>
-                `${row.start.slice(0, 10)}: ${row.value === null ? 'unknown' : `${row.lowerBound ? 'at least ' : ''}${row.value}`} records`,
-            )
-            .join('; ')}
+          aria-label={buckets.map((bucket) => bucket.title).join('; ')}
         >
-          {rows.map((row) => (
-            <div key={row.start}>
-              <span>
-                {row.value === null
-                  ? '—'
-                  : `${row.lowerBound ? '≥ ' : ''}${row.value.toLocaleString()}`}
-              </span>
+          {buckets.map((row, index) => (
+            <div key={row.start} title={row.title}>
+              {showCounts && (
+                <span>
+                  {row.value === null
+                    ? '—'
+                    : `${row.lowerBound ? '≥ ' : ''}${row.value.toLocaleString()}`}
+                </span>
+              )}
               <div
                 className={`fb-activity-track ${row.value === null ? 'astra-activity-unknown' : ''}`}
               >
@@ -222,7 +226,9 @@ function NativeActivity({ analysisId, sourceId }: { analysisId?: string; sourceI
                   }}
                 />
               </div>
-              <time dateTime={row.start}>{row.start.slice(5, 10)}</time>
+              <time dateTime={row.start} aria-hidden={ticks.has(index) ? undefined : true}>
+                {ticks.get(index) ?? ''}
+              </time>
             </div>
           ))}
         </div>
