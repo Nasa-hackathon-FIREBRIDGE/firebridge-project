@@ -3,7 +3,8 @@ import { SENSORS, type SensorKey } from '../../../lib/sensors'
 import type { BridgeReport } from '../engine/index.ts'
 import { REFERENCE_DRIFT_MINUTES } from '../engine/index.ts'
 import { fmtClock, fmtDate, fmtInt, fmtMinutes, fmtOne, sensorLabel } from '../format'
-import { Act, Legend, LegendItem, Note, SensorDot, Tile } from '../ui'
+import { Act, Legend, LegendItem, Note, SensorDot, TABLE, Tile } from '../ui'
+import { driftCheck, timeOfDayCheck } from '../../science/checks'
 import { AskWhy } from '../../copilot/AskWhy'
 
 const OverpassChart = lazy(() => import('../BridgeCharts').then((m) => ({ default: m.OverpassChart })))
@@ -28,6 +29,7 @@ export function RegimeAct({ report }: { report: BridgeReport }) {
   return (
     <Act
       index={2}
+      science={report.evidence ? [driftCheck(report), timeOfDayCheck(report)] : undefined}
       eyebrow="Same sky, different clocks"
       title="When each satellite actually looked"
       lede={<>Local solar time of every daytime detection, measured from the archive’s own timestamps rather than nominal orbit tables. A satellite that drifts later in the afternoon sees fires at a different stage of their daily cycle, so its counts change for reasons unrelated to burning.</>}
@@ -104,7 +106,7 @@ export function RegimeAct({ report }: { report: BridgeReport }) {
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         {timingPlatforms.length > 0 && (
           <div className="min-w-0 overflow-x-auto">
-            <table className="w-full border-collapse text-left text-[12.5px]">
+            <table className={TABLE}>
               <caption className="mb-2 text-left text-[12.5px] font-medium text-fg">Pass separation from Aqua on shared fire days</caption>
               <thead>
                 <tr className="text-fg-3 [&>th]:static [&>th]:bg-transparent [&>th]:font-sans [&>th]:text-[11.5px] [&>th]:normal-case [&>th]:tracking-normal [&>th]:text-fg-3">
