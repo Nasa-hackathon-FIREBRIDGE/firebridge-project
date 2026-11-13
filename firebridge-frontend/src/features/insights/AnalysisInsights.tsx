@@ -28,10 +28,10 @@ function findings(insights: Insights): { icon: ReactNode; text: ReactNode }[] {
   if (peakMonth && total && months.length > 1)
     out.push({
       icon: <TrendingUp size={16} />,
-      text: <>Activity peaked in <strong>{formatMonth(peakMonth.month)}</strong> with {fmt(peakMonth.total)} detections, {pct(peakMonth.total, total)} of the period.</>,
+      text: <>Recorded activity peaked in <strong>{formatMonth(peakMonth.month)}</strong> with {fmt(peakMonth.total)} detections, {pct(peakMonth.total, total)} of the available records.</>,
     })
   if (topMonthsShare !== null && topMonthsShare >= 0.5)
-    out.push({ icon: <Flame size={16} />, text: <>The three busiest months hold <strong>{Math.round(topMonthsShare * 100)}%</strong> of all detections, a strongly seasonal pattern.</> })
+    out.push({ icon: <Flame size={16} />, text: <>The three busiest months hold <strong>{Math.round(topMonthsShare * 100)}%</strong> of the available detections, a strongly seasonal pattern.</> })
   if (peakPeriod && resolution === 'day')
     out.push({ icon: <CalendarCheck2 size={16} />, text: <>The busiest single day was <strong>{formatDay(peakPeriod.date)}</strong>, with {fmt(peakPeriod.total ?? 0)} detections.</> })
   if (ratio !== null)
@@ -39,7 +39,7 @@ function findings(insights: Insights): { icon: ReactNode; text: ReactNode }[] {
       icon: <ScanSearch size={16} />,
       text: (
         <>
-          VIIRS recorded <strong>{ratio >= 10 ? Math.round(ratio) : ratio.toFixed(1)}×</strong> as many detections as MODIS over the same area and dates. That is expected from its finer 375 m pixels and is not evidence of more burning.
+          The available records contain <strong>{ratio >= 10 ? Math.round(ratio) : ratio.toFixed(1)}×</strong> as many VIIRS detections as MODIS detections over the same area and dates. VIIRS has finer 375 m pixels; differences in sampling and inventory completeness also affect this ratio, which is not evidence of more burning.
         </>
       ),
     })
@@ -64,7 +64,7 @@ function SensorBars({ insights, compact = false }: { insights: Insights; compact
               {!compact && <span className="font-mono text-[10.5px] text-fg-3">{sensor.instrument} · {sensor.pixel}</span>}
             </span>
             <span className="shrink-0 tabular-nums text-fg-2">
-              <strong className="font-semibold text-fg">{sensor.count === null ? 'Unknown' : fmt(sensor.count)}</strong>
+              <strong className="font-semibold text-fg">{sensor.count === null ? 'Unknown' : `${sensor.lowerBound ? '≥ ' : ''}${fmt(sensor.count)}`}</strong>
               {sensor.count !== null && <span className="ml-1.5 text-fg-3">{pct(sensor.count, known)}</span>}
             </span>
           </div>
@@ -107,16 +107,16 @@ export function AnalysisInsights({ analysisId, onSelectDay }: { analysisId?: str
           <Figures
             label="The record in four numbers"
             items={[
-              { label: 'Native detections', value: total === null ? 'Unknown' : <>{insights.lowerBound ? '≥ ' : ''}<CountUp value={total} /></>, note: `across ${insights.sensors.length} satellite record${insights.sensors.length === 1 ? '' : 's'}` },
+              { label: 'Native detections', value: total === null ? 'Unknown' : <>{insights.lowerBound ? '≥ ' : ''}<CountUp value={total} /></>, note: insights.lowerBound ? 'At least this many · inventory is incomplete' : `across ${insights.sensors.length} satellite record${insights.sensors.length === 1 ? '' : 's'}` },
               { label: insights.resolution === 'day' ? 'Days with fire' : 'Periods with fire', value: <><CountUp value={insights.activePeriods} /><span className="text-[0.5em] text-fg-3"> / {fmt(insights.knownPeriods)}</span></>, note: 'with at least one detection' },
               { label: 'Busiest day', value: insights.peakPeriod ? <CountUp value={insights.peakPeriod.total ?? 0} /> : '—', note: insights.peakPeriod ? formatDay(insights.peakPeriod.date) : 'No detections returned' },
-              { label: 'VIIRS per MODIS detection', value: insights.ratio === null ? '—' : <><CountUp value={insights.ratio} format={(v) => v.toFixed(1)} />×</>, note: insights.ratio === null ? 'Needs both instruments' : 'a resolution effect, not more fire' },
+              { label: 'Recorded VIIRS per MODIS detection', value: insights.ratio === null ? '—' : <><CountUp value={insights.ratio} format={(v) => v.toFixed(1)} />×</>, note: insights.ratio === null ? 'Needs both instruments' : 'Ratio of available records' },
             ]}
           />
           <Chapter
             id="insights"
             kicker="What the satellites recorded"
-            title={total !== null && viirsShare !== null ? <>{fmt(total)} detections from {insights.sensors.length} satellites, and {Math.round(viirsShare * 100)}% of them came from VIIRS</> : 'What the satellites recorded'}
+            title={total !== null && viirsShare !== null ? <>{insights.lowerBound ? 'At least ' : ''}{fmt(total)} detections from {insights.sensors.length} satellites, and {Math.round(viirsShare * 100)}% of available MODIS and VIIRS records came from VIIRS</> : 'What the satellites recorded'}
           >
             {insights.months.length > 1 && (
               <Figure caption="The fleet as a river: monthly detections stacked by satellite around a centre line. A new stream entering is a satellite joining the record, which raises any raw total without a single extra fire.">
@@ -132,6 +132,7 @@ export function AnalysisInsights({ analysisId, onSelectDay }: { analysisId?: str
                 </>
               }
             >
+              {insights.lowerBound && <p>Counts and shares use available records. ≥ marks an incomplete inventory; unknown source counts remain unknown.</p>}
               {list.length ? list.map((item, index) => <p key={index}>{item.text}</p>) : <p>No detections were returned, so no pattern can be described. This does not establish an absence of fire.</p>}
               <p>
                 <strong>Why the satellites disagree.</strong> They do not see the same fire the same way. MODIS looks at the ground in 1 km pixels, VIIRS in 375 m pixels that catch smaller fires. Terra passes near 10:30, Aqua and VIIRS near 13:30, closer to the afternoon peak of burning, and both MODIS satellites have drifted from their original hours. Clouds, smoke and gaps between passes hide fires from all of them. The Fire calendar and the Sensor bridge put every satellite on one Aqua-equivalent scale.
@@ -179,13 +180,14 @@ export function InsightsRail({ analysisId, onOpenOverview }: { analysisId?: stri
             ))}
           </div>
           <div className="mt-4"><SensorBars insights={insights} compact /></div>
+          {insights.lowerBound && <p className="mb-0 mt-3 text-[11.5px] leading-relaxed text-fg-3">≥ means at least this many; inventory is incomplete. Shares and ratio use available records.</p>}
           <dl className="mb-0 mt-5 grid grid-cols-2 gap-3 border-t border-white/[0.06] pt-4">
             <div className="flex flex-col">
               <dt className="text-[11.5px] text-fg-3">Peak month</dt>
               <dd className="m-0 mt-1 text-[13.5px] font-medium text-fg">{calendar.isPending ? '…' : insights.peakMonth ? formatMonth(insights.peakMonth.month, 'short') : '—'}</dd>
             </div>
             <div className="flex flex-col">
-              <dt className="text-[11.5px] text-fg-3">VIIRS : MODIS</dt>
+              <dt className="text-[11.5px] text-fg-3">Recorded VIIRS : MODIS</dt>
               <dd className="m-0 mt-1 text-[13.5px] font-medium text-fg">{insights.ratio === null ? '—' : `${insights.ratio.toFixed(1)} : 1`}</dd>
             </div>
           </dl>
