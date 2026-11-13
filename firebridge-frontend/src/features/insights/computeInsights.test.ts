@@ -61,7 +61,8 @@ describe('computeInsights', () => {
     } as unknown as NativeSummary
     const gap = { ...calendar, periods: [period('2020-08-01', [['modis-aqua-c6-standard', null], ['viirs-noaa20-c2-standard', '5']]), period('2020-08-02', [['modis-aqua-c6-standard', null], ['viirs-noaa20-c2-standard', null]])] } as unknown as NativeCalendar
     const insights = computeInsights(unknown, gap)
-    expect(insights.total).toBeNull()
+    expect(insights.total).toBe(30)
+    expect(insights.lowerBound).toBe(true)
     expect(insights.sensors[0].count).toBeNull()
     // The known satellite's count is a lower bound, flagged with the satellite that is missing.
     expect(insights.periods[0]).toMatchObject({ total: 5, missing: ['aqua'] })
@@ -69,6 +70,53 @@ describe('computeInsights', () => {
     expect(insights.periods[1]).toMatchObject({ total: null, missing: ['aqua'] })
     expect(insights.knownPeriods).toBe(1)
     expect(insights.ratio).toBeNull()
+  })
+
+  it.each([false, true])('retains known satellite counts when an unknown collection is listed first: %s', (unknownFirst) => {
+    const sources = [
+      source('modis-aqua-c61-standard', 'Aqua', 'modis-aqua', '540', 'lower_bound'),
+      source('modis-aqua-c6-standard', 'Aqua', 'modis-aqua', null, 'unknown'),
+      source('modis-terra-c61-standard', 'Terra', 'modis-terra', '425', 'lower_bound'),
+      source('modis-terra-c6-standard', 'Terra', 'modis-terra', null, 'unknown'),
+      source('viirs-snpp-c2-standard', 'SNPP', 'viirs-snpp', '8210', 'lower_bound'),
+      source('viirs-noaa20-c2-standard', 'N20', 'viirs-noaa20', '8474', 'lower_bound'),
+      source('viirs-noaa21-c2-standard', 'N21', 'viirs-noaa21', '7521', 'lower_bound'),
+    ]
+    const insights = computeInsights({ ...summary, native_detections_by_source: unknownFirst ? sources.reverse() : sources })
+    expect(insights.total).toBe(25170)
+    expect(insights.lowerBound).toBe(true)
+    expect(insights.sensors.map(({ key, count, lowerBound }) => ({ key, count, lowerBound }))).toEqual([
+      { key: 'terra', count: 425, lowerBound: true },
+      { key: 'aqua', count: 540, lowerBound: true },
+      { key: 'snpp', count: 8210, lowerBound: true },
+      { key: 'noaa20', count: 8474, lowerBound: true },
+      { key: 'noaa21', count: 7521, lowerBound: true },
+    ])
+    expect(insights.modis).toBe(965)
+    expect(insights.viirs).toBe(24205)
+    expect(insights.ratio).toBeCloseTo(25.0829)
+  })
+
+  it('sums known collections and marks an unknown companion collection as a lower bound', () => {
+    const insights = computeInsights({ ...summary, native_detections_by_source: [
+      source('modis-aqua-c6-standard', 'Aqua', 'modis-aqua', '2'),
+      source('modis-aqua-c61-standard', 'Aqua', 'modis-aqua', '3'),
+      source('modis-aqua-other', 'Aqua', 'modis-aqua', null, 'unknown'),
+    ] })
+    expect(insights.total).toBe(5)
+    expect(insights.lowerBound).toBe(true)
+    expect(insights.sensors[0]).toMatchObject({ count: 5, lowerBound: true })
+  })
+
+  it('keeps an entirely unknown inventory distinct from a confirmed zero', () => {
+    const unknown = computeInsights({ ...summary, native_detections_by_source: [source('modis-aqua-c6-standard', 'Aqua', 'modis-aqua', null, 'unknown')] })
+    expect(unknown.total).toBeNull()
+    expect(unknown.sensors[0].count).toBeNull()
+    const zero = computeInsights({ ...summary, native_detections_by_source: [source('modis-aqua-c6-standard', 'Aqua', 'modis-aqua', '0')] })
+    expect(zero.total).toBe(0)
+    expect(zero.lowerBound).toBe(false)
+    expect(zero.sensors[0]).toMatchObject({ count: 0, lowerBound: false })
+    expect(computeInsights({ ...summary, native_detections_by_source: [] }).total).toBeNull()
   })
 
   it('judges availability per satellite across collection changes and record spans', () => {
