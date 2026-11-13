@@ -1,7 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 // Self-hosted fonts: production CSP only allows fonts from 'self'.
-import '@fontsource-variable/inter'
+// Inter with its optical-size axis: the text cut at reading sizes, the display cut for headlines.
+import '@fontsource-variable/inter/opsz.css'
+import '@fontsource-variable/inter/opsz-italic.css'
 import '@fontsource-variable/space-grotesk'
 import '@fontsource-variable/jetbrains-mono'
 import './index.css'
