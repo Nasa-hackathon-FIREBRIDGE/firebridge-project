@@ -1,4 +1,5 @@
 import { SENSORS, sensorKeyOf, type SensorKey } from '../../lib/sensors'
+import { summarizeKnownCounts } from '../../lib/nativeCounts'
 import type { NativeCalendar, NativeSummary } from '../observations/types'
 
 export interface SensorTotal {
@@ -8,6 +9,7 @@ export interface SensorTotal {
   color: string
   pixel: string
   count: number | null
+  lowerBound: boolean
   sourceIds: string[]
 }
 
@@ -52,22 +54,22 @@ const toNumber = (value: string | null | undefined) => (value != null && /^\d+$/
 export function computeInsights(summary?: NativeSummary, calendar?: NativeCalendar): Insights {
   const sourceSensor = new Map<string, SensorKey>()
   const sensorMap = new Map<SensorKey, SensorTotal>()
-  let total: number | null = 0
-  let lowerBound = false
+  const counts = summarizeKnownCounts(summary?.native_detections_by_source ?? [])
+  const total = counts.value === null ? null : Number(counts.value)
+  const lowerBound = counts.lowerBound
 
   for (const source of summary?.native_detections_by_source ?? []) {
     const key = sensorKeyOf(source.platform, source.product, source.source_id)
     sourceSensor.set(source.source_id, key)
     const count = source.count_status === 'unknown' ? null : toNumber(source.count)
-    if (source.count_status === 'lower_bound') lowerBound = true
     const meta = SENSORS[key]
-    const entry = sensorMap.get(key) ?? { key, label: meta.label, instrument: meta.instrument, color: meta.color, pixel: meta.pixel, count: 0, sourceIds: [] }
+    const entry = sensorMap.get(key) ?? { key, label: meta.label, instrument: meta.instrument, color: meta.color, pixel: meta.pixel, count: null, lowerBound: false, sourceIds: [] }
     entry.sourceIds.push(source.source_id)
-    entry.count = entry.count === null || count === null ? null : entry.count + count
+    // An unknown collection must not erase records from another collection of the same satellite.
+    if (count !== null) entry.count = (entry.count ?? 0) + count
+    entry.lowerBound ||= count === null || source.count_status === 'lower_bound'
     sensorMap.set(key, entry)
-    total = total === null || count === null ? null : total + count
   }
-  if (!summary) total = null
 
   const order: SensorKey[] = ['terra', 'aqua', 'snpp', 'noaa20', 'noaa21', 'landsat', 'other']
   const sensors = [...sensorMap.values()].sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key))
