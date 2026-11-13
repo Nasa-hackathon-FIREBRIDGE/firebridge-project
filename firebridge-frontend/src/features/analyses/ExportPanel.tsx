@@ -1,3 +1,4 @@
+import { SectionHeading } from '../../components/workspace/SectionHeading'
 import { useRef, useState, type FormEvent } from 'react'
 import type { ExportFormat } from '@firebridge/contracts'
 import { useCreateExport } from '../../hooks/useFirebridge'
@@ -33,13 +34,7 @@ export function ExportPanel({ analysisId, available, metadata }: { analysisId: s
   }
   return (
     <section className="fb-section" aria-labelledby="exports-heading">
-      <div className="fb-section-heading">
-        <span className="fb-step">03</span>
-        <div>
-          <h2 id="exports-heading">Export results</h2>
-          <p>Export the saved analysis. The worker prepares your file asynchronously.</p>
-        </div>
-      </div>
+      <SectionHeading id="exports-heading" eyebrow="Exports · full saved analysis" title="Take the record with you" description="Export the saved analysis as a file. The worker prepares it asynchronously; map filters and table search do not change what is exported." />
       <div className="geo-export-summary">
         <span className="fb-eyebrow">EXPORT SCOPE / FULL SAVED ANALYSIS</span>
         <p>Map inspection filters and loaded-page search do not change this export. The file includes the saved analysis interval and sources.</p>
