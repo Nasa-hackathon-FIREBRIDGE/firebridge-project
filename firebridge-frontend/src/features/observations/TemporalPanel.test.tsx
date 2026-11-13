@@ -38,8 +38,8 @@ it('renders unknown inventory independently from a genuine zero', async () => {
   mount(<TemporalPanel analysisId="analysis" filters={emptyObservationFilters} onChange={() => {}} />, data)
   await screen.findByText('Unknown')
   expect(screen.getByText('0')).toBeTruthy()
-  expect(document.querySelectorAll('.geo-unknown')).toHaveLength(1)
-  expect((document.querySelectorAll('.geo-timeline-track i')[1] as HTMLElement).style.height).toBe('0%')
+  expect(document.querySelectorAll('[data-unknown]')).toHaveLength(1)
+  expect((document.querySelectorAll('[data-bar]')[1] as HTMLElement).style.height).toBe('0%')
 })
 it('preserves large lower bounds and uses a shared source count scale', async () => {
   const source = fixtures.summary.native_detections_by_source[0]
@@ -49,8 +49,24 @@ it('preserves large lower bounds and uses a shared source count scale', async ()
     { ...source, source_id: 'unknown', count: null, count_status: 'unknown' },
   ] })
   expect(await screen.findByText('≥ ' + BigInt('90071992547409930').toLocaleString())).toBeTruthy()
-  const bars = document.querySelectorAll<HTMLElement>('.geo-source-track i')
+  const bars = document.querySelectorAll<HTMLElement>('[data-source-bar]')
   expect([...bars].map((bar) => bar.style.width)).toEqual(['100%', '50%', '0%'])
   expect(screen.getByText('Unknown')).toBeTruthy()
   expect(screen.getByText(/Sensor sampling, resolution and detection methods differ; these counts are not a harmonized fire response/)).toBeTruthy()
+})
+
+it('filters a stretch of months by dragging across the month strip', async () => {
+  const onChange = vi.fn()
+  const periods = Array.from({ length: 120 }, (_, i) => {
+    const start = new Date(Date.UTC(2024, 0, 1 + i)).toISOString()
+    return { start, end_exclusive: new Date(Date.UTC(2024, 0, 2 + i)).toISOString(), counts_by_source: [{ source_id: 'source', count: String(i % 5), count_status: 'complete' }] }
+  })
+  mount(<TemporalPanel analysisId="analysis" filters={emptyObservationFilters} onChange={onChange} />, { ...fixtures.calendar, periods })
+  const strip = await screen.findByRole('group', { name: 'Months of the saved interval' })
+  strip.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 100, right: 400, bottom: 100, x: 0, y: 0, toJSON: () => ({}) })
+  // Four months (Jan–Apr 2024) across 400 px: drag from January to March.
+  fireEvent.pointerDown(strip, { clientX: 20, buttons: 1 })
+  fireEvent.pointerMove(strip, { clientX: 250, buttons: 1 })
+  fireEvent.pointerUp(strip, { clientX: 250 })
+  expect(onChange).toHaveBeenLastCalledWith({ sourceId: '', start: '2024-01-01', endExclusive: '2024-04-01' })
 })
