@@ -4,7 +4,7 @@ import { useReducedMotion } from 'motion/react'
 import type { SensorKey } from '../../../lib/sensors'
 import { MODELS, type BridgeReport, type ModelId, type PlatformReplay } from '../engine/index.ts'
 import { bandFactor, fmtInt, fmtMonth, fmtOne, sensorColor, sensorLabel } from '../format'
-import { Act, Legend, LegendItem, Note, SupportBadge } from '../ui'
+import { Act, Legend, LegendItem, Note, SupportBadge, TABLE } from '../ui'
 import type { ReplayStage } from '../BridgeCharts'
 
 const ReplayChart = lazy(() => import('../BridgeCharts').then((m) => ({ default: m.ReplayChart })))
@@ -131,7 +131,7 @@ export function ReplayAct({ report, platform }: { report: BridgeReport; platform
       {stage === 'revealed' ? (
         <div className="mt-6 grid animate-fade-up gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <div className="min-w-0 overflow-x-auto">
-            <table className="w-full border-collapse text-left text-[12.5px]">
+            <table className={TABLE}>
               <caption className="mb-2 text-left text-[12.5px] font-medium text-fg">Scored against the revealed Aqua record ({fmtInt(chosen.actualTotal)} cell-days in {replay.months.length} months)</caption>
               <thead>
                 <tr className="text-fg-3 [&>th]:static [&>th]:bg-transparent [&>th]:font-sans [&>th]:text-[11.5px] [&>th]:normal-case [&>th]:tracking-normal [&>th]:text-fg-3">
