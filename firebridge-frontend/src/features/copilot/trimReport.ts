@@ -19,6 +19,19 @@ export function explainerReport(report: BridgeReport, analysisId: string, releas
       handovers: report.handovers.map(({ months: _months, ...rest }) => rest),
       anomalies: report.anomalies,
       episodes: { ...report.episodes, all: undefined },
+      evidence: report.evidence && trimEvidence(report),
     },
+  }
+}
+
+/** The independent checks, without the per-cell map: only months that are flagged or burned
+ *  unusually hot, and the place statistics without the cells themselves. */
+function trimEvidence(report: BridgeReport) {
+  const { evidence, anomalies } = report
+  const flagged = new Set(anomalies.months.filter((a) => a.kind).map((a) => a.month))
+  return {
+    ...evidence,
+    places: evidence.places && { ...evidence.places, cells: undefined },
+    months: evidence.months.filter((m) => flagged.has(m.month) || (m.energy && Math.abs(m.energy.z) >= anomalies.threshold)),
   }
 }
