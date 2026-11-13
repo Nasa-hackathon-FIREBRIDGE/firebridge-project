@@ -6,7 +6,10 @@ import { Banner } from '../../components/ui/Banner'
 import type { BridgeReport } from './engine/index.ts'
 import { fmtInt, fmtMinutes, fmtRatio, fmtShare, sensorLabel } from './format'
 import { MAX_BRIDGE_DETECTIONS, useBridgeReport, type BridgeState } from './useBridgeReport'
-import { PlatformPicker, Tile } from './ui'
+import { PlatformPicker } from './ui'
+import { Figures, Masthead, Standfirst } from '../story/Story'
+import { Tally } from '../science/Evidence'
+import { driftCheck, floorCheck, handoverCheck, heavyTailCheck, resolutionCheck, timeOfDayCheck, trendCheck } from '../science/checks'
 import { alarmOutcome, defaultHandover, defaultPlatform } from './selectors'
 import { GapAct } from './acts/GapAct'
 import { RegimeAct } from './acts/RegimeAct'
@@ -41,17 +44,29 @@ function Headline({ report, platform }: { report: BridgeReport; platform: Sensor
   const outcome = handover ? alarmOutcome(handover) : null
   const explained = gap?.shares && gap.shares.residual >= 0 ? gap.shares.pixel + gap.shares.smallFires : null
   const unseen = fingerprint.inRegime.share !== null && fingerprint.drifted.share !== null ? `fires no VIIRS pass saw: ${fmtShare(fingerprint.inRegime.share)} → ${fmtShare(fingerprint.drifted.share)}` : null
+  const checks = report.evidence && platform
+    ? [resolutionCheck(report, platform), driftCheck(report), timeOfDayCheck(report), floorCheck(report, platform), heavyTailCheck(report), handoverCheck(report, platform), trendCheck(report)].filter((c) => c !== null)
+    : []
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Tile tone="ember" label={`${platform ? sensorLabel(platform) : 'VIIRS'} vs Aqua, raw`} value={fmtRatio(gap?.ratioDetections)} sub="daytime detections in the same months" />
-      <Tile label="Instrument effect" value={fmtShare(explained)} sub="of that gap from pixel size and fires below MODIS’s floor" />
-      <Tile label="Aqua overpass drift" value={aqua ? fmtMinutes(aqua.shiftMinutes) : '—'} sub={aqua ? `${aqua.fromYear} → ${aqua.toYear}, from timestamps${unseen ? `; ${unseen}` : ''}` : 'needs two well-sampled years'} />
-      <Tile
-        label="If Aqua went dark: false alarms"
-        value={outcome ? `${outcome.naiveFalse.length} → ${outcome.bridgedFalse.length}` : '—'}
-        sub={handover ? `un-harmonized → FIREBRIDGE, rehearsed switch-off on 1 Jan ${handover.switchMonth.slice(0, 4)}` : 'needs two years of overlap before a switch'}
+    <section className="flex flex-col gap-8" aria-label="Lab summary">
+      <Figures
+        label="The lab in four numbers"
+        items={[
+          { label: `${platform ? sensorLabel(platform) : 'VIIRS'} vs Aqua, raw`, value: fmtRatio(gap?.ratioDetections), note: 'daytime detections in the same months' },
+          { label: 'Instrument effect', value: fmtShare(explained), note: 'of that gap: pixel size and fires below the MODIS floor' },
+          { label: 'Aqua overpass drift', value: aqua ? fmtMinutes(aqua.shiftMinutes) : '—', note: aqua ? `${aqua.fromYear} → ${aqua.toYear}, read from timestamps${unseen ? `; ${unseen}` : ''}` : 'needs two well-sampled years' },
+          { label: 'If Aqua went dark: false alarms', value: outcome ? `${outcome.naiveFalse.length} → ${outcome.bridgedFalse.length}` : '—', note: handover ? `un-harmonized → FIREBRIDGE, switch-off rehearsed on 1 Jan ${handover.switchMonth.slice(0, 4)}` : 'needs two years of overlap before a switch' },
+        ]}
       />
-    </div>
+      {checks.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="m-0 max-w-[60ch] font-serif text-[16px] italic leading-relaxed text-paper-2" style={{ fontVariationSettings: '"opsz" 18' }}>
+            A lab notebook in six experiments. Each states a claim, tests it on this selection, and closes against published science: {checks.length} claims checked.
+          </p>
+          <Tally statuses={checks.map((c) => c.status)} />
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -61,21 +76,28 @@ export function BridgePanel({ analysisId, releaseId }: { analysisId?: string; re
   if (!analysisId) return null
   const report = state.status === 'ready' ? state.report : null
   const platform = report ? (picked?.report === report ? picked.platform : defaultPlatform(report)) : null
+  const gap = report && platform ? report.sensitivity.gaps.find((g) => g.platform === platform) : null
+  const explained = gap?.shares && gap.shares.residual >= 0 ? gap.shares.pixel + gap.shares.smallFires : null
   return (
-    <section className="flex flex-col gap-6 font-sans" aria-labelledby="bridge-heading">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-3xl">
-          <p className="m-0 mb-2 inline-flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ember-300">
-            <GitCompareArrows size={13} aria-hidden="true" /> Harmonization lab{report ? ` · ${report.meta.engine}` : ''}
-          </p>
-          <h2 id="bridge-heading" className="m-0 text-[26px] font-semibold tracking-tight text-fg">How much of the difference is the satellite?</h2>
-          <p className="mb-0 mt-2 text-[14px] leading-relaxed text-fg-2">
-            A detection count changes when the fire changes, but also when the sensor, its pixel size or its overpass time changes. This lab separates the two for your exact selection, tests a common Aqua-equivalent scale against the real Aqua record, and shows where it fails.
-          </p>
-        </div>
+    <section className="flex flex-col gap-14 font-sans" aria-labelledby="bridge-heading">
+      <header className="relative flex flex-col gap-6 pt-6 sm:pt-10">
+        <div className="pointer-events-none absolute -left-40 -top-40 size-[520px] rounded-full bg-ember-500/[0.07] blur-[100px]" aria-hidden="true" />
+        <Masthead>
+          <GitCompareArrows size={13} aria-hidden="true" /> Sensor bridge · harmonization lab{report ? ` · ${report.meta.engine}` : ''}
+        </Masthead>
+        <h2 id="bridge-heading" className="m-0 max-w-[20ch] font-serif text-[clamp(34px,4.6vw,62px)] font-[480] leading-[1.02] tracking-[-0.032em] text-paper" style={{ fontVariationSettings: '"opsz" 144' }}>How much of the difference is the satellite?</h2>
+        <Standfirst>
+          {gap?.ratioDetections && platform ? (
+            <p className="m-0">
+              Here {sensorLabel(platform)} records <strong>{fmtRatio(gap.ratioDetections)}</strong> as many fire detections as Aqua over the same ground and months.{explained !== null ? <> <strong>{fmtShare(explained)}</strong> of that gap is the instrument, not the fire.</> : null} This notebook separates the two, hides Aqua and predicts it, rehearses the day Aqua goes dark, and checks every step against published science.
+            </p>
+          ) : (
+            <p className="m-0">A detection count changes when the fire changes, but also when the sensor, its pixel size or its overpass time changes. This notebook separates the two for your exact selection, tests a common Aqua-equivalent scale against the real Aqua record, and shows where it fails.</p>
+          )}
+        </Standfirst>
         {report && platform && (
-          <div className="flex flex-col items-start gap-1.5">
-            <span className="text-[11.5px] text-fg-3">Compare Aqua with</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-fg-3">Compare Aqua with</span>
             <PlatformPicker platforms={report.platforms} value={platform} onChange={(value) => setPicked({ report, platform: value })} />
           </div>
         )}
