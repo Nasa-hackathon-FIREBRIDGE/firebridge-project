@@ -4,6 +4,7 @@ import { satelliteJury, type AnomalyReport } from './anomaly.ts'
 import { CellDayIndex } from './celldays.ts'
 import { driftFingerprint, type DriftFingerprint } from './drift.ts'
 import { detectEpisodes, type EpisodeSummary } from './episodes.ts'
+import { evidenceReport, type EvidenceReport } from './evidence.ts'
 import { GRID_CRS } from './geo.ts'
 import { rehearseHandovers, type Handover } from './handover.ts'
 import { prepareDetections, type Observation, type RawDetection } from './prepare.ts'
@@ -103,6 +104,8 @@ export interface BridgeReport {
   anomalies: AnomalyReport
   episodes: EpisodeSummary
   headline: GapDecomposition | null
+  /** Independent scientific checks: season, time of day, intensity, trends, per-month energy and extent. */
+  evidence: EvidenceReport
 }
 
 export interface DriftEffect {
@@ -236,15 +239,16 @@ export function analyzeBridge(input: BridgeInput, options: BridgeOptions = {}): 
   // Satellite jury: each sensor's own daytime cell-days in the months it is fully inventoried.
   const cellDays = new Map<string, number>()
   for (const cell of index.cells.values()) for (const sensor of Object.keys(cell.bySensor)) cellDays.set(`${sensor}|${cell.month}`, (cellDays.get(`${sensor}|${cell.month}`) ?? 0) + 1)
+  const witnesses = WITNESSES.filter((sensor) => availability.bySensor[sensor]).map((sensor) => ({
+    sensor,
+    months: new Set(availability.months.filter((m) => isComplete(state(sensor, m)))),
+    drifted: new Set(orbits.find((o) => o.sensor === sensor)?.years ?? []),
+  }))
   const anomalies = satelliteJury({
     months: availability.months,
     harmonized: new Map(months.filter((m) => m.bridge).map((m) => [m.month, m.bridge!.value])),
     raw: new Map(months.map((m) => [m.month, m.raw])),
-    witnesses: WITNESSES.filter((sensor) => availability.bySensor[sensor]).map((sensor) => ({
-      sensor,
-      values: new Map(availability.months.filter((m) => isComplete(state(sensor, m))).map((m) => [m, cellDays.get(`${sensor}|${m}`) ?? 0])),
-      drifted: new Set(orbits.find((o) => o.sensor === sensor)?.years ?? []),
-    })),
+    witnesses: witnesses.map((w) => ({ sensor: w.sensor, values: new Map([...w.months].map((m) => [m, cellDays.get(`${w.sensor}|${m}`) ?? 0])), drifted: w.drifted })),
   })
 
   const years: BridgeYear[] = []
@@ -269,6 +273,7 @@ export function analyzeBridge(input: BridgeInput, options: BridgeOptions = {}): 
   const episodes = detectEpisodes(observations, options.episodeLinkMetres, options.episodeLinkHours)
   if (sense.floor !== null) episodes.viirsOnlyBelowFloor = episodes.all.filter((e) => e.viirs && !e.modis && (e.maxFrp ?? 0) < sense.floor!).length
   const headline = sense.gaps.filter((g) => g.shares).sort((a, b) => b.platformCellDays - a.platformCellDays)[0] ?? null
+  const evidence = evidenceReport({ observations, months, witnesses, episodes, minimumYears: anomalies.minimumYears, anomalies })
   return {
     meta: {
       engine: ENGINE_VERSION,
@@ -296,6 +301,7 @@ export function analyzeBridge(input: BridgeInput, options: BridgeOptions = {}): 
     anomalies,
     episodes,
     headline,
+    evidence,
   }
 }
 
@@ -362,6 +368,7 @@ export { MAINTAINED_ORBIT_UNTIL } from './regime.ts'
 export type { PlatformReplay, ModelId, ModelScore, ReplayMonth } from './replay.ts'
 export { MODELS, B2_FEATURES } from './replay.ts'
 export type { Episode, EpisodeSummary } from './episodes.ts'
+export type { Consensus, EvidenceReport, FirePlace, Intensity, MonthEvidence, Places, Robustness, Seasonality, TimeOfDay, Trends, TrendTest, WeeklyRhythm } from './evidence.ts'
 export type { Sensitivity, GapDecomposition, ResponseCurve, FrpDistribution } from './sensitivity.ts'
 export { FRP_LABELS } from './sensitivity.ts'
 export type { OverpassRow, Drift, PairTiming } from './regime.ts'
