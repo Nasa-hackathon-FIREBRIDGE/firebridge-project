@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
+  CloudSun,
+  FlaskConical,
   ArrowRight,
   ArrowUpRight,
   ChevronDown,
@@ -21,6 +23,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { Reveal } from '../components/ui/Reveal'
+import { REFERENCES } from '../features/science/references'
 import { ArchiveBars } from './methods/ArchiveBars'
 import {
   ARCHIVE,
@@ -148,6 +151,22 @@ const steps: Step[] = [
     ],
   },
   {
+    icon: FlaskConical,
+    kicker: 'Verify',
+    title: 'Every result is checked against physics it never used',
+    text: 'Beside each result, the same detections are asked other questions whose answers published fire science already knows, and every month is set beside NASA’s weather record.',
+    status: 'done',
+    figure: String(Object.keys(REFERENCES).length),
+    figureLabel: 'published sources cited, every DOI and link checked',
+    detail: [
+      'Season: circular statistics on the monthly record and a Rayleigh test on each year’s peak month. Time of day: Aqua’s afternoon pass against Terra’s morning pass, the same MODIS instrument at a different hour.',
+      'Unusual months are judged again on radiated power (FRP) and on the number of burning 5 km cells, each satellite against its own past, and re-run at thresholds from 1.5 to 3 spreads and with each satellite withheld.',
+      'Trends: Mann–Kendall test with Sen’s slope over full years, with exact p-values, for the raw total, one unchanging satellite and the harmonized record.',
+      'Weather: daily maximum temperature and precipitation from NASA POWER (MERRA-2 reanalysis, about 50 km) at the centre of the fire activity, compared month by month with Spearman correlations and permutation p-values. Weekly rhythm: a chi-square test on the weekday each detection cluster begins.',
+      'A check never changes a result. It confirms it, qualifies it or contradicts it, and the page says which.',
+    ],
+  },
+  {
     icon: MessagesSquare,
     kicker: 'Explain',
     title: 'A language model puts the facts into words. It never computes them.',
@@ -165,6 +184,7 @@ const steps: Step[] = [
 ]
 
 const limits: { icon: LucideIcon; title: string; text: string }[] = [
+  { icon: CloudSun, title: 'Weather is read at one point', text: 'The weather comparison reads NASA POWER at the centre of each analysis’s fire activity, on a grid of about 50 km. A large area can hold several weathers, and a correlation with weather is not proof of cause.' },
   { icon: EyeOff, title: 'No fire is not the same as not seen', text: 'Fire masks and cloud flags are not ingested yet, so the pipeline cannot tell a clear-sky “no fire” from a missed look. Observation coverage is reported as unknown.' },
   { icon: Telescope, title: 'Harmonization is not independently evaluated', text: 'The Aqua-equivalent record is tested inside each analysis, but not yet in a separate region or against an external reference.' },
   { icon: Hourglass, title: 'Standard records stop in mid-2026', text: 'NASA replaces near-real-time fire records with standard-quality ones after a few months. Each analysis shows the exact end per satellite; newer records are archived but left out.' },
@@ -295,7 +315,7 @@ export default function EvidencePage() {
         {/* ── The journey ──────────────────────────────────────────────────── */}
         <section aria-labelledby="journey-heading">
           <Reveal>
-            <SectionTitle eyebrow="02 · From orbit to your screen" title={<span id="journey-heading">Seven steps, each one checkable.</span>}>
+            <SectionTitle eyebrow="02 · From orbit to your screen" title={<span id="journey-heading">Eight steps, each one checkable.</span>}>
               The first five steps run in production. The last two are where science meets interpretation, and they are labelled as such.
             </SectionTitle>
           </Reveal>
