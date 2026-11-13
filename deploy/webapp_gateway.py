@@ -51,7 +51,7 @@ def activate(sha):
             env.write_text(original);env.chmod(0o600)
             run('docker','compose','up','-d','--wait','--wait-timeout','180',timeout=240)
         raise
-    receipt={'state':'healthy','revision':sha,'deployed_at':datetime.now(timezone.utc).isoformat(),'images':selected,'domain':'astramind.solutions'}
+    receipt={'state':'healthy','revision':sha,'deployed_at':datetime.now(timezone.utc).isoformat(),'images':selected,'domain':'ogote.com'}
     (ROOT/'deployment.json').write_text(json.dumps(receipt,indent=2)+'\n')
     print(json.dumps(receipt))
 def main():
