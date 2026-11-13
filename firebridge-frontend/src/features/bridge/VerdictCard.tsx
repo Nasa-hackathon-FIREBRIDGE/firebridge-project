@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { ArrowRight, ArrowUpRight, PowerOff, Scale, Sparkles, TriangleAlert } from 'lucide-react'
+import { ArrowUpRight, PowerOff, Scale, Sparkles, TriangleAlert } from 'lucide-react'
+import { Masthead, TextAction } from '../story/Story'
 import { useCopilot } from '../copilot/context'
 import { attention, calendarMonthName } from './calendar'
 import { fmtCount, fmtMonth, fmtOne, sensorLabel } from './format'
@@ -9,11 +10,12 @@ import { useBridgeReport } from './useBridgeReport'
 
 const join = (items: string[]) => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`)
 
+/** One paragraph of the front page: a small mark in the margin, the finding in serif. */
 function Finding({ icon, tone, children }: { icon: ReactNode; tone: string; children: ReactNode }) {
   return (
-    <li className="flex gap-3">
-      <span className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-white/[0.04] ${tone}`} aria-hidden="true">{icon}</span>
-      <p className="m-0 text-[13.5px] leading-relaxed text-fg-2">{children}</p>
+    <li className="grid grid-cols-[28px_minmax(0,1fr)] gap-x-4">
+      <span className={`mt-1.5 ${tone}`} aria-hidden="true">{icon}</span>
+      <p className="m-0 font-serif text-[17px] font-[400] leading-[1.62] text-paper-2 [&_strong]:font-[560] [&_strong]:text-paper" style={{ fontVariationSettings: '"opsz" 18' }}>{children}</p>
     </li>
   )
 }
@@ -41,11 +43,11 @@ export function VerdictCard({ analysisId, onOpenCalendar, onOpenBridge }: { anal
       : 'No month stands out once the satellites are compared fairly.'
   if (!judged && !outcome && !artifacts.length) return null
   return (
-    <section className="card relative overflow-hidden p-5 font-sans sm:p-6" aria-labelledby="verdict-heading">
-      <div className="pointer-events-none absolute -right-24 -top-28 size-72 rounded-full bg-ember-500/10 blur-3xl" aria-hidden="true" />
-      <p className="relative m-0 mb-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ember-300">FIREBRIDGE verdict</p>
-      <h3 id="verdict-heading" className="relative m-0 max-w-3xl text-[19px] font-semibold leading-snug tracking-[-0.01em] text-fg">{headline}</h3>
-      <ul className="relative m-0 mt-4 grid list-none gap-3 p-0 lg:grid-cols-2">
+    <section className="relative flex flex-col gap-8 pt-6 font-sans sm:pt-10" aria-labelledby="verdict-heading">
+      <div className="pointer-events-none absolute -left-48 -top-48 size-[620px] rounded-full bg-ember-500/[0.08] blur-[110px]" aria-hidden="true" />
+      <Masthead>The briefing · {fmtMonth(report.meta.start.slice(0, 7), 'short')} – {fmtMonth(new Date(Date.parse(`${report.meta.endExclusive.slice(0, 10)}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 7), 'short')}</Masthead>
+      <h2 id="verdict-heading" className="relative m-0 max-w-[21ch] font-serif text-[clamp(34px,4.8vw,66px)] font-[480] leading-[1.02] tracking-[-0.034em] text-paper" style={{ fontVariationSettings: '"opsz" 144' }}>{headline}</h2>
+      <ul className="relative m-0 grid max-w-6xl list-none gap-x-14 gap-y-5 p-0 lg:grid-cols-2">
         {top?.harmonized && (
           <Finding icon={<ArrowUpRight size={15} />} tone="text-ember-300">
             <strong className="font-semibold text-fg">{fmtMonth(top.month, 'long')}:</strong> {fmtCount(top.harmonized.value)} Aqua-equivalent fire cell-days against a usual {calendarMonthName(top.month)} of {fmtOne(top.harmonized.usual)}. Each satellite was compared only with its own past, so the agreement is not an artifact of mixing sensors.
@@ -70,24 +72,15 @@ export function VerdictCard({ analysisId, onOpenCalendar, onOpenBridge }: { anal
           </Finding>
         )}
       </ul>
-      <div className="relative mt-5 flex flex-wrap gap-2">
+      <div className="relative flex flex-wrap gap-3">
         {copilot && copilot.available !== false && (
-          <button type="button" className="ui-button ui-button--primary" onClick={copilot.brief}>
+          <TextAction primary onClick={copilot.brief}>
             <Sparkles size={15} aria-hidden="true" />
             Brief me
-          </button>
+          </TextAction>
         )}
-        {onOpenCalendar && (
-          <button type="button" className={`ui-button ${copilot && copilot.available !== false ? '' : 'ui-button--primary'}`} onClick={onOpenCalendar}>
-            Open the fire calendar
-            <ArrowRight size={15} aria-hidden="true" />
-          </button>
-        )}
-        {onOpenBridge && (
-          <button type="button" className="ui-button" onClick={onOpenBridge}>
-            How the satellites were bridged
-          </button>
-        )}
+        {onOpenCalendar && <TextAction onClick={onOpenCalendar}>Open the fire calendar</TextAction>}
+        {onOpenBridge && <TextAction onClick={onOpenBridge} label="How the satellites were bridged">How the satellites were bridged</TextAction>}
       </div>
     </section>
   )
