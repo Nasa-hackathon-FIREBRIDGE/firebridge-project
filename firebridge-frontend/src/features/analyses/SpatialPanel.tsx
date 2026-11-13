@@ -87,6 +87,7 @@ export function SpatialPanel({
     <>
       <section className="fb-section fb-map-panel" id="spatial-workspace" aria-labelledby="map-heading">
         <SectionHeading
+          variant="compact"
           id="map-heading"
           eyebrow="SPATIAL EXPLORER"
           title={analysisId ? 'Fire atlas' : 'Spatial workspace'}
