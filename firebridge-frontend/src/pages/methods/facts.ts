@@ -2,7 +2,7 @@
  * Verified figures and citations behind the Data & methods and Sources pages.
  *
  * Every number here comes from a dated receipt in the FIREBRIDGE data pipeline repository
- * (github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-data-pipeline): the archive audit of
+ * (github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-DataPlatform): the archive audit of
  * 9 Nov 2026 (`.deploy/history-preparation-results.md`), the historical-serving design
  * (`docs/data/HISTORICAL_ANALYSES.md`) and the project overview of the same date. Update the
  * figures together with their date when a newer audit is published; never edit one alone.
@@ -11,7 +11,7 @@ import { HISTORICAL_MAX_WINDOW_DAYS } from '@firebridge/contracts/analysis-limit
 import type { SensorKey } from '../../lib/sensors'
 
 export const AUDIT_DATE = '9 Nov 2026'
-export const PIPELINE_REPO = 'https://github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-data-pipeline'
+export const PIPELINE_REPO = 'https://github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-DataPlatform'
 
 export interface ArchivePlatform {
   key: Exclude<SensorKey, 'other'>
@@ -131,8 +131,8 @@ export const DEVELOPMENT_AI: Citation[] = [
   },
 ]
 
-export const APP_REPO = 'https://github.com/Nasa-hackathon-FIREBRIDGE/firebridge-project'
-export const AGENT_REPO = 'https://github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-AI-Agent'
+export const APP_REPO = 'https://github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-App'
+export const AGENT_REPO = 'https://github.com/Nasa-hackathon-FIREBRIDGE/FireBridge-AI'
 
 export const OUR_CODE: Citation[] = [
   { name: 'FIREBRIDGE web application and API', role: 'This website, its API, workers and the in-browser harmonization engine', href: APP_REPO, licence: 'MIT' },
