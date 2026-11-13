@@ -28,8 +28,8 @@ describe('Fleet streams', () => {
   it('names a satellite joining the record', () => {
     const months: MonthBucket[] = Array.from({ length: 12 }, (_, i) => ({ month: `2023-${String(i + 1).padStart(2, '0')}`, total: 10 + i, bySensor: i >= 5 ? { snpp: 10, noaa21: i } : { snpp: 10 + i } }))
     const sensors: SensorTotal[] = [
-      { key: 'snpp', label: 'Suomi-NPP', instrument: 'VIIRS', color: '#a78bfa', pixel: '375 m', count: 120, sourceIds: ['a'] },
-      { key: 'noaa21', label: 'NOAA-21', instrument: 'VIIRS', color: '#f472b6', pixel: '375 m', count: 50, sourceIds: ['b'] },
+      { key: 'snpp', label: 'Suomi-NPP', instrument: 'VIIRS', color: '#a78bfa', pixel: '375 m', count: 120, lowerBound: false, sourceIds: ['a'] },
+      { key: 'noaa21', label: 'NOAA-21', instrument: 'VIIRS', color: '#f472b6', pixel: '375 m', count: 50, lowerBound: false, sourceIds: ['b'] },
     ]
     render(<FleetStreams months={months} sensors={sensors} />)
     expect(screen.getByText(/NOAA-21 joins · Jun 2023/)).toBeInTheDocument()
