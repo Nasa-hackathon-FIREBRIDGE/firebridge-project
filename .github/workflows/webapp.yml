@@ -40,7 +40,7 @@ jobs:
       - name: Frontend checks and security audit
         working-directory: firebridge-frontend
         env:
-          VITE_API_URL: https://astramind.solutions/api/v1
+          VITE_API_URL: https://ogote.com/api/v1
         run: |
           npm ci --no-fund
           npm audit --audit-level=high
@@ -103,7 +103,7 @@ jobs:
           done
           docker build --file firebridge-frontend/Dockerfile \
             --build-context backend=firebridge-backend \
-            --build-arg VITE_API_URL=https://astramind.solutions/api/v1 \
+            --build-arg VITE_API_URL=https://ogote.com/api/v1 \
             --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
             --label "org.opencontainers.image.revision=$REVISION" \
             --tag "firebridge-webapp-frontend:$REVISION" firebridge-frontend
@@ -203,8 +203,8 @@ jobs:
         run: bash deploy/send_release.sh
       - name: Verify public HTTPS and API readiness
         run: |
-          curl --fail --retry 8 --retry-delay 5 --retry-all-errors https://astramind.solutions/ -o /dev/null
-          curl --fail --retry 8 --retry-delay 5 --retry-all-errors https://astramind.solutions/api/v1/health/ready
+          curl --fail --retry 8 --retry-delay 5 --retry-all-errors https://ogote.com/ -o /dev/null
+          curl --fail --retry 8 --retry-delay 5 --retry-all-errors https://ogote.com/api/v1/health/ready
       - name: Remove registry credentials
         if: always()
         run: docker logout ghcr.io || true
