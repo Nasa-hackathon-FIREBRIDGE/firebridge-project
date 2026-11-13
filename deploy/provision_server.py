@@ -34,7 +34,7 @@ runtime={
  'DATABASE_URL':f'postgresql://firebridge_webapp:{password}@db:5432/firebridge?schema=public&connection_limit=4',
  'REDIS_URL':f"redis://:{config['redis_password']}@firebridge-webapp-redis:6379/0",
  'CURSOR_SECRET':config['cursor_secret'],'PAGINATION_SECRET':config['pagination_secret'],
- 'CORS_ORIGINS':'https://astramind.solutions','DEFAULT_SCOPE_KEY':'global',
+ 'CORS_ORIGINS':'https://ogote.com,https://astramind.solutions','DEFAULT_SCOPE_KEY':'global',
  'INGESTION_ADMIN_TOKEN':'','ANALYSIS_WORKER_CONCURRENCY':'1','EXPORT_WORKER_CONCURRENCY':'1',
  'RECOVERY_ENABLED':'false','EXPORT_STORAGE_DIR':'/app/.data/exports',
  'EXPORT_MAX_ROWS':'100000','EXPORT_MAX_BYTES':'33554432','EXPORT_MAX_ACTIVE':'1','EXPORT_MAX_PER_HOUR':'5',
@@ -76,4 +76,4 @@ for volume,uid in (('firebridge-webapp_redis_data',999),('firebridge-webapp_expo
       'redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b','-c',f'chown {uid}:{uid} /data')
 run('ufw','allow','80/tcp','comment','FIREBRIDGE HTTP')
 run('ufw','allow','443/tcp','comment','FIREBRIDGE HTTPS')
-print(json.dumps({'webapp':'provisioned','runtime_role':'firebridge_webapp','secrets':'private files only','deploy_account':account,'domain':'astramind.solutions','existing_data_services_restarted':False}))
+print(json.dumps({'webapp':'provisioned','runtime_role':'firebridge_webapp','secrets':'private files only','deploy_account':account,'domain':'ogote.com','existing_data_services_restarted':False}))
