@@ -18,6 +18,10 @@ vi.mock('./BridgeCharts', () => ({
   HandoverChart: () => <div data-testid="handover-chart" />,
 }))
 
+// Weather comes from NASA POWER over the network; the calendar must work without it.
+let weatherEvidence: unknown = null
+vi.mock('../science/weather', async (original) => ({ ...(await original<typeof import('../science/weather')>()), useWeatherEvidence: () => ({ evidence: weatherEvidence, status: weatherEvidence ? 'success' : 'pending', error: null }) }))
+
 const report = runBridge({ detections: syntheticSeasons(), start: '2019-01-01', endExclusive: '2022-01-01' })
 const drifting = runBridge({ detections: driftingSeasons(), start: '2019-01-01', endExclusive: '2025-01-01' })
 let state: BridgeState = { status: 'ready', report }
@@ -27,6 +31,8 @@ const { BridgePanel } = await import('./BridgePanel')
 const { EpisodesCard } = await import('./EpisodesCard')
 const { CalendarPanel } = await import('./CalendarPanel')
 const { VerdictCard } = await import('./VerdictCard')
+const { DriversPanel } = await import('../drivers/DriversPanel')
+const { weatherEvidence: buildWeather } = await import('../science/weather')
 
 afterEach(cleanup)
 // jsdom has no layout engine; the calendar scrolls an inspected month into view.
@@ -81,7 +87,7 @@ describe('Fire episodes card', () => {
     state = { status: 'ready', report }
     const onShow = vi.fn()
     render(<EpisodesCard analysisId="a1" onShowEpisode={onShow} />)
-    expect(screen.getByRole('heading', { name: 'Fire episodes' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: /^Fire episodes: [\d,]+ detections, [\d,]+ clusters/ })).toBeVisible()
     expect(screen.getByText('Detection clusters')).toBeInTheDocument()
     const [first] = screen.getAllByRole('button', { name: /^Show episode of .* on the map$/ })
     fireEvent.click(first)
@@ -169,5 +175,50 @@ describe('Verdict card', () => {
     fireEvent.click(screen.getByRole('button', { name: 'How the satellites were bridged' }))
     expect(onCalendar).toHaveBeenCalledTimes(1)
     expect(onBridge).toHaveBeenCalledTimes(1)
+  })
+})
+
+/** Synthetic weather: July 2022, the busy month, is hot and dry; every other month is ordinary. */
+function syntheticWeather() {
+  const months = []
+  for (let year = 2018; year <= 2024; year++)
+    for (let m = 1; m <= 12; m++) {
+      const month = `${year}-${String(m).padStart(2, '0')}`
+      const summer = m >= 6 && m <= 9
+      months.push({ month, tmax: (summer ? 33 : 18) + (month === '2022-07' ? 3 : (year % 3) * 0.2), rain: summer ? (month === '2022-07' ? 1 : 8) : 60 + (year % 2) * 10 })
+    }
+  return months
+}
+
+describe('Fire drivers and the weather check', () => {
+  it('reads each month against NASA weather and says whether the weather fits', () => {
+    state = { status: 'ready', report: drifting }
+    weatherEvidence = buildWeather(drifting, syntheticWeather(), { lat: 35.1, lon: -5.5 })
+    render(<CalendarPanel analysisId="a1" />)
+    expect(screen.getByText('Weather that month · NASA POWER')).toBeInTheDocument()
+    expect(screen.getByText(/Hot or dry: the weather fits the burst/)).toBeInTheDocument()
+    expect(screen.getByText('Fire follows the weather: hotter, drier months burned more')).toBeInTheDocument()
+    expect(screen.getByText('How solid is each verdict?')).toBeInTheDocument()
+    weatherEvidence = null
+  })
+
+  it('shows where it burns and the weekly rhythm, with sources', () => {
+    state = { status: 'ready', report: drifting }
+    weatherEvidence = buildWeather(drifting, syntheticWeather(), { lat: 35.1, lon: -5.5 })
+    render(<DriversPanel analysisId="a1" />)
+    expect(screen.getByRole('heading', { name: 'Why and where did it burn?' })).toBeVisible()
+    expect(screen.getByRole('img', { name: /Monthly fire anomaly above NASA POWER heat and rain anomalies/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /^Fire season · .*burning cells of 5 km$/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /Detection clusters by weekday/ })).toBeInTheDocument()
+    expect(screen.getByText(/Earl, N\., Simmonds, I\., Tapper, N\./)).toBeInTheDocument()
+    weatherEvidence = null
+  })
+
+  it('keeps the page useful while NASA POWER is unavailable', () => {
+    state = { status: 'ready', report: drifting }
+    weatherEvidence = null
+    render(<DriversPanel analysisId="a1" />)
+    expect(screen.getByRole('status')).toHaveTextContent('Reading NASA POWER daily weather')
+    expect(screen.getByText('Fire returns to the same places, and the off-season burns elsewhere')).toBeInTheDocument()
   })
 })
