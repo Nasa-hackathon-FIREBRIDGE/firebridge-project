@@ -3,7 +3,10 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowDown,
   CalendarRange,
+  CloudSun,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Database,
   FileDown,
   Layers2,
@@ -35,6 +38,7 @@ import { UserInputError } from '../../lib/userFeedback'
 import { ApiError, Status } from './Feedback'
 import { ObservationFilterBar } from '../observations/ObservationFilters'
 import { TemporalPanel, SourceComparison } from '../observations/TemporalPanel'
+import { useScrollOverflow } from '../../hooks/useScrollOverflow'
 import { emptyObservationFilters, type ObservationFilters } from '../observations/filters'
 import { useRelease } from '../observations/useResults'
 import { AnalysisInsights, InsightsRail } from '../insights/AnalysisInsights'
@@ -51,7 +55,9 @@ import { AnalysisPreparation } from './AnalysisPreparation'
 import { BridgePanel } from '../bridge/BridgePanel'
 import { EpisodesCard } from '../bridge/EpisodesCard'
 import { CalendarPanel } from '../bridge/CalendarPanel'
+import { DriversPanel } from '../drivers/DriversPanel'
 import { VerdictCard } from '../bridge/VerdictCard'
+import { OverviewEvidence } from '../science/OverviewEvidence'
 import { CopilotProvider } from '../copilot/CopilotProvider'
 import { reveal } from '../copilot/reveal'
 import type { CopilotNav } from '../copilot/actions'
@@ -60,6 +66,7 @@ const sections = [
   { id: 'workspace-top', label: 'Map workspace', icon: MapPinned },
   { id: 'analysis-overview', label: 'Overview', icon: Sparkles },
   { id: 'fire-calendar', label: 'Fire calendar', icon: CalendarSearch },
+  { id: 'fire-drivers', label: 'Fire drivers', icon: CloudSun },
   { id: 'sensor-bridge', label: 'Sensor bridge', icon: GitCompareArrows },
   { id: 'observation-records', label: 'Observations', icon: Table2 },
   { id: 'temporal-analysis', label: 'Timeline', icon: CalendarDays },
@@ -97,6 +104,9 @@ function Workspace() {
   const activeSection =
     sections.find((section) => '#' + section.id === location.hash)?.id ?? 'workspace-top'
   const [visited, setVisited] = useState<string[]>(['workspace-top', activeSection])
+  // Ten tabs do not fit a narrow workspace: show what is cut off and keep the selected tab in view.
+  const { ref: tabsRef, edges: tabEdges, scroll: scrollTabs, reveal: revealTab } = useScrollOverflow<HTMLDivElement>()
+  useEffect(() => { revealTab(document.getElementById('tab-' + activeSection)) }, [activeSection, revealTab])
   function selectSection(id: string) {
     setVisited((current) => (current.includes(id) ? current : [...current, id]))
     navigate(
@@ -347,7 +357,18 @@ function Workspace() {
 
       {/* ── Tabs ───────────────────────────────────────────────────────── */}
       <div className="fbx-tabs-wrap">
+        {tabEdges.start && (
+          <button type="button" className="fbx-tabs-scroll fbx-tabs-scroll--start" aria-label="Show earlier tabs" onClick={() => scrollTabs(-1)}>
+            <ChevronLeft size={16} aria-hidden="true" />
+          </button>
+        )}
+        {tabEdges.end && (
+          <button type="button" className="fbx-tabs-scroll fbx-tabs-scroll--end" aria-label="Show more tabs" onClick={() => scrollTabs(1)}>
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+        )}
         <div
+          ref={tabsRef}
           className="astra-analysis-tabs fbx-tabs"
           role="tablist"
           aria-label="Analysis sections"
@@ -392,11 +413,11 @@ function Workspace() {
       <div id="panel-analysis-overview" role="tabpanel" aria-labelledby="tab-analysis-overview" hidden={activeSection !== 'analysis-overview'} className="fbx-panel">
         {mounted('analysis-overview') && (
           resultId ? (
-            <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-16">
               <VerdictCard analysisId={resultId} onOpenCalendar={() => openSection('fire-calendar')} onOpenBridge={() => openSection('sensor-bridge')} />
               <AnalysisInsights analysisId={resultId} onSelectDay={showDayOnMap} />
+              <OverviewEvidence analysisId={resultId} onOpenCalendar={() => openSection('fire-calendar')} />
               <EpisodesCard analysisId={resultId} onShowEpisode={showIntervalOnMap} onOpenBridge={() => openSection('sensor-bridge')} />
-              <SourceComparison analysisId={resultId} />
             </div>
           ) : (
             <EmptyPanel
@@ -417,6 +438,21 @@ function Workspace() {
             <EmptyPanel
               title="No calendar yet"
               text="Request an analysis to see when burning was unusual, judged by every satellite against its own past."
+              onSetup={setupAction}
+            />
+          )
+        )}
+      </div>
+
+      {/* ── Fire drivers (weather, places, weekly rhythm) ───────────────── */}
+      <div id="panel-fire-drivers" role="tabpanel" aria-labelledby="tab-fire-drivers" hidden={activeSection !== 'fire-drivers'} className="fbx-panel">
+        {mounted('fire-drivers') && (
+          resultId ? (
+            <DriversPanel analysisId={resultId} />
+          ) : (
+            <EmptyPanel
+              title="No drivers yet"
+              text="Request an analysis to set its fire record beside NASA weather, map where it burns and look for human rhythms."
               onSetup={setupAction}
             />
           )
