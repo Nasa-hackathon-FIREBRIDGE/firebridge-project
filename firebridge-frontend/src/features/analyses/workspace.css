@@ -1053,23 +1053,65 @@
   color: #a9adb7;
   font-size: 11px;
 }
+/* Bars share the available width and never widen the page, however long the period: the panel
+   groups days into weeks, months or years so the bar count stays readable. */
 .fb-activity-bars {
   display: flex;
   align-items: flex-end;
-  flex: 1;
+  flex: 1 1 320px;
   justify-content: center;
-  gap: 18px;
-  min-width: 160px;
-  max-width: 420px;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 .fb-activity-bars > div {
   display: grid;
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   max-width: 60px;
   justify-items: center;
   gap: 5px;
   color: #a9adb7;
   font: 10px var(--fb-mono);
+}
+.fb-activity-bars time,
+.fb-activity-bars span {
+  white-space: nowrap;
+}
+/* Every column reserves the label row, labelled or not, so all bars share one baseline. */
+.fb-activity-bars time {
+  display: block;
+  min-height: 12px;
+  line-height: 12px;
+}
+/* Many thin bars: no gaps to speak of, and each shown date starts at its bar and runs right
+   (the last one runs left) instead of widening the column. */
+.fb-activity-bars--dense {
+  gap: 2px;
+}
+.fb-activity-bars--dense > div {
+  max-width: none;
+  justify-items: start;
+}
+.fb-activity-bars--dense time {
+  width: 0;
+  overflow: visible;
+}
+.fb-activity-bars--dense > div:last-child time {
+  justify-self: end;
+  direction: rtl;
+}
+/* Thin bars fill their column (the gap separates them); a full-size radius would wash them out. */
+.fb-shell .fb-activity-bars--dense .fb-activity-track i {
+  left: 0;
+  width: 100%;
+  border-radius: 1px 1px 0 0;
+}
+/* Unknown periods read as one faint hatched band rather than a row of dashed boxes. */
+.fb-shell .fb-activity-bars--dense .astra-activity-unknown {
+  border: 0;
+  opacity: 1;
+  background: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.07) 0 2px, transparent 2px 5px);
 }
 .fb-activity-track {
   position: relative;
