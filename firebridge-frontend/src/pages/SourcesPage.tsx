@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, ArrowUpRight, Boxes, Code2, Flame, Library, Map, MapPinned, MessagesSquare, Sparkles, type LucideIcon } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, BookOpen, Boxes, CloudSun, Code2, Flame, Library, Map, MapPinned, MessagesSquare, Sparkles, type LucideIcon } from 'lucide-react'
 import { Reveal } from '../components/ui/Reveal'
 import {
   BOUNDARIES,
@@ -12,14 +12,21 @@ import {
   OUR_CODE,
   PIPELINE_REPO,
   SOFTWARE,
+  WEATHER,
   type Citation,
 } from './methods/facts'
+import { REFERENCES, type Reference } from '../features/science/references'
 
 const AI_LIMITS = [
-  'Create data. Every fire record comes from NASA FIRMS, and every number on the site is computed by code from those records.',
+  'Create data. Every fire record comes from NASA FIRMS and every weather value from NASA POWER, and every number on the site is computed by code from those records.',
   'Make media. No AI image, video, voice or music generators were used. The logo and illustrations are SVG written as code.',
   'Run unchecked. In the product, AI only puts computed facts into words, and every number it writes is checked against them.',
 ]
+
+/** The published science the analysis pages cite beside their own results. */
+const LITERATURE: Citation[] = (Object.values(REFERENCES) as Reference[]).map((ref) =>
+  ref.url?.startsWith('https://doi.org/') ? { name: ref.short, role: ref.full, doi: ref.url.replace('https://doi.org/', '') } : { name: ref.short, role: ref.full, href: ref.url },
+)
 
 const TEAM_ROLE = [
   'Set the goals and the design direction, and directed every AI session.',
@@ -103,6 +110,14 @@ export default function SourcesPage() {
             <CitationList items={NRT_PRODUCTS} label="Near-real-time fire products" />
             <CitationList items={FIRE_DOCUMENTATION} label="FIRMS services and documentation" />
           </div>
+        </Group>
+
+        <Group id="weather" icon={CloudSun} eyebrow="Weather" title="NASA weather beside the fire" intro="The Fire drivers page and the calendar set every month beside NASA’s weather record for the same place. Only the centre of the analysis’s fire activity is sent to NASA POWER.">
+          <CitationList items={WEATHER} label="Weather data" />
+        </Group>
+
+        <Group id="literature" icon={BookOpen} eyebrow="Published science" title="The literature each result is checked against" intro="Every analysis page sets its results beside these published findings and agency records. Each DOI was checked to resolve at doi.org, and each link to respond, on 13 Nov 2026.">
+          <CitationList items={LITERATURE} label="Cited literature" />
         </Group>
 
         <Group id="imagery" icon={Map} eyebrow="Imagery & maps" title="Basemaps" intro="Background imagery gives geographic context only. Its acquisition date can differ from the fire records drawn on top.">
