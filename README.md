@@ -6,9 +6,9 @@ NOAA-21) into an explorable, reproducible calendar of burning activity for any
 area, while keeping every sensor difference visible. Built for the NASA Space
 Apps Challenge 2026, challenge "Harmonization of MODIS and VIIRS Hot Spots".
 
-- Live application: https://astramind.solutions
-- How the data is processed: https://astramind.solutions/evidence
-- Sources, licences and AI use: https://astramind.solutions/sources
+- Live application: https://ogote.com
+- How the data is processed: https://ogote.com/evidence
+- Sources, licences and AI use: https://ogote.com/sources
 
 | Repository | Contents |
 |---|---|
@@ -23,7 +23,7 @@ All three are released under the [MIT licence](LICENSE).
 Every page answers a question in a sentence, then shows the evidence. Each result
 is also checked against something it never used: other measurements in the same
 detections, NASA's weather record and published fire science (cited by DOI on the
-[sources page](https://astramind.solutions/sources)).
+[sources page](https://ogote.com/sources)).
 
 - **Overview**: the verdict, every day of the record on one line, the satellite
   fleet as a river, and six findings checked against the literature.
@@ -93,7 +93,7 @@ critical alert.
 
 ## Production (Contabo)
 
-- Site: https://astramind.solutions; API: `/api/v1`.
+- Site: https://ogote.com; API: `/api/v1`.
 - The `staging` branch is deployed after validation by `.github/workflows/webapp.yml`.
 - Configuration, private network, restricted SQL account and CI/CD operation:
   [deploy/README.md](deploy/README.md).
