@@ -3,7 +3,8 @@ import { lazy, Suspense, useState } from 'react'
 import type { SensorKey } from '../../../lib/sensors'
 import { MODELS, type BridgeReport } from '../engine/index.ts'
 import { fmtInt, fmtMonth, fmtOne, fmtRatio, sensorColor, sensorLabel } from '../format'
-import { Act, Legend, LegendItem, Note, Tile } from '../ui'
+import { Act, Legend, LegendItem, Note, TABLE, Tile } from '../ui'
+import { handoverCheck } from '../../science/checks'
 import { alarmOutcome, defaultHandover } from '../selectors'
 import { AskWhy } from '../../copilot/AskWhy'
 
@@ -37,6 +38,7 @@ export function HandoverAct({ report, platform }: { report: BridgeReport; platfo
   return (
     <Act
       index={5}
+      science={report.evidence ? [handoverCheck(report, platform)] : undefined}
       id="handover-rehearsal"
       eyebrow="Synthetic instrument switch"
       title={title}
@@ -101,7 +103,7 @@ export function HandoverAct({ report, platform }: { report: BridgeReport; platfo
 
       {rehearsals.length > 1 && (
         <div className="mt-6 min-w-0 overflow-x-auto">
-          <table className="w-full border-collapse text-left text-[12.5px]">
+          <table className={TABLE}>
             <caption className="mb-2 text-left text-[12.5px] font-medium text-fg">Every rehearsal with {name}, scored on the months Aqua flew in its original regime</caption>
             <thead>
               <tr className="text-fg-3 [&>th]:static [&>th]:bg-transparent [&>th]:font-sans [&>th]:text-[11.5px] [&>th]:normal-case [&>th]:tracking-normal [&>th]:text-fg-3">
