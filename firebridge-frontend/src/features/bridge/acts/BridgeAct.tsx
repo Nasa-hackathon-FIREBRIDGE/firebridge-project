@@ -3,6 +3,7 @@ import type { SensorKey } from '../../../lib/sensors'
 import { compareYears, type BridgeReport, type YearComparison } from '../engine/index.ts'
 import { fmtInt, fmtOne, fmtSigned, sensorColor, sensorLabel } from '../format'
 import { Act, Legend, LegendItem, Note, Tile } from '../ui'
+import { trendCheck } from '../../science/checks'
 import type { IndexedSeries } from '../BridgeCharts'
 
 const IndexedYearsChart = lazy(() => import('../BridgeCharts').then((m) => ({ default: m.IndexedYearsChart })))
@@ -152,6 +153,7 @@ export function BridgeAct({ report }: { report: BridgeReport }) {
   return (
     <Act
       index={6}
+      science={report.evidence ? [trendCheck(report)] : undefined}
       id="sensor-bridge-record"
       eyebrow="The bridge"
       title="One comparable record across changing satellites"
