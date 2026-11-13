@@ -18,6 +18,30 @@ Apps Challenge 2026, challenge "Harmonization of MODIS and VIIRS Hot Spots".
 
 All three are released under the [MIT licence](LICENSE).
 
+## What an analysis shows
+
+Every page answers a question in a sentence, then shows the evidence. Each result
+is also checked against something it never used: other measurements in the same
+detections, NASA's weather record and published fire science (cited by DOI on the
+[sources page](https://astramind.solutions/sources)).
+
+- **Overview**: the verdict, every day of the record on one line, the satellite
+  fleet as a river, and six findings checked against the literature.
+- **Fire calendar**: one ridge per year over the usual season; a month glows only
+  when independent satellites, each judged against its own past, agree. Each
+  month opens as a case file: every satellite's testimony, radiated energy,
+  burned area, NASA weather and how robust the verdict is.
+- **Fire drivers**: fire against NASA POWER heat and rain (MERRA-2), where it
+  burns in and out of season, and whether people leave a weekly rhythm.
+- **Sensor bridge**: why VIIRS counts more than MODIS, the measured Aqua and
+  Terra orbit drift, Aqua hidden and predicted, and the day Aqua goes dark,
+  rehearsed.
+- **Compare sources**: a 24-hour sky clock of measured overpass times and the
+  pixels of each instrument drawn to scale.
+
+All analysis runs in the browser from the pinned release; weather is read from
+the NASA POWER API at the centre of the analysis's fire activity.
+
 ## Layout
 
 This is the team's integration branch, connected to the data pipeline.
